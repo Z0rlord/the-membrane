@@ -1350,7 +1350,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
-| v0.9.7 | 2026-06-14 | Remove martial-arts / ritual wording remnants |
+| v0.9.7 | 2026-06-14 | Remove unrelated-application wording remnants |
 | v0.9.6 | 2026-06-14 | Genericize §0.8 PoP table and invasive BCI (remove named vendors); fix §0.5 affiliation text |
 | v0.9.5 | 2026-06-14 | Remove third-party competitor citations (policy vs continuity §4.8 retained) |
 | v0.9.4 | 2026-06-14 | Independent research / no-affiliation disclaimer (title block, §0.5, contribute) |
