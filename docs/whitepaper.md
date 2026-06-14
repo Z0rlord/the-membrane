@@ -4,10 +4,12 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.3"
+version: "0.9.4"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
+
+> **Independent research.** This document is **personal research** by the author (Zorie R. Barber). It is **not** affiliated with, endorsed by, sponsored by, or commissioned by any company, employer, client, university, foundation, or government body. Mentions of third-party products, services, papers, or trademarks (e.g. Neuralink, SPQR Aegis, OpenBCI, NIST) are **descriptive only** — for threat modeling, benchmarking, or technical comparison. No partnership, employment, or investment relationship is implied.
 
 ## Abstract
 
@@ -17,7 +19,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 
 ## Executive Summary
 
-**What this is:** A specification for a human **cognition / thinking / nervous-system firewall**. The Membrane sits at the boundary where endogenous neural activity meets external systems — AI routers, cloud inference, BCI telemetry, and surveillance pipelines that reconstruct mental state from behavior or physiology.
+**What this is:** A specification for a human **cognition / thinking / nervous-system firewall**. The Membrane sits at the boundary where endogenous neural activity meets external systems — AI routers, cloud inference, BCI telemetry, and surveillance pipelines that reconstruct mental state from behavior or physiology. Published as **independent research in public** (§0.5); not a product announcement or organizational initiative.
 
 **Primary threats:**
 
@@ -34,6 +36,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - Proof that no off-chain clone or hidden reader exists.
 - A shipping product. Phase 0 is a research prototype.
 - Martial-arts attendance, proof-of-practice, or any unrelated application layer.
+- The work, opinion, or roadmap of any company or institution named in this document.
 
 **Major limitations:**
 - Covert surveillance with no attested channel may be undetectable.
@@ -199,7 +202,9 @@ We use them because they are the strongest available hardware isolation layer. W
 
 ## 0.5 Research Status and Scope
 
-The Membrane is a forward-looking research architecture, not a production-ready protocol and not a claim of present-day technical feasibility.
+The Membrane is **independent, personal research** — a forward-looking architecture specification, not a production-ready protocol, not a claim of present-day technical feasibility, and **not** an official project of any organization.
+
+**Affiliation:** The author maintains this repository and whitepaper in a personal capacity. Employers, clients, and collaborators past or present are **not** responsible for its contents unless they explicitly say otherwise in writing. Competitor and vendor citations (§4.8, footnotes) reflect the author's reading of the literature, not those vendors' participation in this work.
 
 Several components described in this document remain:
 - computationally impractical at scale,
@@ -739,6 +744,8 @@ This preserves compatibility with invasive BCI paths (§4.6) and pure-silicon A2
 ### 4.8 Policy Enforcement vs Channel Continuity
 
 Readers comparing agent-governance products should note a structural difference from systems such as SPQR Aegis:[^20]
+
+> **Comparison only.** SPQR Technologies and other cited organizations are **not** affiliated with this research. The table below contrasts architectural vectors; it is not a competitive claim, endorsement, or disparagement.
 
 | Dimension | Policy enforcement (e.g. SPQR Aegis) | The Membrane |
 |-----------|--------------------------------------|--------------|
@@ -1346,6 +1353,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.4 | 2026-06-14 | Independent research / no-affiliation disclaimer (title block, §0.5, §4.8, contribute) |
 | v0.9.3 | 2026-06-14 | IAC layer (§4.2.1), router session CPs (§4.2.2), epistemic capture (§0.2), substrate parity, SPQR foil (§4.8), hybrid human–AI membrane, cognitive identity drift open problem |
 | v0.9.2 | 2026-06-14 | Appendix B: open research & Phase 0 stack; published to GitHub |
 | v0.9.1 | 2026-06-14 | Remove cultured tissue (§4.8) and Related Work (§14) |
@@ -1357,6 +1365,8 @@ No citation in this document is presented as stronger than its tier.
 ---
 
 # How to Contribute
+
+This is **community-facing independent research**. Contributors are welcome; contribution does not create an organizational entity or imply affiliation with the author's employers or clients.
 
 Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-research.md). Publish benchmarks via GitHub issues. Security disclosures: notify the author privately, 90-day coordinated disclosure. Reference implementation: GPL-3.0/AGPL-3.0.
 
