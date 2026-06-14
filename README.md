@@ -9,7 +9,7 @@ The Membrane does not read minds. It attests **which channels may cross the boun
 
 | File | Description |
 |------|-------------|
-| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.10) |
+| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.11) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
 | [docs/the-membrane-complete.pdf](docs/the-membrane-complete.pdf) | PDF export with table of contents |
@@ -27,11 +27,11 @@ Rebuild MD/PDF: `./scripts/build-paper.sh`
 
 **Threats:** AI routing (copilots/agents ingesting context), invasive neural channels (implants/BCIs), non-invasive inference (EEG, gaze, behavioral phenotyping).
 
-**Mechanism:** zk-STARK Chain Proofs + TEE attestation + personal web-of-trust witnesses. No valid CP → sever the channel.
+**Mechanism:** zk-STARK Chain Proofs + SHA-256 Merkle commitments + TEE attestation + personal web-of-trust witnesses. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollup for Bitcoin-backed audit time. No valid CP → sever the channel.
 
 ## Phase 0 (no invasive implant required)
 
-OpenBCI or Muse → [Lab Streaming Layer](https://github.com/sccn/labstreaminglayer) → local TEE prover → optional **local** LLM session gate → self-hosted **attestation bus** (NOSTR relay optional) → fail closed on stale/missing attestation.
+OpenBCI or Muse → [Lab Streaming Layer](https://github.com/sccn/labstreaminglayer) → local TEE prover (channel + bus Merkle roots) → optional **local** LLM session gate → self-hosted **attestation bus** → daily **OTS** rollup on `cp_chain_root` → fail closed on stale/missing attestation.
 
 See [appendix-open-research.md](docs/appendix-open-research.md) for libraries and papers.
 
