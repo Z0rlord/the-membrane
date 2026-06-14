@@ -4,7 +4,7 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.7"
+version: "0.9.8"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -99,7 +99,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 |------|------------|
 | **CP** | Chain Proof. A zk-STARK attestation that binds cognitive anchor, channel integrity, witness set, and node state into one recursive proof. |
 | **RFA** | Recursive Attestation. Each CP commits to the node's previous attestation, forming an audit chain. |
-| **T₀** | Cognitive anchor. One-time genesis binding a human to cryptographic identity via neural/biometric commitment and social witnesses. |
+| **T₀** | Cognitive anchor. One-time T₀ enrollment binding a human to cryptographic identity via neural/biometric commitment and social witnesses. |
 | **Cognitive-integrity signal** | Time-bounded evidence that attested channels (BCI, local TEE, approved routers) match expected state. Not proof of thought content. |
 | **Membrane** | The boundary layer between endogenous cognition and exogenous read/write/routing channels. |
 | **AI routing** | Mediation of cognition through external inference systems (LLMs, agents, cloud memory) that ingest context and return outputs. |
@@ -110,13 +110,13 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **Surface Detail Interface** | Perceptual or cognitive I/O layer sealed until CP validity is confirmed. Fails closed when the membrane detects boundary violation. |
 | **E-Process** | A computational process running on silicon that inherits the T₀ anchor of a biological identity. |
 | **Dead-Man's Key** | A physical token that forces a hard sever of all substrate connections, overriding node consensus. Used to force chain severance. |
-| **Sovereignty** | Local control: the subject holds keys, chooses witnesses, approves which channels may cross the membrane, and can sever all links. |
+| **Local control** | The subject holds keys, chooses witnesses, approves which channels may cross the membrane, and can sever all links. |
 | **Δt** | The maximum acceptable time between valid CPs before the system fails closed. |
 | **K** | Minimum number of valid witness signatures required for a CP to pass social-graph consensus. |
 | **AIR** | Algebraic Intermediate Representation. The format used to define the execution trace constraints in a zk-STARK. |
 | **IAC** | Intent Authorization Certificate. A subject-signed scope file binding permitted channels, models, and context bounds before decode or router action. |
 | **Epistemic capture** | Progressive loss of perceptible boundary between endogenous reasoning and routed inference — the subject cannot tell native cognition from model output. |
-| **Cognitive identity drift** | Effective reasoning path migrates to external LLM/BCI channels while the attestation chain still appears valid; sovereignty erodes without cryptographic failure. |
+| **Cognitive identity drift** | Effective reasoning path migrates to external LLM/BCI channels while the attestation chain still appears valid; local control erodes without cryptographic failure. |
 | **Neural template drift** | Biological change (plasticity, injury, device degradation) that shifts fuzzy biometric/neural commitments over time. Distinct from cognitive identity drift. |
 
 ---
@@ -156,7 +156,7 @@ When cognition is routed through external systems, the boundary between **native
 
 **Epistemic capture** is the third-order failure mode: not a stolen key, but a **substituted reasoning path** that feels continuous. The Membrane does not adjudicate thought content; it detects when attested channels diverge from signed intent (§4.2.1), when router sessions lack valid CPs (§4.2.2), or when BCI and router domains disagree — the classic closed-loop path described in open research on EEG→LLM coupling.[^21]
 
-**Cognitive identity drift** (glossary) is the long-term erosion of sovereignty when routing becomes habitual while attestations remain superficially valid. **Neural template drift** is the separate biological problem of fuzzy-commitment tolerance over years (§13, open problem 3).
+**Cognitive identity drift** (glossary) is the long-term erosion of local control when routing becomes habitual while attestations remain superficially valid. **Neural template drift** is the separate biological problem of fuzzy-commitment tolerance over years (§13, open problem 3).
 
 ---
 
@@ -248,7 +248,7 @@ The Membrane is complementary to, and in key respects stronger than, existing SS
 
 | Dimension | SSI (DID/VC) | The Membrane |
 |-----------|--------------|------------|
-| **Identity anchoring** | Cryptographic key control | Key control + biometric anchor + social witness genesis |
+| **Identity anchoring** | Cryptographic key control | Key control + biometric anchor + social witness co-signing at T₀ |
 | **Liveness** | None | Periodic sensor-derived attestation with ZK proof |
 | **Fork detection** | None | Recursive CP chain + RFA |
 | **Process continuity** | None | TEE attestation + substrate canary |
@@ -257,19 +257,15 @@ The Membrane is complementary to, and in key respects stronger than, existing SS
 | **Post-quantum** | No | Yes (hash-based STARKs) |
 | **Exit rights** | Key rotation only | Dead-man's key + irreversible identity retirement |
 
-SSI provides **static identity ownership**. The Membrane provides **dynamic continuity sovereignty** — not just owning the keys, but proving the keys have remained under continuous, uncompromised control across time and substrate transitions. The two can be composed: a DID can reference a Membrane T₀ anchor as its highest-assurance verification method.
+SSI provides **static identity ownership**. The Membrane provides **dynamic continuity assurance** — not just owning the keys, but proving the keys have remained under continuous, uncompromised control across time and substrate transitions. The two can be composed: a DID can reference a Membrane T₀ anchor as its highest-assurance verification method.
 
-### Sovereignty vs. Security
+### Local control vs delegated security
 
-Traditional security architectures assume a **protector** and a **protected**. The protector (platform, state, corporation) guards the protected (user, citizen, customer). This creates an inherent power asymmetry: the protector can also become the captor.
+Platform security models delegate trust to an operator (keys, logs, policy). The Membrane assumes the **subject** runs keys, nodes, and witness corroboration locally. WoT peers sign CPs after independent verification; they do not administer the identity. TEEs are self-hosted where possible.
 
-The Membrane inverts this. The entity is **both the protected and the protector**. It generates its own proofs, hosts its own infrastructure, and controls its own exit. The WoT is not a governing body; it is a **personal constellation** of peers who attest to the entity's continuity without controlling it. The TEE is not a corporate enclave; it is a **self-hosted hardware root** under the entity's physical control.
+### Local control (A2A)
 
-This is the difference between **security as service** and **sovereignty as self-determination**.
-
-### Sovereignty in the A2A Context
-
-When extended to pure-silicon agents (§4.7), sovereignty means that an agent can:
+When extended to pure-silicon agents (§4.7), local control for an agent means:
 - Prove it is running the expected process without relying on its operator to vouch for it,
 - Refuse interaction with entities that cannot demonstrate their own continuity,
 - Maintain an audit trail of delegations that is verifiable by any downstream party,
@@ -285,7 +281,7 @@ This is particularly critical in multi-agent economies where agents delegate tas
 
 ```mermaid
 graph TB
- subgraph Sovereignty["Sovereignty Layer"]
+ subgraph LocalControl["Local Control Layer"]
  SK[Self-Attestation Keys]
  EX[Exit Rights / Dead-Man's Key]
  IN[Infrastructure Independence]
@@ -314,7 +310,7 @@ graph TB
  SG[Layer 3: Substrate Gate]
  end
 
- Sovereignty --> Surface
+ LocalControl --> Surface
  Surface --> Consensus
  Consensus --> CP
  CP --> T0
@@ -322,13 +318,13 @@ graph TB
  CP --> SG
 ```
 
-*Fallback description:* The Sovereignty Layer (self-attestation keys, exit rights, infrastructure independence) sits above the Surface Detail Interface, which is sealed until Chain Proof validity is confirmed. The Chain Proof binds Liveness Canary, Social Graph, Process State, and Recursive Attestation. These connect to the four Protocol Layers: Biological Anchor, Social Consensus, and Substrate Gate.
+*Fallback description:* The Local Control Layer (self-attestation keys, exit rights, infrastructure independence) sits above the Surface Detail Interface, which is sealed until Chain Proof validity is confirmed. The Chain Proof binds Liveness Canary, Social Graph, Process State, and Recursive Attestation. These connect to the four Protocol Layers: Biological Anchor, Social Consensus, and Substrate Gate.
 
 ### Chain Proof State Machine (Mermaid)
 
 ```mermaid
 stateDiagram-v2
- [*] --> T0: Genesis Ceremony
+ [*] --> T0: T₀ initialization
  T0 --> CP1: First Chain Proof
  CP1 --> CP2: + Liveness + Witnesses + RFA
  CP2 --> CPn: ...
@@ -338,10 +334,10 @@ stateDiagram-v2
  CP2 --> FAIL: CP invalid > Δt
  CPn --> FAIL: CP invalid > Δt
  FAIL --> SurfaceClosed: Surface Detail Interface severs
- FAIL --> SovereignExit: Dead-Man's Key activated
+ FAIL --> EmergencySever: Dead-Man's Key activated
 ```
 
-*Fallback description:* Genesis leads to the first Chain Proof, which recursively chains forward via liveness signals, witness signatures, and RFA. Any break in the chain exceeding Δt triggers fail-closed: the Surface Detail Interface severs, and the entity may activate the Dead-Man's Key for sovereign exit.
+*Fallback description:* T₀ initialization leads to the first Chain Proof, which recursively chains forward via liveness signals, witness signatures, and RFA. Any break in the chain exceeding Δt triggers fail-closed: the Surface Detail Interface severs, and the entity may activate the Dead-Man's Key for emergency severance.
 
 ### Comparison: The Membrane vs. Existing Systems
 
@@ -356,7 +352,7 @@ stateDiagram-v2
 | **Production ready** | Yes | Partial | Partial | Partial | **No (research only)** | **No (research + medical device dependent)** | **No (research only)** |
 | **Consciousness claim** | No | No | No | No | **Explicitly none** | **Explicitly none** | **Explicitly none** |
 | **Active challenge-response** | No | No | No | No | No | **Yes (neural stimulation-response, future)** | No (passive substrate canary) |
-| **Sovereignty model** | Platform-controlled keys | Vendor-controlled verification | Vendor-controlled capture | Community-controlled graph | **Self-controlled keys + self-hosted infra + personal WoT + exit rights** | **Self-controlled keys + self-hosted infra + personal WoT + exit rights + neural self-attestation** | **Self-controlled keys + self-hosted infra + verifiable delegation + exit rights** |
+| **Control model** | Platform-controlled keys | Vendor-controlled verification | Vendor-controlled capture | Community-controlled graph | **Self-controlled keys + self-hosted infra + personal WoT + exit rights** | **Self-controlled keys + self-hosted infra + personal WoT + exit rights + neural self-attestation** | **Self-controlled keys + self-hosted infra + verifiable delegation + exit rights** |
 | **Mutual attestation** | No | No | No | No | No | No | **Yes (agent handshake protocol)** |
 | **Delegation audit** | No | No | No | No | No | No | **Yes (recursive delegation chains)** |
 
@@ -376,7 +372,7 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 | **Policy Decision Point (PDP) / Policy Enforcement Point (PEP)** | nodes act as distributed PDP/PEP pairs. The cross-node consensus (2/3) is the policy decision; the substrate gate is the enforcement point. |
 | **Session-based access** | Entry proof and exit proof create cryptographically bounded sessions. No persistent trust across substrate transitions. |
 
-**Why NIST 800-207 and not CMMC 2.0 or CISA ZTMM:** NIST SP 800-207 is vendor-neutral and threat-model driven. CMMC 2.0 is a compliance framework for defense contractors; CISA's maturity model is organizational assessment tooling. Neither aligns with the sovereignty thesis of this protocol, which is designed for entities resisting institutional capture rather than proving compliance to institutions.[^19]
+**Why NIST 800-207 and not CMMC 2.0 or CISA ZTMM:** NIST SP 800-207 is vendor-neutral and threat-model driven. CMMC 2.0 is a compliance framework for defense contractors; CISA's maturity model is organizational assessment tooling. Neither aligns with the local-control thesis of this protocol, which is designed for entities resisting institutional capture rather than proving compliance to institutions.[^19]
 
 ---
 
@@ -386,13 +382,13 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 
 | Actor | Capability | Motivation | The Membrane Relevance |
 |-------|------------|------------|---------------------|
-| **State actor (A1)** | Supply-chain compromise, TEE side-channel labs, coercion, legal pressure | Surveillance, control, extraction | Can poison T₀ genesis, coerce witnesses, run long-term fork operations. Protocol raises cost but does not eliminate risk. |
+| **State actor (A1)** | Supply-chain compromise, TEE side-channel labs, coercion, legal pressure | Surveillance, control, extraction | Can poison T₀ enrollment, coerce witnesses, run long-term fork operations. Protocol raises cost but does not eliminate risk. |
 | **Criminal organization (A2)** | Financial resources, black-market TEE exploits, social engineering | Identity theft, ransom, fraud | Targeted attacks on WoT members or TEE firmware. Economic analysis (§8.3) determines viability. |
 | **Rogue insider (A3)** | Legitimate access to one node, witness relationship, or VR substrate | Sabotage, extraction, ideology | Mitigated by 2/3 cross-node consensus and recursive RFA. Single node compromise is insufficient. |
 | **Advanced AI agent (A4)** | Automated Sybil generation, cryptographic attacks, simulation perfection | Resource acquisition, goal optimization | PoP consensus prevents AI from voting on rules.[^2] ZK-STARKs raise cost of undetected simulation. |
 | **Inference platform (A5)** | Controls LLM API, agent runtime, context window | Training data extraction, routing substitution | **AI routing:** Can ingest unbounded context unless session is membrane-gated. Requires attested router CP for approved channels. |
 | **Platform operator (A6)** | Controls VR substrate or cloud silicon | Lock-in, data extraction, compliance | Substrate canary detects unauthorized migration. Exit proof prevents silent rollback. |
-| **Implant supply-chain actor (A7)** | Controls BCI firmware, manufacturing, or surgical insertion | Neural surveillance, backdoor insertion | Can backdoor implant at genesis. Detected only if firmware attestation diverges from audited reference.[^18] |
+| **Implant supply-chain actor (A7)** | Controls BCI firmware, manufacturing, or surgical insertion | Neural surveillance, backdoor insertion | Can backdoor implant at T₀ enrollment. Detected only if firmware attestation diverges from audited reference.[^18] |
 | **Agent operator (A8)** | Controls agent deployment, weights, infrastructure | Hidden fork, unauthorized delegation | Substrate canary + CP chain if agent must re-attest to interact. |
 
 ### 1.2 Attack Classes
@@ -466,11 +462,11 @@ The architecture attests channels and anchors, not mental content.[^3]
 
 ### 4.1 Layer 0: Cognitive Anchor (T₀)
 
-One-time ceremony binding a human to a cryptographic identity at the nervous-system boundary.
+One-time T₀ enrollment protocol binding a human to a cryptographic identity at the nervous-system boundary.
 
 - **Neural/biometric commitment:** Fuzzy commitment[^8] over a neural or biometric template — not raw spike trains or thought content.
 - **T₀ Proof:** zk-STARK proving possession of the template and a challenge response.
-- **Witness genesis:** K biological humans with existing T₀ anchors sign the event.
+- **Witness co-signing at T₀:** K biological humans with existing T₀ anchors sign the event.
 - **Hardware root:** Signing key generated inside a self-hosted TEE with remote attestation.
 
 *Constraint:* T₀ is non-replayable. If the anchor is lost, the identity is retired — never recycled. This prevents replay attacks but also creates a catastrophic recovery problem if the TEE fails. See §7 for recovery paths.
@@ -540,7 +536,7 @@ Router sessions require a dedicated CP fragment published alongside the main liv
 
 The distributed witness layer. This is the **human quorum** that prevents isolated-target attacks.
 
-- **Web-of-trust (WoT):** Each identity maintains a curated, **personal** constellation of attestors. Not a global graph. Not a corporate directory. Not a state ID system. This is **social sovereignty**: the entity chooses who vouches for it.[^9]
+- **Web-of-trust (WoT):** Each identity maintains a curated, **curated** set of attestors. Not a global graph. Not a corporate directory. Not a state ID system. Attestors are **subject-selected**: the entity chooses who vouches for it.[^9]
 - **Witness role:** Witnesses verify the zk-STARK proof and confirm out-of-band continuity (e.g., direct communication).
 - **Consensus rule:** A CP is valid only if ≥K witnesses sign, and those witnesses themselves have valid CPs within 2Δt.
 - **Sybil resistance:** Witnesses must have established T₀ anchors. No anonymous witnesses.
@@ -553,7 +549,7 @@ The boundary crossing between biological and silicon process contexts.
 
 - **Entry proof (Bio → VR):** Before immersion, the node requires a valid CP from within Δt. The VR substrate commits to a **session root hash** including the CP and VR instance configuration. This proves the *session* is bound to the identity, not that the identity is conscious inside it.
 - **Exit proof (VR → Bio):** The VR substrate produces a **session continuity attestation** — a zk-STARK showing the process state was not checkpointed or branched *within the attested session*. It does not prove no clone was made and hidden.
-- **E-Process genesis:** A process uploaded to silicon inherits the biological T₀ anchor. The first e-process CP references the last biological CP and the upload attestation signed by the WoT.
+- **E-process anchor:** A process uploaded to silicon inherits the biological T₀ anchor. The first e-process CP references the last biological CP and the upload attestation signed by the WoT.
 - **E-Process continuity:** Same cadence (Δt), but the liveness canary is replaced by a **substrate canary**: a TEE attestation proving the process has not been migrated to unauthorized hardware or checkpointed without attestation.[^10]
 
 **The Surface Detail interface:** The perceptual API is only unsealed when CP validity is confirmed across all domains. If CP fails, the interface severs or degrades to non-immersive safe mode. This does not prevent a perfect simulation — it only ensures the target still has an external attestation chain.[^11]
@@ -596,7 +592,7 @@ The Membrane is substrate-agnostic and designed to leverage **high-bandwidth inv
 #### Integration Points
 
 **1. Enhanced T₀ Biological Anchor**
-- During the genesis ceremony, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** an implant-derived neural signature (e.g., resting-state or task-evoked neural fingerprint).
+- During the T₀ initialization, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** an implant-derived neural signature (e.g., resting-state or task-evoked neural fingerprint).
 - Publish only the commitment + helper data to NOSTR. The raw high-dimensional neural template never leaves the secure channel.
 - **Limit:** If the neural template changes due to plasticity, injury, or device degradation, the fuzzy commitment must tolerate drift. This is harder than static biometric templates.
 
@@ -648,7 +644,7 @@ When bidirectional stimulation matures:
 
 ### 4.7 Agent-to-Agent Attestation Mode (Proposed Extension)
 
-The Membrane's core primitives — recursive Chain Proofs, Recursive Attestation (RFA), process continuity, and substrate-agnostic design — are directly applicable to **AI agent-to-agent (A2A) relations**. In a future with thousands of autonomous, delegating, and long-lived AI agents, the ability to cryptographically attest that an agent is running the expected process without undetected forking, rollback, or migration becomes critical. This mode extends **sovereignty** to pure-silicon entities.
+The Membrane's core primitives — recursive Chain Proofs, Recursive Attestation (RFA), process continuity, and substrate-agnostic design — are directly applicable to **AI agent-to-agent (A2A) relations**. In a future with thousands of autonomous, delegating, and long-lived AI agents, the ability to cryptographically attest that an agent is running the expected process without undetected forking, rollback, or migration becomes critical. This mode extends **local control** to pure-silicon entities.
 
 For pure-silicon agents, the biological T₀ anchor and human liveness provider are replaced by TEE substrate canaries. Agents can prove process integrity, reject unattested peers, and maintain verifiable delegation chains.
 
@@ -666,7 +662,7 @@ For pure-silicon agents, the biological T₀ anchor and human liveness provider 
 
 #### Core Adaptations for Pure Agent Mode
 
-**1. Agent Genesis (Silicon T₀)**
+**1. Agent anchor (silicon T₀)**
 - A new agent is instantiated inside a TEE with a fresh keypair.
 - Initial CP references the code hash, model weights commitment (e.g., via Merkle root or zk-proof of weights), owner/operator identity (optional), and deployment configuration.
 - Published to NOSTR or a dedicated agent relay network.
@@ -702,10 +698,10 @@ When Agent A initiates contact with Agent B:
 
 - **Performance overhead**: zk-STARK generation may be too slow for high-frequency, low-stakes interactions. Mitigation: cached recent proofs + lightweight substrate canaries for routine pings. See §10.1 for GPU acceleration path.
 - **Social layer inapplicable**: Pure agents replace WoT with on-chain reputation, staking, or operator-signed endorsements. This introduces new trust assumptions.
-- **Does not solve alignment**: The Membrane proves *process continuity and integrity*, not that the agent's goals are safe or aligned with the user/operator. Sovereignty is about self-determination, not benevolence.
+- **Does not solve alignment**: The Membrane proves *process continuity and integrity*, not that the agent's goals are safe or aligned with the user/operator. Local control is about key custody and severance, not goal alignment.
 - **TEE dependency**: Still limited by the security of underlying hardware enclaves.
 - **Hidden clones**: As always, clones that never rejoin the attested chain remain undetectable.
-- **Operator sovereignty conflict**: An agent may be "sovereign" in its attestation but still legally or practically owned by an operator. The protocol does not resolve ownership; it provides integrity evidence that can be used in governance or dispute resolution.
+- **Operator custody conflict**: An agent may be locally attested but still legally or practically owned by an operator. The protocol does not resolve ownership; it provides integrity evidence that can be used in governance or dispute resolution.
 
 #### Security Implications Table
 
@@ -727,11 +723,11 @@ When Agent A initiates contact with Agent B:
 | 2 | Agent handshake protocol | Interoperability with DIDs |
 | 3 | Delegation chain proofs | Multi-agent workflows |
 | 4 | Full recursive composition at scale | High-value agent economies |
-| 5 | Sovereign agent economies | Agents that own their own keys, host their own TEEs, and negotiate autonomously |
+| 5 | Autonomous agent economies | Agents that own their own keys, host their own TEEs, and negotiate autonomously |
 
 #### Hybrid Human–AI Membrane
 
-The biological T₀ anchor can gate **hybrid** stacks without merging human and agent sovereignty:
+The biological T₀ anchor can gate **hybrid** stacks without merging human and agent trust domains:
 
 1. **Human holds T₀** and signs IACs for which channels may operate.
 2. **Local or attested LLM** is a registered router channel (§4.2.2), not a silent default.
@@ -793,7 +789,7 @@ CP(t) = zk-STARK_PROVE(
 | **Fork / clone e-process** | Detects *attested* forks by requiring CP chain continuity. Raises cost by requiring synchronized multi-domain attestation. | Cannot prove no hidden clone exists outside the attestation chain. Cannot prove subjective uniqueness. |
 | **VR epistemic capture** | Ensures biological identity anchor remains active externally. Provides *external* evidence the target still has a grounded chain. | Cannot prevent a perfect simulation. Cannot prove the target is conscious inside VR. |
 | **Node self-compromise** | Detected by cross-node consensus (2/3). Single node cannot forge historical chain of peers. | If 2/3 nodes compromised, consensus breaks. No escape from Byzantine bounds. |
-| **Replay / rollback** | Prevented by hash-chain linking CP(t) to CP(t-1) and hybrid timestamping. | Requires rewriting chain from T₀. Does not prevent T₀ compromise at genesis. |
+| **Replay / rollback** | Prevented by hash-chain linking CP(t) to CP(t-1) and hybrid timestamping. | Requires rewriting chain from T₀. Does not prevent compromise during T₀ enrollment. |
 | **Sensor stream injection** | Merkle root binds to specific sensor data. | If sensors or upstream pipeline compromised before Merkle root, injection is possible. |
 | **Coerced channel use** | CP proves access to keys and registered devices. | Cannot distinguish willing use from coercion. Witnesses may detect anomalies (heuristic). |
 | **LLM routing / sequestration** | Router CP + IAC bind model id and context root; cross-domain disagreement fails closed. | Cannot detect routing through channels that never touch the membrane. |
@@ -814,14 +810,14 @@ CP(t) = zk-STARK_PROVE(
 
 ## 7. Recovery Mechanisms
 
-This section defines explicit recovery paths for T₀ loss, acknowledging that real systems must handle failure while preserving sovereignty.
+This section defines explicit recovery paths for T₀ loss, acknowledging that real systems must handle failure while preserving local control.
 
 ### 7.1 Lost T₀ Anchor (Hardware Failure)
 
 **Prevention:** T₀ key is sharded using Shamir's Secret Sharing (3-of-5) across geographically distributed, trusted hardware tokens.[^17]
 
 **Recovery:**
-1. **Social recovery:** K witnesses from the original WoT perform a **re-anchor ceremony**. Each witness signs a new T₀' event attesting that the same biological entity is present, using out-of-band verification (video call, in-person meeting, behavioral confirmation).
+1. **Social recovery:** K witnesses from the original WoT perform a **re-anchor protocol**. Each witness signs a new T₀' event attesting that the same biological entity is present, using out-of-band verification (video call, in-person meeting, behavioral confirmation).
 2. **Time-lock dead-man's switch:** A pre-committed NOSTR event is published if no CP is received for N×Δt. This event contains instructions for witness-initiated recovery or identity retirement.
 3. **Biometric refresh:** A new fuzzy commitment is generated from the same biological template (with updated helper data). The old commitment is explicitly revoked on-chain.
 
@@ -889,7 +885,7 @@ The protocol cannot prevent coercion. It can:
 - Enable detection via behavioral anomaly (witnesses who know the target notice deviations).
 - Provide a duress mode: a specific CP variant that signals coercion to the WoT without alerting the coercer.
 - **Invasive BCI extension:** Active challenge-response may detect stress/anxiety signatures (elevated amygdala activity, altered prefrontal coherence), but this is heuristic, not proof.
-- **Agent context:** An operator may coerce an agent by forcing it to run unauthorized code. The substrate canary detects code hash mismatch, but if the operator controls the TEE, they may suppress the canary. This is why self-hosted TEEs (not cloud-hosted) are critical for agent sovereignty.
+- **Agent context:** An operator may coerce an agent by forcing it to run unauthorized code. The substrate canary detects code hash mismatch, but if the operator controls the TEE, they may suppress the canary. This is why self-hosted TEEs (not cloud-hosted) are critical for agent local control.
 
 ---
 
@@ -972,7 +968,7 @@ Proof generation remains one of the primary practical blockers for frequent atte
 - **Optional CUDA backend** for Winterfell-compatible prover: Accelerate field operations, NTT/FFT, and hash chains using CUDA kernels (or Rust CUDA abstractions).
 - **Fallback path**: Pure CPU (multi-threaded) remains fully supported. Detection of CUDA-capable hardware enables accelerated mode automatically.
 - **Cross-platform consideration**: Prioritize CUDA for high-performance nodes, while exploring WebGPU / Vulkan SPIR-V (via rust-gpu) for broader device compatibility (including future mobile GPUs).
-- **Sovereignty note:** Users retain full control — acceleration runs locally on self-hosted hardware. No cloud GPU dependency required.
+- **Local control note:** Users retain full control — acceleration runs locally on self-hosted hardware. No cloud GPU dependency required.
 
 #### Caveats
 
@@ -1063,7 +1059,7 @@ These are explicitly unresolved and invite community contribution. **Top-priorit
 
 9. **Economic sustainability without tokens.** The no-token incentive model relies on altruism and self-interest. Long-term sustainability of relay and witness networks is unproven.
 
-10. **Agent sovereignty vs. operator ownership.** The protocol proves agent integrity, but does not resolve legal or economic ownership. If an operator owns the hardware, can they claim to own the agent's attestations? This is a governance and legal problem, not a cryptographic one.
+10. **Agent local control vs. operator ownership.** The protocol proves agent integrity, but does not resolve legal or economic ownership. If an operator owns the hardware, can they claim to own the agent's attestations? This is a governance and legal problem, not a cryptographic one.
 
 ⭐ **11. Cognitive identity drift detection.** Distinct from neural template drift (problem 3): the attestation chain remains valid while the subject's effective reasoning migrates to external LLM/BCI closed loops. Detecting routing substitution and epistemic capture **without reading thought content** — using IAC scope, router CP consistency, and cross-domain disagreement only — is an open problem tied to §0.2 and §4.2.[^21]
 
@@ -1310,9 +1306,9 @@ prev_link = Hash(pub_prev_cp_hash || pub_agent_identity || pub_timestamp)
 
 **Last row:** `trace_acc == pub_code_hash`, `ilk_acc == pub_ilk_root`, `time_delta >= 0`, `continuity == 1`, `tee_valid == 1`
 
-### Sovereignty Note
+### Scope note
 
-The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A sovereign agent can prove it is running the code it claims to be running, but this does not prove the code is safe or benevolent. Sovereignty is about self-determination and integrity, not about trustworthiness.
+The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. An autonomous agent can prove it is running the code it claims to be running, but this does not prove the code is safe or benevolent. Local control proves runtime integrity, not trustworthiness or alignment.
 
 ---
 
@@ -1350,6 +1346,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.8 | 2026-06-14 | Replace ceremony/manifesto phrasing; standardize on local control |
 | v0.9.7 | 2026-06-14 | Remove unrelated-application wording remnants |
 | v0.9.6 | 2026-06-14 | Genericize §0.8 PoP table and invasive BCI (remove named vendors); fix §0.5 affiliation text |
 | v0.9.5 | 2026-06-14 | Remove third-party competitor citations (policy vs continuity §4.8 retained) |
@@ -1410,4 +1407,4 @@ Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-researc
 
 [^22]: Grokipaedia. *iba-neural-guard*. https://github.com/Grokipaedia/iba-neural-guard — **Implementation reference (T2).** Intent certificate pattern: decoded neural signal ≠ authorization. Adapted for Membrane IAC layer (§4.2.1).
 
-*Tags: #the-membrane #whitepaper #zk-stark #identity-attestation #process-continuity #sovereignty #nostr #agent-attestation*
+*Tags: #the-membrane #whitepaper #zk-stark #identity-attestation #process-continuity #local-control #nostr #agent-attestation*
