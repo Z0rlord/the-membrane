@@ -4,12 +4,12 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.5"
+version: "0.9.6"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
 
-> **Independent research.** This document is **personal research** by the author (Zorie R. Barber). It is **not** affiliated with, endorsed by, sponsored by, or commissioned by any company, employer, client, university, foundation, or government body. Mentions of third-party products, services, papers, or trademarks (e.g. Neuralink, OpenBCI, NIST) are **descriptive only** — for threat modeling, benchmarking, or technical comparison. No partnership, employment, or investment relationship is implied.
+> **Independent research.** This document is **personal research** by the author (Zorie R. Barber). It is **not** affiliated with, endorsed by, sponsored by, or commissioned by any company, employer, client, university, foundation, or government body. Mentions of third-party products, services, papers, or trademarks (e.g. open-source BCI stacks, NIST standards) are **descriptive only** — for threat modeling, benchmarking, or technical comparison. No partnership, employment, or investment relationship is implied.
 
 ## Abstract
 
@@ -73,7 +73,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
  - [4.3 Layer 2: Social Graph Consensus](#43-layer-2-social-graph-consensus)
  - [4.4 Layer 3: Substrate Transition Gate](#44-layer-3-substrate-transition-gate)
  - [4.5 Layer 4: Recursive Attestation (RFA)](#45-layer-4-recursive-firewall-attestation-rfa)
- - [4.6 Neuralink Primitives Integration](#46-neuralink-primitives-integration)
+ - [4.6 Cortical Implant Primitives Integration](#46-cortical-implant-primitives-integration)
  - [4.7 Agent-to-Agent Attestation Mode](#47-agent-to-agent-attestation-mode)
  - [4.8 Policy Enforcement vs Channel Continuity](#48-policy-enforcement-vs-channel-continuity)
 - [5. Formal Specification](#5-formal-specification)
@@ -204,7 +204,7 @@ We use them because they are the strongest available hardware isolation layer. W
 
 The Membrane is **independent, personal research** — a forward-looking architecture specification, not a production-ready protocol, not a claim of present-day technical feasibility, and **not** an official project of any organization.
 
-**Affiliation:** The author maintains this repository and whitepaper in a personal capacity. Employers, clients, and collaborators past or present are **not** responsible for its contents unless they explicitly say otherwise in writing. Competitor and vendor citations (§4.8, footnotes) reflect the author's reading of the literature, not those vendors' participation in this work.
+**Affiliation:** The author maintains this repository and whitepaper in a personal capacity. Employers, clients, and collaborators past or present are **not** responsible for its contents unless they explicitly say otherwise in writing. Third-party names in footnotes and Appendix B are descriptive citations only and do not imply affiliation or endorsement.
 
 Several components described in this document remain:
 - computationally impractical at scale,
@@ -346,18 +346,18 @@ stateDiagram-v2
 
 ### Comparison: The Membrane vs. Existing Systems
 
-| Feature | WebAuthn / Passkeys | Proof of Humanity | Worldcoin | BrightID | **The Membrane** | **The Membrane + Neuralink** | **The Membrane + A2A** |
-|---------|---------------------|-------------------|-----------|----------|----------------|---------------------------|---------------------|
-| **Identity proof** | Cryptographic key possession | Video + CAPTCHA | Iris scan | Social graph | Biometric + WoT + TEE | Biometric + Neural + WoT + TEE | Code hash + TEE + operator endorsement (optional) |
+| Feature | Platform passkeys | Video-based PoP | Biometric PoP | Social-graph PoP | **The Membrane** | **The Membrane + invasive BCI** | **The Membrane + A2A** |
+|---------|-------------------|-----------------|---------------|------------------|----------------|------------------------------|---------------------|
+| **Identity proof** | Cryptographic key possession | Video + CAPTCHA | Iris / face scan | Social graph | Biometric + WoT + TEE | Biometric + neural + WoT + TEE | Code hash + TEE + operator endorsement (optional) |
 | **Liveness** | None | Weak | Weak | None | Channel CP + ZK proof | Neural/BCI + ZK proof | Substrate canary |
 | **Fork detection** | None | None | None | None | Recursive CP chain + RFA | Recursive CP chain + RFA | Recursive CP chain + RFA |
 | **Substrate agnostic** | No | No | No | No | **Yes** (bio ↔ silicon) | **Yes** (bio ↔ silicon) | **Yes** (silicon ↔ silicon) |
-| **Privacy model** | Good | Moderate | Poor (biometric storage) | Moderate | **ZK-STARK: prove without revealing** | **ZK-STARK + neural embedding: prove without revealing raw spikes** | **ZK-STARK + execution trace: prove without revealing weights** |
+| **Privacy model** | Good | Moderate | Moderate–poor (vendor-held biometrics) | Moderate | **ZK-STARK: prove without revealing** | **ZK-STARK + neural embedding: prove without revealing raw spikes** | **ZK-STARK + execution trace: prove without revealing weights** |
 | **Post-quantum** | No | No | No | No | **Yes (hash-based STARKs)** | **Yes (hash-based STARKs)** | **Yes (hash-based STARKs)** |
 | **Production ready** | Yes | Partial | Partial | Partial | **No (research only)** | **No (research + medical device dependent)** | **No (research only)** |
 | **Consciousness claim** | No | No | No | No | **Explicitly none** | **Explicitly none** | **Explicitly none** |
 | **Active challenge-response** | No | No | No | No | No | **Yes (neural stimulation-response, future)** | No (passive substrate canary) |
-| **Sovereignty model** | Platform-controlled keys | Platform-controlled verification | Corporate-controlled orbs | Community-controlled graph | **Self-controlled keys + self-hosted infra + personal WoT + exit rights** | **Self-controlled keys + self-hosted infra + personal WoT + exit rights + neural self-attestation** | **Self-controlled keys + self-hosted infra + verifiable delegation + exit rights** |
+| **Sovereignty model** | Platform-controlled keys | Vendor-controlled verification | Vendor-controlled capture | Community-controlled graph | **Self-controlled keys + self-hosted infra + personal WoT + exit rights** | **Self-controlled keys + self-hosted infra + personal WoT + exit rights + neural self-attestation** | **Self-controlled keys + self-hosted infra + verifiable delegation + exit rights** |
 | **Mutual attestation** | No | No | No | No | No | No | **Yes (agent handshake protocol)** |
 | **Delegation audit** | No | No | No | No | No | No | **Yes (recursive delegation chains)** |
 
@@ -574,37 +574,37 @@ A fully compromised node can forge its own attestation. RFA does not prevent thi
 
 **Limitation:** If 2/3 nodes are compromised simultaneously, the consensus is broken. There is no recursive escape from this — it is the standard Byzantine fault tolerance bound.[^12]
 
-### 4.6 Neuralink Primitives Integration (Proposed Extension)
+### 4.6 Cortical Implant Primitives Integration (Proposed Extension)
 
-The Membrane is substrate-agnostic and designed to leverage high-bandwidth Brain-Computer Interfaces (BCIs) such as Neuralink's N1 implant. Neuralink primitives provide richer, higher-entropy signals than traditional IMU/video/audio canaries, strengthening both the **T₀ biological anchor** and the **Liveness Canary Circuit** — with significant caveats.
+The Membrane is substrate-agnostic and designed to leverage **high-bandwidth invasive BCIs** — cortical implants with kilohertz-scale neural recording. Implant-class signals provide richer, higher-entropy inputs than traditional IMU/video/audio canaries, strengthening both the **T₀ biological anchor** and the **Liveness Canary Circuit** — with significant caveats.
 
-#### Neuralink Primitives Relevant to The Membrane
+#### Implant Primitives Relevant to The Membrane
 
 | Primitive | Description | The Membrane Application | Security Properties |
 |-----------|-------------|------------------------|---------------------|
-| **N1 Implant Electrode Array** | 1,024+ electrodes on ultra-thin threads recording neural spikes and local field potentials (LFPs) at high sampling rates (~20 kHz). | Primary source for neural liveness signals and biometric template refresh. | High-entropy neural patterns are difficult to forge or replay perfectly. |
-| **Wireless Telemetry & Secure Pairing** | Bluetooth Low Energy with patented out-of-band pairing and AES-256 encryption. | Attested data channel from implant to node. | Cryptographic binding of implant to authorized devices; resists MITM. |
-| **On-implant Processing** | Low-power amplification, digitization, and initial spike detection. | Trusted execution environment for generating commitments before wireless transmission. | Reduces attack surface on raw neural data. |
-| **Bidirectional Capability** | Recording + stimulation (emerging). | Challenge-response protocols: node can issue neural "challenges" (subtle stimulation patterns) and verify responses. | Active liveness proof beyond passive recording. |
-| **Device Telemetry & State** | Implant health metrics, thread integrity, power status, firmware attestation. | Feed into Recursive Attestation (RFA) and substrate transition proofs. | Enables hardware-rooted continuity checks. |
+| **High-density electrode array** | 1,000+ electrodes on flexible leads recording spikes and local field potentials (LFPs) at high sampling rates (~20 kHz). | Primary source for neural liveness signals and biometric template refresh. | High-entropy neural patterns are difficult to forge or replay perfectly. |
+| **Wireless telemetry & secure pairing** | Bluetooth Low Energy with out-of-band pairing and AES-256 encryption. | Attested data channel from implant to node. | Cryptographic binding of implant to authorized devices; resists MITM. |
+| **On-implant processing** | Low-power amplification, digitization, and initial spike detection. | Trusted execution environment for generating commitments before wireless transmission. | Reduces attack surface on raw neural data. |
+| **Bidirectional capability** | Recording + stimulation (emerging). | Challenge-response protocols: node can issue neural "challenges" (subtle stimulation patterns) and verify responses. | Active liveness proof beyond passive recording. |
+| **Device telemetry & state** | Implant health metrics, lead integrity, power status, firmware attestation. | Feed into Recursive Attestation (RFA) and substrate transition proofs. | Enables hardware-rooted continuity checks. |
 
 **Caveats:**
-- Current Neuralink devices are primarily medical (restoring function for paralysis, speech, etc.) with evolving long-term reliability (thread retraction observed in early trials).[^18]
-- Full remote attestation capabilities are not publicly documented as of 2026; integration would require Neuralink API/SDK exposure or custom firmware extensions.
+- Current clinical cortical implants are investigational medical devices with evolving long-term reliability (e.g., lead retraction in early trials).[^18]
+- Full third-party remote attestation APIs are not publicly documented as of 2026; integration would require manufacturer SDK exposure or custom firmware extensions.
 - Neural data is extremely sensitive — all commitments must use strong privacy techniques (fuzzy extractors, homomorphic commitments, or zk-proofs over embeddings).[^8]
-- The N1 is a **single point of failure** inside the skull. If compromised at the hardware level, no software protocol can recover trust without surgical replacement.
+- The implant is a **single point of failure** inside the skull. If compromised at the hardware level, no software protocol can recover trust without surgical replacement.
 
 #### Integration Points
 
 **1. Enhanced T₀ Biological Anchor**
-- During the genesis ceremony, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** a Neuralink-derived neural signature (e.g., resting-state or task-evoked neural fingerprint).
+- During the genesis ceremony, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** an implant-derived neural signature (e.g., resting-state or task-evoked neural fingerprint).
 - Publish only the commitment + helper data to NOSTR. The raw high-dimensional neural template never leaves the secure channel.
 - **Limit:** If the neural template changes due to plasticity, injury, or device degradation, the fuzzy commitment must tolerate drift. This is harder than static biometric templates.
 
 **2. Neural-Enhanced Liveness Canary (Liveness-2 Circuit)**
 Add as optional parallel domain:
 - **Neural Canary Event**: Participant performs a simple standardized mental or motor task (e.g., imagined movement, mental arithmetic, or specific imagery).
-- The N1 implant streams processed neural features (spike rates, LFP power in key frequency bands, population vector activity) to the The Membrane node.
+- The implant streams processed neural features (spike rates, LFP power in key frequency bands, population vector activity) to the Membrane node.
 - The node generates a Merkle root over these features and includes it in the CP.
 - **ZK circuit augmentation:** The `Liveness-1` circuit gains an additional column `neural_acc` that accumulates hash commitments of neural feature vectors. Boundary constraints verify the neural Merkle root against `pub_neural_root`.
 
@@ -615,21 +615,21 @@ Add as optional parallel domain:
 **3. Neural Challenge-Response (Active Liveness)**
 When bidirectional stimulation matures:
 - The node issues a pseudorandom stimulation pattern (subtle, below perceptual threshold).
-- The N1 records the evoked neural response.
+- The implant records the evoked neural response.
 - The node verifies that the response matches the expected signature for that identity and challenge.
 - This creates an **active** liveness proof: the entity being attested must have a live neural substrate capable of responding to perturbation, not just replaying pre-recorded data.
 
 **Caveat:** Stimulation safety is medical-critical. Any challenge-response protocol must operate within clinically validated parameters. This is a medical ethics boundary, not just an engineering one.[^18]
 
 **4. Implant Telemetry as RFA Input**
-- N1 firmware version, thread integrity metrics, and power state are included as public inputs to the node's RFA STARK.
-- If the implant reports thread retraction or firmware mismatch, the node fails closed pending surgical or remote re-anchoring.
+- Implant firmware version, lead integrity metrics, and power state are included as public inputs to the node's RFA STARK.
+- If the implant reports lead retraction or firmware mismatch, the node fails closed pending surgical or remote re-anchoring.
 - **Caveat:** This telemetry comes from the implant itself. A compromised implant can lie about its own state. The telemetry is one input among many in cross-domain consensus, not a standalone truth.
 
 #### Security Implications
 
-| Attack | Without Neuralink | With Neuralink |
-|--------|-------------------|----------------|
+| Attack | Without invasive BCI | With invasive BCI |
+|--------|----------------------|-------------------|
 | Replay pre-recorded sensor stream | Possible if video/IMU captured | Much harder: neural features are high-dimensional and task-specific |
 | Deepfake video injection | Possible with generative AI | Does not bypass neural channel |
 | Coerced channel use | Possible under duress | Active challenge-response may detect stress signatures (heuristic, not proof) |
@@ -641,7 +641,7 @@ When bidirectional stimulation matures:
 
 | Phase | Milestone | Dependency |
 |-------|-----------|------------|
-| 0 | Documented Neuralink API/SDK for third-party attestation | Neuralink corporate decision |
+| 0 | Documented third-party attestation API for clinical implants | Manufacturer / regulatory decision |
 | 1 | Fuzzy commitment prototype over neural embeddings | Research-only; no human trials without IRB |
 | 2 | `Liveness-2` circuit with neural column | Requires Winterfell AIR extension |
 | 3 | Challenge-response protocol design | Medical safety validation; FDA or equivalent |
@@ -800,13 +800,13 @@ CP(t) = zk-STARK_PROVE(
 | **LLM routing / sequestration** | Router CP + IAC bind model id and context root; cross-domain disagreement fails closed. | Cannot detect routing through channels that never touch the membrane. |
 | **Cognitive identity drift** | IAC TTL and session nonce raise cost of silent habituation to external inference. | Cannot prove subject still reasons endogenously when attestations remain valid. |
 
-### Extended Attack Matrix (Neuralink + A2A)
+### Extended Attack Matrix (invasive BCI + A2A)
 
 | Attack Vector | What the protocol actually does | What it cannot do |
 |--------------|--------------------------------|-------------------|
-| **Neuralink adversarial stimulation** | Active challenge-response may detect anomalous response patterns. | If attacker controls stimulation within medical bounds, may force "correct" response. Cross-domain consensus required for detection. |
-| **Neuralink firmware rollback** | Firmware attestation hash checked in RFA. | If rollback occurs before attestation chain begins, undetectable. |
-| **Neuralink supply-chain implant** | Detected if firmware hash mismatches audited reference at T₀. | If backdoored firmware matches reference (colluding manufacturer), undetectable without destructive analysis. |
+| **Implant adversarial stimulation** | Active challenge-response may detect anomalous response patterns. | If attacker controls stimulation within medical bounds, may force "correct" response. Cross-domain consensus required for detection. |
+| **Implant firmware rollback** | Firmware attestation hash checked in RFA. | If rollback occurs before attestation chain begins, undetectable. |
+| **Implant supply-chain backdoor** | Detected if firmware hash mismatches audited reference at T₀. | If backdoored firmware matches reference (colluding manufacturer), undetectable without destructive analysis. |
 | **Agent hidden fork by operator** | Substrate canary + CP chain makes detectable if fork must re-attest. | If fork never interacts with attested peers, undetectable. |
 | **Agent delegation hijacking** | Delegation chain proofs require each hop to carry valid CP. | If compromised sub-agent never rejoins chain, undetectable by upstream. |
 | **Agent value extraction (checkpoint/rollback)** | Substrate canary detects unauthorized checkpoint/restore. | If extraction occurs between canary cycles, may be undetectable. |
@@ -849,8 +849,8 @@ This section defines explicit recovery paths for T₀ loss, acknowledging that r
 | WoT drops below K | Liveness + node OK | Degraded mode: accept CP with reduced K for one cycle, alert target, require WoT refresh within 48 hours. |
 | Single node fails | Other 2 nodes + all domains OK | Continue operating. Failed node is marked for repair. RFA chain continues on remaining nodes. |
 | 2/3 nodes fail | Any domain status | **Fail closed immediately.** Dead-man's key becomes the only override. |
-| Neuralink telemetry fails (if equipped) | All other domains OK | Degraded mode: fall back to Liveness-1 (traditional sensor) for this cycle. Alert target. |
-| Neuralink firmware mismatch | All other domains OK | **Fail closed.** Surgical or remote re-anchoring required before resuming neural attestation. |
+| Implant telemetry fails (if equipped) | All other domains OK | Degraded mode: fall back to Liveness-1 (traditional sensor) for this cycle. Alert target. |
+| Implant firmware mismatch | All other domains OK | **Fail closed.** Surgical or remote re-anchoring required before resuming neural attestation. |
 | Agent substrate canary fails | All other domains OK | Degraded mode: require fresh CP within shortened window, alert operator and peers. |
 | Agent delegation chain break | Parent + other children OK | Isolate the broken branch, alert downstream agents, require re-attestation before resuming delegation. |
 | Router session stale or `model_id` mismatch | Liveness + WoT + node OK | **Sever LLM channel.** Require fresh router CP + IAC or offline-only mode. |
@@ -871,8 +871,8 @@ The protocol is designed to make sustained undetected compromise more expensive 
 | Maintain fork for 30 days | Continuous CP generation + social maintenance + no detection | Time-bounded liveness + out-of-band witness contact increases operational burden |
 | Silent TEE compromise | Side-channel lab + physical access + firmware exploit | Cross-node consensus requires compromising 2/3 independent nodes |
 | Perfect VR simulation | Full physics simulation + social graph simulation + NOSTR mesh simulation | "Physical expense" heuristic: simulation cost exceeds most attack budgets[^6] |
-| Neuralink simulation | Complete connectome model + real-time neural dynamics simulation | Cost orders of magnitude higher than physics simulation, but not infinite |
-| Adversarial Neuralink stimulation | Medical device exploit + stimulation control | Constrained by medical safety bounds; cross-domain consensus detects anomalies |
+| Invasive BCI simulation | Complete connectome model + real-time neural dynamics simulation | Cost orders of magnitude higher than physics simulation, but not infinite |
+| Adversarial implant stimulation | Medical device exploit + stimulation control | Constrained by medical safety bounds; cross-domain consensus detects anomalies |
 | Agent fork for unauthorized delegation | Compromise operator + forge CP chain + maintain hidden clone | Detectable if fork must interact with attested peers; requires sustained operational cost |
 | Mass agent supply-chain compromise | Backdoor all TEEs in agent fleet | Detectable via widespread CP failures and RFA mismatches |
 
@@ -889,7 +889,7 @@ The protocol cannot prevent coercion. It can:
 - Raise the cost by requiring *continuous* coercion across Δt (not one-time extraction).
 - Enable detection via behavioral anomaly (witnesses who know the target notice deviations).
 - Provide a duress mode: a specific CP variant that signals coercion to the WoT without alerting the coercer.
-- **Neuralink extension:** Active challenge-response may detect stress/anxiety signatures (elevated amygdala activity, altered prefrontal coherence), but this is heuristic, not proof.
+- **Invasive BCI extension:** Active challenge-response may detect stress/anxiety signatures (elevated amygdala activity, altered prefrontal coherence), but this is heuristic, not proof.
 - **Agent context:** An operator may coerce an agent by forcing it to run unauthorized code. The substrate canary detects code hash mismatch, but if the operator controls the TEE, they may suppress the canary. This is why self-hosted TEEs (not cloud-hosted) are critical for agent sovereignty.
 
 ---
@@ -922,7 +922,7 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 | Witness confirmation latency | < 4 hours | Measure NOSTR gossip propagation + human response time |
 | False positive rate (fail closed without attack) | < 1% per month | Log all false alerts and root-cause |
 | Operational continuity (target) | 30 days without manual intervention | Time-to-first-failure test |
-| Neuralink extension proof size (future) | < 75 KB | Estimate additional column overhead |
+| Invasive BCI extension proof size (future) | < 75 KB | Estimate additional column overhead |
 | A2A handshake latency (future) | < 2 seconds | Cached CP + lightweight substrate canary |
 | Proof verification latency (A2A target) | < 250 ms | Benchmark verifier on standard CPU; required for real-time agent handshakes |
 | NOSTR publication overhead (target) | < 10 ms | Measure event publish latency to self-hosted relay |
@@ -931,12 +931,12 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 
 | Immediately Actionable | Future-Dependent |
 |----------------------|------------------|
-| NOSTR relay + OpenClaw | BCI integration |
+| NOSTR relay + local automation | BCI integration |
 | Smartphone sensor pipeline | Full VR runtime attestation |
 | Winterfell STARK circuit | Multi-party recursive composition at scale |
 | Single TEE node | Cross-vendor TEE consensus (AMD + Intel + ARM) |
 | K=2 WoT | Large-scale WoT with recursive witness validation |
-| Liveness-1 (traditional sensors) | Liveness-2 (Neuralink neural signals) |
+| Liveness-1 (traditional sensors) | Liveness-2 (invasive BCI neural signals) |
 | Basic CP exchange | Full A2A delegation chains |
 | CPU proving | GPU-accelerated proving (§10.1) |
 
@@ -946,13 +946,13 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 
 | Phase | Deliverable | Stack | Blockers |
 |-------|-------------|-------|----------|
-| 0 | NOSTR attestation bus + OpenClaw automation | Rust/TypeScript, NOSTR relays[^14] | Relay censorship, Sybil relays |
+| 0 | NOSTR attestation bus + local automation | Rust/TypeScript, NOSTR relays[^14] | Relay censorship, Sybil relays |
 | 1 | Liveness canary zk-STARK circuit | Winterfell/Cairo, SHA-256/Rescue[^13] | STARK proof generation latency on mobile/embedded |
 | 2 | Self-hosted TEE node | AMD SEV-SNP, Linux KVM[^7] | Supply-chain trust, side-channel leakage |
 | 3 | Social graph witness protocol | NOSTR WoT, gossip model[^9] | Social layer compromise, witness coercion |
 | 4 | Substrate transition gate | VR runtime integration[^10] | VR runtime itself is a massive TCB |
 | 5 | Recursive node attestation | Multi-party STARK composition[^2] | 2/3 compromise threshold is hard limit |
-| 6 | Neuralink extension (optional) | N1 API + Winterfell AIR extension[^18] | Medical device maturity, corporate API availability, FDA validation |
+| 6 | Invasive BCI extension (optional) | Implant API + Winterfell AIR extension[^18] | Medical device maturity, corporate API availability, FDA validation |
 | 7 | Agent-to-Agent mode | Pure-silicon CP + handshake protocol + delegation chains | Performance overhead, incentive design, TEE availability for agents |
 | 8 | GPU acceleration (optional) | CUDA kernels + Winterfell backend | NVIDIA dependency, driver-level trust, mobile power constraints |
 
@@ -988,7 +988,7 @@ Proof generation remains one of the primary practical blockers for frequent atte
 |-------|-----------|---------|
 | 1+ | CUDA-accelerated polynomial & hash kernels | Faster MVP proving on desktops/servers |
 | 2+ | Integrated Winterfell GPU backend (optional feature) | Mobile-friendly liveness proofs |
-| 3+ | GPU-optimized recursive composition | Practical high-frequency A2A & Neuralink use |
+| 3+ | GPU-optimized recursive composition | Practical high-frequency A2A & invasive BCI use |
 
 ---
 
@@ -1005,7 +1005,7 @@ Reference implementation: **GPL-3.0** or **AGPL-3.0**. The protocol must remain 
 | Pre-alpha | Community audit (open source) | NOSTR event schema, circuit logic |
 | Alpha | Independent security firm | TEE integration, side-channel analysis |
 | Beta | Academic cryptographers | zk-STARK soundness, recursive composition |
-| Production | Multi-party audit consortium | Full stack, social recovery, coercion resistance, Neuralink extension safety, A2A delegation integrity |
+| Production | Multi-party audit consortium | Full stack, social recovery, coercion resistance, invasive BCI extension safety, A2A delegation integrity |
 
 ### 11.3 Interoperability
 
@@ -1013,7 +1013,7 @@ Reference implementation: **GPL-3.0** or **AGPL-3.0**. The protocol must remain 
 - **TEE ecosystems:** Targets AMD SEV-SNP and Intel TDX via standard attestation APIs. ARM CCA as future target.
 - **Identity bridges:** Optional DID:web or DID:ion mapping for compatibility with W3C decentralized identity systems. No dependency.
 - **ZK ecosystems:** STARK proofs verifiable on StarkNet or Cairo VM for on-chain anchoring if desired. Not required.
-- **Neuralink:** Requires proprietary API/SDK. If unavailable, the protocol falls back to Liveness-1 without degradation.
+- **Invasive BCI:** Requires proprietary manufacturer API/SDK. If unavailable, the protocol falls back to Liveness-1 without degradation.
 - **A2A frameworks:** Can be layered over MCP, A2A, or custom agent communication protocols. CP exchange is transport-agnostic.
 
 ---
@@ -1028,7 +1028,7 @@ If e-processes or pure agents achieve legal or moral personhood, the membrane mu
 
 The membrane's channel requirements could be weaponized: a captor forces the subject to maintain attested sessions. The duress signal and dead-man's key are partial mitigations, not solutions.
 
-**Neuralink extension adds new coercion vectors:**
+**Invasive BCI extension adds new coercion vectors:**
 - Forced implantation or replacement.
 - Adversarial stimulation to induce compliance.
 - Neural data extraction under duress.
@@ -1193,7 +1193,7 @@ This creates a **proof chain**. An adversary compromising the node at T must for
 
 ### Overview
 
-The `Liveness-2` circuit extends `Liveness-1` by adding a **neural feature accumulator** column. It is designed for BCI-equipped users (e.g., Neuralink N1) and operates as an optional parallel domain. The protocol accepts either `Liveness-1` or `Liveness-2` signals, or both for higher confidence.
+The `Liveness-2` circuit extends `Liveness-1` by adding a **neural feature accumulator** column. It is designed for BCI-equipped users (high-bandwidth cortical implant) and operates as an optional parallel domain. The protocol accepts either `Liveness-1` or `Liveness-2` signals, or both for higher confidence.
 
 ### Additional Public Inputs
 
@@ -1236,7 +1236,7 @@ neural_acc' = Hash(neural_acc || priv_neural_data[row])
 - Proves that an entity with the biometric key generated a neural-feature Merkle root within Δt for a specific task.
 - Does **not** prove the neural data was not synthesized by a connectome model.
 - Does **not** prove the entity was conscious during the task.
-- Does **not** prove the N1 implant was not backdoored at manufacture.
+- Does **not** prove the implant was not backdoored at manufacture.
 - Active challenge-response (future) adds an additional constraint: the neural response must match a stimulation-locked pattern, raising simulation cost.[^18]
 
 ---
@@ -1317,7 +1317,7 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 
 ---
 
-## Integration with NOSTR + OpenClaw
+## Integration with NOSTR + Local Automation
 
 **NOSTR bus:**
 - CP events: kind `31990`, tags `["e", <prev_event_id>]`, `["p", <firewall_npub>]`, `["k", "the-membrane-liveness"]`
@@ -1328,7 +1328,7 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 - Agent CP events: kind `31990`, tags `["k", "the-membrane-agent"]` (optional)
 - Relays: self-hosted + 2+ public for redundancy. **Caveat:** relays can censor or partition.[^14]
 
-**OpenClaw automation:**
+**Local automation (e.g., cron or sensor trigger):**
 - Trigger: IMU threshold or cron.
 - Action: Compile sensor data → generate STARK → publish NOSTR.
 - Fallback: Proof failure or missing witnesses → post kind `31991` "degraded continuity" alert → fail closed.
@@ -1340,7 +1340,7 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 | Tier | Type | Citations |
 |------|------|-----------|
 | **T1: Formal** | Peer-reviewed or established cryptographic standards | [^2] Neulinger & Sparer (Springer), [^8] Juels & Wattenberg (ACM CCS), [^13] Ben-Sasson et al. (STARKs), [^15] NIST PQC, [^17] Shamir (ACM) |
-| **T2: Implementation** | Production systems, protocols, hardware docs | [^7] AMD SEV-SNP / Intel TDX, [^13] Winterfell/Cairo, [^14] NOSTR protocol, [^18] Neuralink Corp (medical device docs) |
+| **T2: Implementation** | Production systems, protocols, hardware docs | [^7] AMD SEV-SNP / Intel TDX, [^13] Winterfell/Cairo, [^14] NOSTR protocol, [^18] clinical cortical implant literature |
 | **T3: Conceptual** | Speculative architecture, sci-fi framing, heuristic arguments | [^1] Khan preprint (cognitive firewall concept), [^11] Banks (Surface Detail as inverse reference), [^6] embodied cognition heuristic |
 
 No citation in this document is presented as stronger than its tier.
@@ -1351,6 +1351,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.6 | 2026-06-14 | Genericize §0.8 PoP table and invasive BCI (remove named vendors); fix §0.5 affiliation text |
 | v0.9.5 | 2026-06-14 | Remove third-party competitor citations (policy vs continuity §4.8 retained) |
 | v0.9.4 | 2026-06-14 | Independent research / no-affiliation disclaimer (title block, §0.5, contribute) |
 | v0.9.3 | 2026-06-14 | IAC layer (§4.2.1), router session CPs (§4.2.2), epistemic capture (§0.2), substrate parity, policy vs continuity (§4.8), hybrid human–AI membrane, cognitive identity drift open problem |
@@ -1358,7 +1359,7 @@ No citation in this document is presented as stronger than its tier.
 | v0.9.1 | 2026-06-14 | Remove cultured tissue (§4.8) and Related Work (§14) |
 | v0.9 | 2026-06-14 | Refocus on cognitive firewall; remove DojoPop conflation |
 | v0.8 | 2026-06-14 | Strip AI slop; pluggable channels; rebrand from GORGONEUM |
-| v0.6 | 2026-05-12 | Related work, GPU section, A2A and Neuralink extensions |
+| v0.6 | 2026-05-12 | Related work, GPU section, A2A and invasive BCI extensions |
 | v0.5 | 2026-05-12 | Sovereignty framing and agent attestation mode |
 
 ---
@@ -1401,7 +1402,7 @@ Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-researc
 
 [^17]: Shamir, A. (1979). *How to Share a Secret*. Communications of the ACM. — **Formal (T1).** Secret sharing scheme used for T₀ key sharding and social recovery.
 
-[^18]: Neuralink Corporation. *Patient Information: N1 Implant and R1 Robot*. https://neuralink.com/patient-information/ — **Implementation / medical device (T2).** As of 2026, Neuralink devices are investigational medical devices with demonstrated thread retraction in early trials. No public remote attestation API exists. All security claims are prospective.
+[^18]: Clinical cortical implant literature (e.g., high-density electrode ASIC platforms, investigational device trials). **Implementation / medical device (T2).** As of 2026, consumer-accessible third-party attestation APIs for invasive BCIs are not publicly available. Thread/lead retraction and firmware rollback remain documented clinical risks. All Membrane integration claims are prospective.
 
 [^19]: National Institute of Standards and Technology (NIST). *SP 800-207: Zero Trust Architecture*. https://doi.org/10.6028/NIST.SP.800-207 — **Standards (T1).** Vendor-neutral reference for Zero Trust Architecture. The Membrane implements these principles via cryptographic consensus rather than network segmentation.
 

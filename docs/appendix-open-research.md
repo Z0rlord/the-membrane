@@ -1,20 +1,20 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md) (v0.9.5). Last updated: 2026-06-14.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.6). Last updated: 2026-06-14.
 
 **Independent research** — not affiliated with any organization named herein. IAC and router session CP schemas: whitepaper §4.2.1–§4.2.2.
 
-## Neuralink: what is public
+## Clinical cortical implants: what is public
 
-Neuralink has **no open SDK** and no third-party attestation API for the clinical N1 stack. Useful public material:
+High-bandwidth invasive BCIs have **no open third-party attestation SDK** suitable for Membrane integration today. Useful public material (vendor-neutral):
 
 | Resource | URL | Use for Membrane |
 |----------|-----|------------------|
-| ASIC / dev platform paper | [bioRxiv 703801](https://www.biorxiv.org/content/10.1101/703801v4) | Streaming model, electrode counts, UDP multicast — not consumer app stack |
-| Patient / device overview | [neuralink.com/patient-information](https://neuralink.com/patient-information/) | Threat model for BLE pairing, firmware updates, phone app as TCB |
-| PRIME study | [ClinicalTrials NCT06429735](https://clinicaltrials.gov/study/NCT06429735) | Regulatory context only |
+| ASIC / dev platform paper | [bioRxiv 703801](https://www.biorxiv.org/content/10.1101/703801v4) | Streaming model, electrode counts, UDP multicast — representative implant-class architecture |
+| BCI cybersecurity survey | [arXiv:2007.09466](https://arxiv.org/abs/2007.09466) | BLE pairing, firmware updates, companion app as TCB |
+| Wearable BCI security (Argus) | [arXiv:2201.07711](https://arxiv.org/abs/2201.07711) | Information-flow control patterns for neural data paths |
 
-Treat Neuralink as a **future Liveness-2 target**, not a build dependency today.
+Treat invasive cortical implants as a **future Liveness-2 target**, not a Phase 0 build dependency.
 
 ---
 
@@ -104,12 +104,12 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 
 - Covert passive surveillance with no attested channel.
 - Thought content or consciousness.
-- Neuralink-class invasive implant integration.
+- Invasive cortical implant integration.
 
 ---
 
 ## References to add to implementation issues
 
 - Khan, E. (2026). *Brain Hacking: AI for Safeguarding Against Dangerous AI*. [Preprints.org](https://www.preprints.org/manuscript/202601.0156) — cognitive firewall framing (T3).
-- Li et al. BCI cybersecurity survey — [arXiv:2007.09466](https://arxiv.org/abs/2007.09466) — Neuralink BLE threat model.
+- Li et al. BCI cybersecurity survey — [arXiv:2007.09466](https://arxiv.org/abs/2007.09466) — implant companion-app threat model.
 - Argus wearable BCI security — [arXiv:2201.07711](https://arxiv.org/abs/2201.07711).
