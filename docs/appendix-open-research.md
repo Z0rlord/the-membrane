@@ -1,8 +1,8 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md) (v0.9.8). Last updated: 2026-06-14.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.9). Last updated: 2026-06-14.
 
-**Independent research** — not affiliated with any organization named herein. IAC and router session CP schemas: whitepaper §4.2.1–§4.2.2.
+IAC and router session CP schemas: whitepaper §4.2.1–§4.2.2.
 
 ## Clinical cortical implants: what is public
 

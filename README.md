@@ -2,7 +2,6 @@
 
 Research architecture for a **cognitive boundary** — a nervous-system firewall against AI routing, invasive BCI read/write paths, and non-invasive thought inference.
 
-> **Independent research.** Personal work by [Zorie R. Barber](https://github.com/Z0rlord). **Not affiliated with any company, employer, university, or organization.** Third-party names in appendix (open BCI stacks, etc.) appear for technical comparison only — no endorsement or partnership implied.
 
 The Membrane does not read minds. It attests **which channels may cross the boundary** (local LLM, BCI telemetry, cloud inference), whether they match prior commitments, and **fails closed** when attestation breaks.
 
@@ -10,7 +9,7 @@ The Membrane does not read minds. It attests **which channels may cross the boun
 
 | File | Description |
 |------|-------------|
-| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.8) |
+| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.9) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
 | [docs/the-membrane-complete.pdf](docs/the-membrane-complete.pdf) | PDF export with table of contents |
@@ -38,7 +37,7 @@ See [appendix-open-research.md](docs/appendix-open-research.md) for libraries an
 
 ## Status
 
-**Personal research specification only.** No reference implementation in this repo yet. Not a product, not institutional R&D, not investment material.
+Research specification only. No reference implementation in this repo yet.
 
 ## License
 
@@ -47,4 +46,4 @@ See [appendix-open-research.md](docs/appendix-open-research.md) for libraries an
 
 ## Author
 
-Zorie R. Barber — independent researcher. Views expressed here are the author's own.
+Zorie R. Barber
