@@ -4,12 +4,12 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.4"
+version: "0.9.5"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
 
-> **Independent research.** This document is **personal research** by the author (Zorie R. Barber). It is **not** affiliated with, endorsed by, sponsored by, or commissioned by any company, employer, client, university, foundation, or government body. Mentions of third-party products, services, papers, or trademarks (e.g. Neuralink, SPQR Aegis, OpenBCI, NIST) are **descriptive only** — for threat modeling, benchmarking, or technical comparison. No partnership, employment, or investment relationship is implied.
+> **Independent research.** This document is **personal research** by the author (Zorie R. Barber). It is **not** affiliated with, endorsed by, sponsored by, or commissioned by any company, employer, client, university, foundation, or government body. Mentions of third-party products, services, papers, or trademarks (e.g. Neuralink, OpenBCI, NIST) are **descriptive only** — for threat modeling, benchmarking, or technical comparison. No partnership, employment, or investment relationship is implied.
 
 ## Abstract
 
@@ -743,18 +743,16 @@ This preserves compatibility with invasive BCI paths (§4.6) and pure-silicon A2
 
 ### 4.8 Policy Enforcement vs Channel Continuity
 
-Readers comparing agent-governance products should note a structural difference from systems such as SPQR Aegis:[^20]
+Agent-governance stacks often focus on **policy enforcement** — proving an agent obeyed rules after the fact. The Membrane focuses on **channel continuity** — proving which read/write/routing paths were open and whether they matched prior commitments.
 
-> **Comparison only.** SPQR Technologies and other cited organizations are **not** affiliated with this research. The table below contrasts architectural vectors; it is not a competitive claim, endorsement, or disparagement.
-
-| Dimension | Policy enforcement (e.g. SPQR Aegis) | The Membrane |
-|-----------|--------------------------------------|--------------|
+| Dimension | Operator policy enforcement | The Membrane |
+|-----------|----------------------------|--------------|
 | **Question answered** | Did the agent obey policy? | Which channels were open and continuous? |
-| **Proof object** | Proof of Conduct / ILK decision log | Chain Proof of channel + anchor state |
+| **Proof object** | Conduct log / decision audit trail | Chain Proof of channel + anchor state |
 | **Trust locus** | Operator, compliance, audit | Subject-local severance |
 | **Failure mode** | Policy violation report | Membrane severance; channel kill |
 
-The two approaches are **composable**, not competing: ILK-style decision logs (§Liveness-A) can feed operator audit while the Membrane gives the **subject** a fail-closed boundary against routing and surveillance. SPQR benchmarks (238ms verify, 9.4ms publish) remain performance targets for Membrane CP generation (§9.2, §10.1).
+The two approaches are **composable**, not mutually exclusive: ILK-style decision logs (§Liveness-A) can support operator audit while the Membrane gives the **subject** a fail-closed boundary against routing and surveillance. Real-time A2A handshakes target sub-second verification and low-millisecond NOSTR publication overhead (§9.2, §10.1).
 
 ---
 
@@ -926,8 +924,8 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 | Operational continuity (target) | 30 days without manual intervention | Time-to-first-failure test |
 | Neuralink extension proof size (future) | < 75 KB | Estimate additional column overhead |
 | A2A handshake latency (future) | < 2 seconds | Cached CP + lightweight substrate canary |
-| Proof verification latency (competitive target) | < 250 ms | SPQR Aegis reports 238ms median; The Membrane must match or exceed this for A2A viability |
-| Publication overhead (competitive target) | < 10 ms | SPQR Aegis reports 9.4ms; The Membrane target for NOSTR event publication |
+| Proof verification latency (A2A target) | < 250 ms | Benchmark verifier on standard CPU; required for real-time agent handshakes |
+| NOSTR publication overhead (target) | < 10 ms | Measure event publish latency to self-hosted relay |
 
 ### 9.3 Dependency Separation
 
@@ -960,7 +958,7 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 
 ### 10.1 Hardware Acceleration: CUDA and GPU Support (Proposed Extension)
 
-Proof generation remains one of the primary practical blockers for frequent attestation (short Δt) and complex circuits. SPQR Aegis reports 238ms median verification latency and 9.4ms publication overhead for their zk-STARK agent governance proofs (arXiv:2603.16938v1). The Membrane must match or exceed these benchmarks to remain competitive for real-time A2A handshakes and high-frequency substrate canaries. (Liveness-2 neural features, recursive RFA, A2A delegation chains). GPU acceleration, particularly via CUDA on NVIDIA hardware, offers a high-impact optimization path.
+Proof generation remains one of the primary practical blockers for frequent attestation (short Δt) and complex circuits (Liveness-2 neural features, recursive RFA, A2A delegation chains). GPU acceleration, particularly via CUDA on NVIDIA hardware, offers a high-impact optimization path toward sub-second verification and low-latency NOSTR publication.
 
 #### Relevance to The Membrane
 
@@ -1295,7 +1293,7 @@ trace_acc' = Hash(trace_acc || priv_execution_trace[row])
 ```
 ilk_acc' = Hash(ilk_acc || priv_decision_log[row])
 ```
-*Enforces that every agent decision since the last CP is committed into the attestation chain. This creates a complete behavioral audit trail that proves not just code integrity, but decision continuity. Adapted from the Immutable Logging Kernel concept (SPQR Technologies, 2026).[^20]*
+*Enforces that every agent decision since the last CP is committed into the attestation chain. This creates a complete behavioral audit trail that proves not just code integrity, but decision continuity.*
 
 **C3 — TEE Attestation Verification:**
 ```
@@ -1353,8 +1351,9 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
-| v0.9.4 | 2026-06-14 | Independent research / no-affiliation disclaimer (title block, §0.5, §4.8, contribute) |
-| v0.9.3 | 2026-06-14 | IAC layer (§4.2.1), router session CPs (§4.2.2), epistemic capture (§0.2), substrate parity, SPQR foil (§4.8), hybrid human–AI membrane, cognitive identity drift open problem |
+| v0.9.5 | 2026-06-14 | Remove third-party competitor citations (policy vs continuity §4.8 retained) |
+| v0.9.4 | 2026-06-14 | Independent research / no-affiliation disclaimer (title block, §0.5, contribute) |
+| v0.9.3 | 2026-06-14 | IAC layer (§4.2.1), router session CPs (§4.2.2), epistemic capture (§0.2), substrate parity, policy vs continuity (§4.8), hybrid human–AI membrane, cognitive identity drift open problem |
 | v0.9.2 | 2026-06-14 | Appendix B: open research & Phase 0 stack; published to GitHub |
 | v0.9.1 | 2026-06-14 | Remove cultured tissue (§4.8) and Related Work (§14) |
 | v0.9 | 2026-06-14 | Refocus on cognitive firewall; remove DojoPop conflation |
@@ -1405,8 +1404,6 @@ Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-researc
 [^18]: Neuralink Corporation. *Patient Information: N1 Implant and R1 Robot*. https://neuralink.com/patient-information/ — **Implementation / medical device (T2).** As of 2026, Neuralink devices are investigational medical devices with demonstrated thread retraction in early trials. No public remote attestation API exists. All security claims are prospective.
 
 [^19]: National Institute of Standards and Technology (NIST). *SP 800-207: Zero Trust Architecture*. https://doi.org/10.6028/NIST.SP.800-207 — **Standards (T1).** Vendor-neutral reference for Zero Trust Architecture. The Membrane implements these principles via cryptographic consensus rather than network segmentation.
-
-[^20]: Mazzocchetti, A. M. (2026). *The Aegis Architecture for Verifiable Policy Enforcement in Autonomous AI Systems*. arXiv:2603.16938v1 [cs.CR]. https://arxiv.org/abs/2603.16938 — **Implementation / competitor (T2).** SPQR Technologies' live product using zk-STARKs for AI agent governance. Reports 238ms median verification latency, 9.4ms publication overhead, 2 live deployments. Conceptual overlap in primitives (STARKs, TEEs, recursive attestation) but opposite vector: policy enforcement vs. channel continuity. Cited as foil and benchmark target (§4.8).
 
 [^21]: NeuroLM, SYNAPTICON, Brain-LLM Interface — see [appendix-open-research.md](./appendix-open-research.md). **Conceptual / active research (T3).** Closed-loop EEG→LLM pipelines illustrate sequestration and identity drift threats; not production security claims.
 
