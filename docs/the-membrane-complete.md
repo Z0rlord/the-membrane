@@ -3,8 +3,8 @@ title: "The Membrane: Cognitive Boundary Architecture"
 subtitle: "A nervous-system firewall against AI routing and thought surveillance"
 author: "Zorie R. Barber"
 date: 2026-06-14
-tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.9"
+tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, whitepaper]
+version: "0.9.10"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -43,7 +43,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - Cognitive-integrity signals are probabilistic; replay, injection, and coercion remain.
 - Fork detection is chain-bound; hidden parallel readers are out of scope.
 
-**Phase 0 prototype:** Self-hosted NOSTR relay, TEE node, `Liveness-2`-ready neural/sensor commitment circuit, and K=2–3 personal witnesses. See §9.
+**Phase 0 prototype:** Self-hosted attestation bus, TEE node, `Liveness-2`-ready neural/sensor commitment circuit, and K=2–3 personal witnesses. See §9.
 
 **Future extensions:** Full BCI integration (§4.6), agent-handshake mode for untrusted AI delegates (§4.7), GPU-accelerated proving (§10.1).
 
@@ -83,6 +83,8 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - [10. Implementation Roadmap](#10-implementation-roadmap)
  - [10.1 Hardware Acceleration: CUDA and GPU Support](#101-hardware-acceleration-cuda-and-gpu-support)
 - [11. Open Source, Audit, and Interoperability](#11-open-source-audit-and-interoperability)
+ - [11.3 Attestation transport (hot path)](#113-attestation-transport-hot-path)
+ - [11.4 Optional anchoring profiles](#114-optional-anchoring-profiles)
 - [12. Ethical Considerations](#12-ethical-considerations)
 - [13. Known Open Problems](#13-known-open-problems)
 - [Part 2: zk-STARK Circuit Architecture](#part-2-zk-stark-circuit-architecture)
@@ -105,6 +107,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **AI routing** | Mediation of cognition through external inference systems (LLMs, agents, cloud memory) that ingest context and return outputs. |
 | **Liveness-2** | Neural-channel circuit: BCI-derived feature commitments (spike rates, LFP bands) as a cognitive-integrity domain. |
 | **WoT** | Web-of-Trust. A personal, curated set of human witnesses who sign CPs after independent verification. |
+| **Attestation bus** | Transport-agnostic, signed append-only log for CP and channel events. Hot path for liveness and witness gossip; not a blockchain. |
 | **TEE** | Trusted Execution Environment. Hardware-isolated enclave (AMD SEV-SNP, Intel TDX) used as a best-available, not absolute, trust anchor. |
 | **Substrate** | The underlying execution medium: biological neural tissue or silicon hardware. |
 | **Surface Detail Interface** | Perceptual or cognitive I/O layer sealed until CP validity is confirmed. Fails closed when the membrane detects boundary violation. |
@@ -237,7 +240,7 @@ The architecture should therefore be read as:
 | **Self-attestation** | Subject generates CPs with keys they control | Third-party identity capture |
 | **Privacy-preserving proof** | zk-STARKs disclose Merkle roots only, not raw neural or behavioral data | Surveillance extraction |
 | **Exit / severance** | Dead-man's key forces hard disconnect of attested channels | Lock-in, coerced retention |
-| **Infrastructure independence** | Self-hosted TEE + NOSTR relay | Cloud termination of attestation |
+| **Infrastructure independence** | Self-hosted TEE + attestation bus | Cloud termination of attestation |
 | **Personal witnesses** | Curated WoT, not corporate/state directories | Permissioned identity graphs |
 
 ### Sovereignty vs. Self-Sovereign Identity (SSI)
@@ -485,7 +488,7 @@ Each Chain Proof includes commitments from **registered channels** that may cros
 **CP requirements:**
 
 - **Cadence:** Valid cognitive-integrity attestation every Δt for each active channel.
-- **Attestation object:** NOSTR kind `31990` with Merkle roots of channel commitments, hybrid timestamp, prior CP hash.
+- **Attestation object:** Signed `MembraneEvent` on the attestation bus (§11.3) with Merkle roots of channel commitments, hybrid timestamp, and `prev_cp_hash`.
 - **ZK circuit:** Proves temporal and continuity constraints without revealing raw neural or behavioral payloads.
 - **Fail closed:** Unregistered or stale channel → membrane severs that path.
 
@@ -511,9 +514,9 @@ This layer blocks **capability drift** (silent model swap, expanded API scope, d
 
 #### 4.2.2 LLM Router Session Chain Proofs
 
-Router sessions require a dedicated CP fragment published alongside the main liveness CP:
+Router sessions require a dedicated CP fragment published alongside the main liveness CP.
 
-**NOSTR:** kind `31990`, tag `["k", "the-membrane-router"]`
+**Event type:** `membrane.cp.router` (see §11.3)
 
 | Public input | Semantics |
 |--------------|-----------|
@@ -523,7 +526,7 @@ Router sessions require a dedicated CP fragment published alongside the main liv
 | `parent_cp_hash` | Links session to biological or agent anchor CP |
 | `iac_hash` | Hash of active Intent Authorization Certificate |
 
-**BCI channel tag:** kind `31990`, tag `["k", "the-membrane-bci"]` — same CP machinery with `pub_neural_root` and implant/device id in tags.
+**BCI channel:** `membrane.cp.bci` — same machinery with `pub_neural_root` and device id in event metadata.
 
 **Fail closed:**
 - Cloud or copilot route active without fresh router CP within Δt → sever inference channel.
@@ -534,7 +537,7 @@ Router sessions require a dedicated CP fragment published alongside the main liv
 
 The distributed witness layer. This is the **human quorum** that prevents isolated-target attacks.
 
-- **Web-of-trust (WoT):** Each identity maintains a curated, **curated** set of attestors. Not a global graph. Not a corporate directory. Not a state ID system. Attestors are **subject-selected**: the entity chooses who vouches for it.[^9]
+- **Web-of-trust (WoT):** Each identity maintains a curated set of attestors. Not a global graph. Not a corporate directory. Not a state ID system. Attestors are **subject-selected**: the entity chooses who vouches for it.[^9]
 - **Witness role:** Witnesses verify the zk-STARK proof and confirm out-of-band continuity (e.g., direct communication).
 - **Consensus rule:** A CP is valid only if ≥K witnesses sign, and those witnesses themselves have valid CPs within 2Δt.
 - **Sybil resistance:** Witnesses must have established T₀ anchors. No anonymous witnesses.
@@ -591,7 +594,7 @@ The Membrane is substrate-agnostic and designed to leverage **high-bandwidth inv
 
 **1. Enhanced T₀ Biological Anchor**
 - During the T₀ initialization, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** an implant-derived neural signature (e.g., resting-state or task-evoked neural fingerprint).
-- Publish only the commitment + helper data to NOSTR. The raw high-dimensional neural template never leaves the secure channel.
+- Publish only the commitment + helper data to the attestation bus. The raw high-dimensional neural template never leaves the secure channel.
 - **Limit:** If the neural template changes due to plasticity, injury, or device degradation, the fuzzy commitment must tolerate drift. This is harder than static biometric templates.
 
 **2. Neural-Enhanced Liveness Canary (Liveness-2 Circuit)**
@@ -663,7 +666,7 @@ For pure-silicon agents, the biological T₀ anchor and human liveness provider 
 **1. Agent anchor (silicon T₀)**
 - A new agent is instantiated inside a TEE with a fresh keypair.
 - Initial CP references the code hash, model weights commitment (e.g., via Merkle root or zk-proof of weights), owner/operator identity (optional), and deployment configuration.
-- Published to NOSTR or a dedicated agent relay network.
+- Published to the attestation bus or a dedicated agent mesh.
 
 **2. Agent Liveness / Substrate Canary**
 - Replaced by automated **substrate canary**: periodic TEE remote attestation proving:
@@ -690,7 +693,7 @@ When Agent A initiates contact with Agent B:
 **5. Integration with Existing A2A Standards**
 - Compatible with DIDs / Verifiable Credentials (CP acts as a dynamic, high-assurance VC).
 - Can be layered over emerging protocols such as MCP, A2A, or agent communication frameworks.
-- NOSTR (or similar pub/sub mesh) serves as the lightweight messaging backbone for CP exchange.
+- A signed pub/sub mesh serves as the lightweight messaging backbone for CP exchange (implementation-agnostic; see §11.3).
 
 #### Limitations in A2A Context
 
@@ -716,7 +719,7 @@ When Agent A initiates contact with Agent B:
 
 | Phase | Milestone (A2A) | Notes |
 |-------|-----------------|-------|
-| 0 | Basic CP exchange over NOSTR | Pure silicon agents |
+| 0 | Basic CP exchange over attestation bus | Pure silicon agents |
 | 1 | Substrate canary + RFA for single agents | TEE-focused |
 | 2 | Agent handshake protocol | Interoperability with DIDs |
 | 3 | Delegation chain proofs | Multi-agent workflows |
@@ -745,7 +748,7 @@ Agent-governance stacks often focus on **policy enforcement** — proving an age
 | **Trust locus** | Operator, compliance, audit | Subject-local severance |
 | **Failure mode** | Policy violation report | Membrane severance; channel kill |
 
-The two approaches are **composable**, not mutually exclusive: ILK-style decision logs (§Liveness-A) can support operator audit while the Membrane gives the **subject** a fail-closed boundary against routing and surveillance. Real-time A2A handshakes target sub-second verification and low-millisecond NOSTR publication overhead (§9.2, §10.1).
+The two approaches are **composable**, not mutually exclusive: ILK-style decision logs (§Liveness-A) can support operator audit while the Membrane gives the **subject** a fail-closed boundary against routing and surveillance. Real-time A2A handshakes target sub-second verification and low-millisecond attestation-bus publication overhead (§9.2, §10.1).
 
 ---
 
@@ -761,7 +764,7 @@ Let S(t) be the social witness signature set.
 ```
 CP(t) = zk-STARK_PROVE(
  witness = [L(t), S(t), CP(t-1), F(t), F(t-1)],
- public = [H(ProcessState(t)), H(F_code), timestamp, relay_root],
+ public = [H(ProcessState(t)), H(F_code), timestamp, bus_root],
  constraints = [
  L(t) is within Δt of L(t-1),
  |S(t)| >= K,
@@ -772,7 +775,7 @@ CP(t) = zk-STARK_PROVE(
 )
 ```
 
-**Verification:** Any relay or node verifies CP(t) in O(log n) using the STARK proof and public inputs.[^2][^13]
+**Verification:** Any bus replica or node verifies CP(t) in O(log n) using the STARK proof and public inputs.[^2][^13]
 
 **What this actually proves:** That a process with a specific history, running on attested infrastructure, generated a liveness signal and gathered social witness within a time bound. **Nothing MORE.**
 
@@ -816,7 +819,7 @@ This section defines explicit recovery paths for T₀ loss, acknowledging that r
 
 **Recovery:**
 1. **Social recovery:** K witnesses from the original WoT perform a **re-anchor protocol**. Each witness signs a new T₀' event attesting that the same biological entity is present, using out-of-band verification (video call, in-person meeting, behavioral confirmation).
-2. **Time-lock dead-man's switch:** A pre-committed NOSTR event is published if no CP is received for N×Δt. This event contains instructions for witness-initiated recovery or identity retirement.
+2. **Time-lock dead-man's switch:** A pre-committed signed bus event is published if no CP is received for N×Δt. This event contains instructions for witness-initiated recovery or identity retirement.
 3. **Biometric refresh:** A new fuzzy commitment is generated from the same biological template (with updated helper data). The old commitment is explicitly revoked on-chain.
 
 **Limitation:** If the original WoT is also compromised or deceased, recovery fails. This is a social-layer failure mode, not a cryptographic one.
@@ -863,7 +866,7 @@ The protocol is designed to make sustained undetected compromise more expensive 
 | Forge one CP with K=3 | Compromise 3 WoT humans + TEE + sensor pipeline | Recursive witness validity raises cost (each witness has own witnesses) |
 | Maintain fork for 30 days | Continuous CP generation + social maintenance + no detection | Time-bounded liveness + out-of-band witness contact increases operational burden |
 | Silent TEE compromise | Side-channel lab + physical access + firmware exploit | Cross-node consensus requires compromising 2/3 independent nodes |
-| Perfect VR simulation | Full physics simulation + social graph simulation + NOSTR mesh simulation | "Physical expense" heuristic: simulation cost exceeds most attack budgets[^6] |
+| Perfect VR simulation | Full physics simulation + social graph simulation + attestation-bus mesh simulation | "Physical expense" heuristic: simulation cost exceeds most attack budgets[^6] |
 | Invasive BCI simulation | Complete connectome model + real-time neural dynamics simulation | Cost orders of magnitude higher than physics simulation, but not infinite |
 | Adversarial implant stimulation | Medical device exploit + stimulation control | Constrained by medical safety bounds; cross-domain consensus detects anomalies |
 | Agent fork for unauthorized delegation | Compromise operator + forge CP chain + maintain hidden clone | Detectable if fork must interact with attested peers; requires sustained operational cost |
@@ -873,7 +876,7 @@ The protocol is designed to make sustained undetected compromise more expensive 
 
 - **Witnesses:** No direct financial incentive. Reputation stake in the WoT (loss of trust if they attest falsely). Future: micro-rewards via Lightning Network for timely attestation.
 - **Node operators:** Infrastructure cost only. Incentive is self-protection or community service. No tokenomics — avoids economic capture by AI or state actors.[^2]
-- **Relays:** Standard NOSTR relay incentives (donation, subscription). No protocol-specific tokens.
+- **Bus operators:** Self-hosted or mutual-aid replication. No protocol-specific tokens required.
 - **Agents (A2A):** Operator reputation, task-completion rewards, or staking slashing. The protocol itself does not enforce incentives; it provides the attestation layer on which incentive mechanisms can be built.
 
 ### 8.3 Coercion Resistance
@@ -894,7 +897,7 @@ The protocol cannot prevent coercion. It can:
 Phase 0 demonstrates a **self-hosted cognitive firewall** without requiring implants or VR.
 
 **MVP components:**
-1. Self-hosted NOSTR relay
+1. Self-hosted attestation bus (append-only signed log + fanout)
 2. TEE node (single AMD SEV-SNP or Intel TDX instance)
 3. **Intent gate:** Subject-signed IAC before router or BCI decode (§4.2.1)
 4. **AI router gate:** Local or attested inference session with context-hash commitment in CP (§4.2.2)
@@ -912,19 +915,19 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 | Proof generation time | < 5 minutes on consumer hardware (desktop) | Benchmark Winterfell prover with 60-row trace |
 | Proof size | < 50 KB | Measure STARK output bytes |
 | Verification time | < 100 ms | Benchmark verifier on standard CPU |
-| Witness confirmation latency | < 4 hours | Measure NOSTR gossip propagation + human response time |
+| Witness confirmation latency | < 4 hours | Measure bus fanout + human witness response time |
 | False positive rate (fail closed without attack) | < 1% per month | Log all false alerts and root-cause |
 | Operational continuity (target) | 30 days without manual intervention | Time-to-first-failure test |
 | Invasive BCI extension proof size (future) | < 75 KB | Estimate additional column overhead |
 | A2A handshake latency (future) | < 2 seconds | Cached CP + lightweight substrate canary |
 | Proof verification latency (A2A target) | < 250 ms | Benchmark verifier on standard CPU; required for real-time agent handshakes |
-| NOSTR publication overhead (target) | < 10 ms | Measure event publish latency to self-hosted relay |
+| Bus publication overhead (target) | < 10 ms | Measure signed event append latency on self-hosted bus |
 
 ### 9.3 Dependency Separation
 
 | Immediately Actionable | Future-Dependent |
 |----------------------|------------------|
-| NOSTR relay + local automation | BCI integration |
+| Attestation bus + local automation | BCI integration |
 | Smartphone sensor pipeline | Full VR runtime attestation |
 | Winterfell STARK circuit | Multi-party recursive composition at scale |
 | Single TEE node | Cross-vendor TEE consensus (AMD + Intel + ARM) |
@@ -939,10 +942,10 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 
 | Phase | Deliverable | Stack | Blockers |
 |-------|-------------|-------|----------|
-| 0 | NOSTR attestation bus + local automation | Rust/TypeScript, NOSTR relays[^14] | Relay censorship, Sybil relays |
+| 0 | Attestation bus + local automation | Rust/TypeScript; see Appendix B profiles | Bus censorship, Sybil replicas |
 | 1 | Liveness canary zk-STARK circuit | Winterfell/Cairo, SHA-256/Rescue[^13] | STARK proof generation latency on mobile/embedded |
 | 2 | Self-hosted TEE node | AMD SEV-SNP, Linux KVM[^7] | Supply-chain trust, side-channel leakage |
-| 3 | Social graph witness protocol | NOSTR WoT, gossip model[^9] | Social layer compromise, witness coercion |
+| 3 | Social graph witness protocol | WoT over attestation bus[^9] | Social layer compromise, witness coercion |
 | 4 | Substrate transition gate | VR runtime integration[^10] | VR runtime itself is a massive TCB |
 | 5 | Recursive node attestation | Multi-party STARK composition[^2] | 2/3 compromise threshold is hard limit |
 | 6 | Invasive BCI extension (optional) | Implant API + Winterfell AIR extension[^18] | Medical device maturity, corporate API availability, FDA validation |
@@ -951,7 +954,7 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 
 ### 10.1 Hardware Acceleration: CUDA and GPU Support (Proposed Extension)
 
-Proof generation remains one of the primary practical blockers for frequent attestation (short Δt) and complex circuits (Liveness-2 neural features, recursive RFA, A2A delegation chains). GPU acceleration, particularly via CUDA on NVIDIA hardware, offers a high-impact optimization path toward sub-second verification and low-latency NOSTR publication.
+Proof generation remains one of the primary practical blockers for frequent attestation (short Δt) and complex circuits (Liveness-2 neural features, recursive RFA, A2A delegation chains). GPU acceleration, particularly via CUDA on NVIDIA hardware, offers a high-impact optimization path toward sub-second verification and low-latency attestation-bus publication.
 
 #### Relevance to The Membrane
 
@@ -995,19 +998,58 @@ Reference implementation: **GPL-3.0** or **AGPL-3.0**. The protocol must remain 
 
 | Stage | Auditor Type | Scope |
 |-------|-------------|-------|
-| Pre-alpha | Community audit (open source) | NOSTR event schema, circuit logic |
+| Pre-alpha | Community audit (open source) | MembraneEvent schema, circuit logic |
 | Alpha | Independent security firm | TEE integration, side-channel analysis |
 | Beta | Academic cryptographers | zk-STARK soundness, recursive composition |
 | Production | Multi-party audit consortium | Full stack, social recovery, coercion resistance, invasive BCI extension safety, A2A delegation integrity |
 
-### 11.3 Interoperability
+### 11.3 Attestation transport (hot path)
 
-- **NOSTR:** Native. Uses standard kinds 31990/31991. Compatible with existing clients as read-only viewers.
+The Membrane protocol is **transport-agnostic**. Cryptography, T₀ enrollment, IAC, and fail-closed severance do not require NOSTR, Ethereum, or Arweave. They require a **hot-path attestation bus**: a subject-controlled, signed, append-only event log with fanout to WoT witnesses.
+
+**Bus requirements:**
+
+| Requirement | Rationale |
+|-------------|-----------|
+| Signed events | Subject and witnesses use Ed25519 (or equivalent) |
+| Hash chain | Each event references `prev_cp_hash` or prior event id |
+| Low latency | Supports cadence Δt (target: &lt;10 ms append on self-hosted bus) |
+| Self-hostable | Subject can run the bus without a chain operator |
+| Metadata only | Raw neural/behavioral payloads never on the bus — STARK public inputs only |
+
+**Canonical event envelope (`MembraneEvent`):**
+
+| Field | Description |
+|-------|-------------|
+| `type` | e.g. `membrane.cp.liveness`, `membrane.cp.router`, `membrane.cp.bci`, `membrane.iac`, `membrane.alert.degraded` |
+| `subject_pubkey` | Compressed public key (DID or npub encoding allowed) |
+| `prev_cp_hash` | Prior Chain Proof hash |
+| `timestamp` | Hybrid Unix timestamp |
+| `payload` | Type-specific public inputs (Merkle roots, model_id, iac_hash, STARK bytes or URI) |
+| `signature` | Over canonical serialization |
+
+Witnesses subscribe to the bus (or receive events out-of-band), verify STARKs, and return signatures. The membrane node fails closed if the bus is stale, partitioned, or missing required event types.
+
+### 11.4 Optional anchoring profiles (cold path)
+
+Periodic CP publication on the **hot bus** is required for liveness. **Cold anchoring** is optional — for audit durability or third-party timestamping, not for minute-scale severance.
+
+| Profile | Role | Cadence | Examples | Tradeoffs |
+|---------|------|---------|----------|-----------|
+| **Hot (required)** | Liveness, WoT gossip, severance | Every Δt | Self-hosted append-only log; relay-style pub/sub; MQTT; Hypercore; local file + sync | Must be fast and subject-controlled |
+| **Warm (optional)** | Shareable snapshots | Hourly–daily | IPFS / self-hosted object store | Not a liveness source |
+| **Cold A (optional)** | Permanent audit trail | Weekly+ | [Arweave](https://www.arweave.org/) bundle of CP chain | Pay-once storage; slow; public permanence[^23] |
+| **Cold B (optional)** | Timestamp / root commit | Daily+ | Ethereum L2 calldata with `H(CP_root)` | Gas cost; public chain; not every-Δt[^24] |
+
+**Design rule:** Fail-closed logic reads the **hot bus only**. Arweave and Ethereum never substitute for a missing router CP or stale witness set. NOSTR is one **example hot-bus implementation** — see Appendix B.
+
+### 11.5 Interoperability
+
 - **TEE ecosystems:** Targets AMD SEV-SNP and Intel TDX via standard attestation APIs. ARM CCA as future target.
 - **Identity bridges:** Optional DID:web or DID:ion mapping for compatibility with W3C decentralized identity systems. No dependency.
-- **ZK ecosystems:** STARK proofs verifiable on StarkNet or Cairo VM for on-chain anchoring if desired. Not required.
+- **ZK ecosystems:** STARK proofs verifiable on StarkNet or Cairo VM for optional cold anchoring (Profile Cold B). Not required for core operation.
 - **Invasive BCI:** Requires proprietary manufacturer API/SDK. If unavailable, the protocol falls back to Liveness-1 without degradation.
-- **A2A frameworks:** Can be layered over MCP, A2A, or custom agent communication protocols. CP exchange is transport-agnostic.
+- **A2A frameworks:** Can be layered over MCP, A2A, or custom agent communication protocols. CP exchange remains bus-agnostic.
 
 ---
 
@@ -1098,12 +1140,12 @@ This circuit proves that **some entity** with access to the biometric key and se
 
 | Register | Description |
 |----------|-------------|
-| `pub_identity` | NOSTR npub (compressed) |
+| `pub_identity` | Subject public key (compressed; DID or npub encoding) |
 | `pub_prev_cp_hash` | Hash of CP(t-1) |
 | `pub_timestamp` | Hybrid Unix timestamp |
 | `pub_merkle_root` | Merkle root of sensor chunk hashes |
 | `pub_witness_count` | Valid witness signatures (≥ K) |
-| `pub_witness_root` | Merkle root of witness npubs (anonymized) |
+| `pub_witness_root` | Merkle root of witness public keys (anonymized) |
 | `pub_node_hash` | Hash of node code + TEE attestation |
 
 ### Private Inputs
@@ -1112,7 +1154,7 @@ This circuit proves that **some entity** with access to the biometric key and se
 |----------|-------------|
 | `priv_sensor_data` | IMU vectors, video frame hashes, audio fingerprints |
 | `priv_biometric_key` | Derived key from fuzzy commitment of T₀ anchor[^8] |
-| `priv_witness_sigs` | Witness signatures on NOSTR event |
+| `priv_witness_sigs` | Witness signatures on bus event |
 | `priv_location_entropy` | Optional noise hash (omittable) |
 
 ### Execution Trace (AIR)
@@ -1151,7 +1193,7 @@ time_delta >= 0
 
 **C4 — Signature Verification:**
 ```
-sig_valid = VerifyEd25519(witness_sig, witness_npub, event_hash)
+sig_valid = VerifyEd25519(witness_sig, witness_pubkey, event_hash)
 ```
 
 **C5 — Continuity Link:**
@@ -1244,7 +1286,7 @@ The `Liveness-A` circuit is a simplified variant for pure-silicon agents. It rem
 
 | Register | Description |
 |----------|-------------|
-| `pub_agent_identity` | Agent's NOSTR npub or DID |
+| `pub_agent_identity` | Agent public key or DID |
 | `pub_prev_cp_hash` | Hash of CP(t-1) |
 | `pub_timestamp` | Hybrid Unix timestamp |
 | `pub_code_hash` | Hash of agent code / model weights commitment |
@@ -1310,21 +1352,16 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 
 ---
 
-## Integration with NOSTR + Local Automation
+## Integration: Attestation Bus + Local Automation
 
-**NOSTR bus:**
-- CP events: kind `31990`, tags `["e", <prev_event_id>]`, `["p", <firewall_npub>]`, `["k", "the-membrane-liveness"]`
-- Neural-enhanced CP events: kind `31990`, tags `["k", "the-membrane-liveness-neural"]` (optional)
-- BCI channel CP events: kind `31990`, tags `["k", "the-membrane-bci"]` (optional)
-- Router session CP events: kind `31990`, tags `["k", "the-membrane-router"]`, plus `["model", <model_id>]`, `["ctx", <context_merkle_root>]` (optional)
-- IAC events: kind `31990`, tags `["k", "the-membrane-iac"]`, content = signed scope JSON (optional)
-- Agent CP events: kind `31990`, tags `["k", "the-membrane-agent"]` (optional)
-- Relays: self-hosted + 2+ public for redundancy. **Caveat:** relays can censor or partition.[^14]
+**Hot path (§11.3):** Publish `MembraneEvent` records to the self-hosted attestation bus after each proof cycle. Event types include `membrane.cp.liveness`, `membrane.cp.router`, `membrane.cp.bci`, `membrane.iac`, and `membrane.cp.agent`. Optional cold anchors (§11.4): Arweave bundle or L2 root commit on a slower cadence.
 
 **Local automation (e.g., cron or sensor trigger):**
 - Trigger: IMU threshold or cron.
-- Action: Compile sensor data → generate STARK → publish NOSTR.
-- Fallback: Proof failure or missing witnesses → post kind `31991` "degraded continuity" alert → fail closed.
+- Action: Compile sensor data → generate STARK → append signed event to bus.
+- Fallback: Proof failure or missing witnesses → emit `membrane.alert.degraded` → fail closed.
+
+**Example mapping (NOSTR profile):** Appendix B maps `MembraneEvent` types to NOSTR kinds `31990`/`31991` for implementers who choose that hot-bus backend.
 
 ---
 
@@ -1333,7 +1370,7 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 | Tier | Type | Citations |
 |------|------|-----------|
 | **T1: Formal** | Peer-reviewed or established cryptographic standards | [^2] Neulinger & Sparer (Springer), [^8] Juels & Wattenberg (ACM CCS), [^13] Ben-Sasson et al. (STARKs), [^15] NIST PQC, [^17] Shamir (ACM) |
-| **T2: Implementation** | Production systems, protocols, hardware docs | [^7] AMD SEV-SNP / Intel TDX, [^13] Winterfell/Cairo, [^14] NOSTR protocol, [^18] clinical cortical implant literature |
+| **T2: Implementation** | Production systems, protocols, hardware docs | [^7] AMD SEV-SNP / Intel TDX, [^13] Winterfell/Cairo, [^14] attestation transport examples, [^18] clinical cortical implant literature |
 | **T3: Conceptual** | Speculative architecture, sci-fi framing, heuristic arguments | [^1] Khan preprint (cognitive firewall concept), [^11] Banks (Surface Detail as inverse reference), [^6] embodied cognition heuristic |
 
 No citation in this document is presented as stronger than its tier.
@@ -1344,6 +1381,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.10 | 2026-06-14 | Transport-agnostic attestation bus; optional Arweave/L2 cold profiles; NOSTR demoted to appendix example |
 | v0.9.9 | 2026-06-14 | Restore sovereignty terminology; single affiliation disclaimer |
 | v0.9.8 | 2026-06-14 | Replace ceremony/manifesto phrasing; standardize on local control |
 | v0.9.7 | 2026-06-14 | Remove unrelated-application wording remnants |
@@ -1377,6 +1415,35 @@ High-bandwidth invasive BCIs have **no open third-party attestation SDK** suitab
 | Wearable BCI security (Argus) | [arXiv:2201.07711](https://arxiv.org/abs/2201.07711) | Information-flow control patterns for neural data paths |
 
 Treat invasive cortical implants as a **future Liveness-2 target**, not a Phase 0 build dependency.
+
+---
+
+## Attestation transport profiles (Phase 0)
+
+The protocol is **transport-agnostic**. Pick a hot bus for every-Δt CPs; add cold anchors only if you need long-term audit or third-party timestamps.
+
+| Profile | When | Implementation sketch |
+|---------|------|------------------------|
+| **Hot (required)** | Every Δt | Self-hosted append-only log + fanout to WoT |
+| **Warm (optional)** | Hourly+ | IPFS or object store for STARK bundles |
+| **Cold A (optional)** | Weekly+ | Arweave snapshot of CP chain root |
+| **Cold B (optional)** | Daily+ | L2 calldata commit of `H(CP_root)` |
+
+### Example hot bus: NOSTR relay profile
+
+One practical Phase 0 backend maps `MembraneEvent` to [NOSTR](https://github.com/nostr-protocol/nips) application events:
+
+| `MembraneEvent.type` | NOSTR mapping |
+|----------------------|---------------|
+| `membrane.cp.liveness` | kind `31990`, tag `["k", "the-membrane-liveness"]` |
+| `membrane.cp.router` | kind `31990`, tag `["k", "the-membrane-router"]` |
+| `membrane.cp.bci` | kind `31990`, tag `["k", "the-membrane-bci"]` |
+| `membrane.iac` | kind `31990`, tag `["k", "the-membrane-iac"]` |
+| `membrane.alert.degraded` | kind `31991` |
+
+Common tags: `["e", <prev_event_id>]`, `["p", <subject_pubkey>]`. Run a **self-hosted relay**; treat public relays as optional read replicas only. Relay censorship/partition is a bus-availability risk — not a protocol dependency.
+
+Other hot-bus options: MQTT broker, Hypercore feed, SQLite append log + Tailscale sync. The security model is unchanged; only fanout and replication differ.
 
 ---
 
@@ -1433,27 +1500,29 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 ## Suggested Phase 0 architecture
 
 ```text
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│ OpenBCI /   │ LSL │ Local Membrane│     │ Self-hosted     │
-│ Muse EEG    ├────►│ Node (TEE)    ├────►│ NOSTR relay     │
-└─────────────┘     │ · channel reg │     │ kind 31990 CPs  │
-                    │ · Merkle roots│     └─────────────────┘
-┌─────────────┐     │ · CP prover   │
+┌─────────────┐     ┌──────────────┐     ┌─────────────────────────┐
+│ OpenBCI /   │ LSL │ Local Membrane│     │ Self-hosted attestation │
+│ Muse EEG    ├────►│ Node (TEE)    ├────►│ bus (MembraneEvent log) │
+└─────────────┘     │ · channel reg │     │ optional: NOSTR profile │
+                    │ · Merkle roots│     └─────────────────────────┘
+┌─────────────┐     │ · CP prover   │              │
 │ Local LLM   │◄───►│ · session gate│────► Fail closed: no CP →
 │ (optional)  │     └──────────────┘      kill LLM + BCI decode
 └─────────────┘
          ▲
          └── Context hash + model id committed in each CP
              (cloud inference off by default)
+
+Optional cold path (weekly+): Arweave bundle or L2 root commit — audit only
 ```
 
 ### Build order
 
-1. **BrainFlow + LSL** — stream EEG features; never publish raw traces to NOSTR.
+1. **BrainFlow + LSL** — stream EEG features; never publish raw traces to the attestation bus.
 2. **Channel registry** — YAML list of permitted paths (BCI app, local LLM port, forbidden cloud URLs).
 3. **Merkle commitment circuit** — Winterfell Liveness-1 over feature vectors + timestamp (see whitepaper Part 2).
 4. **Intent gate** — adapt [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard) pattern: no signed scope → no decode→action mapping.
-5. **NOSTR CP bus** — kind `31990`, tags `#the-membrane`, hash chain to prior event.
+5. **Attestation bus** — append signed `MembraneEvent` records with hash chain; NOSTR relay is one optional backend (table above).
 6. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video), not continuous co-presence monitoring.
 
 ### What Phase 0 proves
@@ -1508,7 +1577,7 @@ Implement the MVP (§9) using the stacks in [Appendix B](#appendix-b-open-resear
 
 [^13]: Ben-Sasson, E. et al. (2018). *Scalable, transparent, and post-quantum secure computational integrity*. IACR ePrint. — **Formal (T1).** Foundational STARK paper. Winterfell (Rust) and Cairo are production implementations.
 
-[^14]: NOSTR Protocol. https://github.com/nostr-protocol/nips — **Implementation (T2).** Decentralized relay protocol. Kind `31990` reserved for application-specific events. Vulnerable to relay censorship and network partition.
+[^14]: Attestation transport examples (pub/sub meshes, append-only logs). NOSTR NIPs: https://github.com/nostr-protocol/nips — **Implementation (T2).** One optional hot-bus profile; not normative for the protocol.
 
 [^15]: National Institute of Standards and Technology (NIST). *Post-Quantum Cryptography Standardization*. — **Standards (T1).** SPHINCS+ selected as hash-based post-quantum signature. Shares hash-function assumptions with zk-STARKs.
 
@@ -1522,4 +1591,8 @@ Implement the MVP (§9) using the stacks in [Appendix B](#appendix-b-open-resear
 
 [^22]: Grokipaedia. *iba-neural-guard*. https://github.com/Grokipaedia/iba-neural-guard — **Implementation reference (T2).** Intent certificate pattern: decoded neural signal ≠ authorization. Adapted for Membrane IAC layer (§4.2.1).
 
-*Tags: #the-membrane #whitepaper #zk-stark #identity-attestation #process-continuity #sovereignty #nostr #agent-attestation*
+[^23]: Arweave permaweb. https://www.arweave.org/ — **Implementation (T2).** Optional cold-profile storage for CP chain snapshots. Unsuitable as hot-path liveness bus (latency, pub/sub model).
+
+[^24]: Ethereum / L2 rollups. — **Implementation (T2).** Optional cold-profile root commits (`H(CP_root)`). Unsuitable for per-Δt CP publication (cost, latency, public mempool).
+
+*Tags: #the-membrane #whitepaper #zk-stark #identity-attestation #process-continuity #sovereignty #agent-attestation*
