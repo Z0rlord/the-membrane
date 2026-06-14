@@ -4,7 +4,7 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.6"
+version: "0.9.7"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -35,7 +35,6 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - Proof of consciousness or qualia.
 - Proof that no off-chain clone or hidden reader exists.
 - A shipping product. Phase 0 is a research prototype.
-- Martial-arts attendance, proof-of-practice, or any unrelated application layer.
 - The work, opinion, or roadmap of any company or institution named in this document.
 
 **Major limitations:**
@@ -1351,13 +1350,14 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.7 | 2026-06-14 | Remove martial-arts / ritual wording remnants |
 | v0.9.6 | 2026-06-14 | Genericize §0.8 PoP table and invasive BCI (remove named vendors); fix §0.5 affiliation text |
 | v0.9.5 | 2026-06-14 | Remove third-party competitor citations (policy vs continuity §4.8 retained) |
 | v0.9.4 | 2026-06-14 | Independent research / no-affiliation disclaimer (title block, §0.5, contribute) |
 | v0.9.3 | 2026-06-14 | IAC layer (§4.2.1), router session CPs (§4.2.2), epistemic capture (§0.2), substrate parity, policy vs continuity (§4.8), hybrid human–AI membrane, cognitive identity drift open problem |
 | v0.9.2 | 2026-06-14 | Appendix B: open research & Phase 0 stack; published to GitHub |
 | v0.9.1 | 2026-06-14 | Remove cultured tissue (§4.8) and Related Work (§14) |
-| v0.9 | 2026-06-14 | Refocus on cognitive firewall; remove DojoPop conflation |
+| v0.9 | 2026-06-14 | Refocus on cognitive firewall; remove unrelated application-layer conflation |
 | v0.8 | 2026-06-14 | Strip AI slop; pluggable channels; rebrand from GORGONEUM |
 | v0.6 | 2026-05-12 | Related work, GPU section, A2A and invasive BCI extensions |
 | v0.5 | 2026-05-12 | Sovereignty framing and agent attestation mode |
@@ -1458,7 +1458,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 3. **Merkle commitment circuit** — Winterfell Liveness-1 over feature vectors + timestamp (see whitepaper Part 2).
 4. **Intent gate** — adapt [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard) pattern: no signed scope → no decode→action mapping.
 5. **NOSTR CP bus** — kind `31990`, tags `#the-membrane`, hash chain to prior event.
-6. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video), not live ritual watching.
+6. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video), not continuous co-presence monitoring.
 
 ### What Phase 0 proves
 

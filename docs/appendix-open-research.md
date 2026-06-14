@@ -1,6 +1,6 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md) (v0.9.6). Last updated: 2026-06-14.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.7). Last updated: 2026-06-14.
 
 **Independent research** — not affiliated with any organization named herein. IAC and router session CP schemas: whitepaper §4.2.1–§4.2.2.
 
@@ -92,7 +92,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 3. **Merkle commitment circuit** — Winterfell Liveness-1 over feature vectors + timestamp (see whitepaper Part 2).
 4. **Intent gate** — adapt [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard) pattern: no signed scope → no decode→action mapping.
 5. **NOSTR CP bus** — kind `31990`, tags `#the-membrane`, hash chain to prior event.
-6. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video), not live ritual watching.
+6. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video), not continuous co-presence monitoring.
 
 ### What Phase 0 proves
 
