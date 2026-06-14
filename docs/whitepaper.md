@@ -4,7 +4,7 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, nostr, whitepaper]
-version: "0.9.2"
+version: "0.9.3"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -27,7 +27,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **Invasive read / write** | Cortical implants, consumer BCIs, and medical devices with upstream telemetry or stimulation channels |
 | **Non-invasive inference** | EEG/MEG/fNIRS, gaze + keystroke models, emotion classifiers, digital phenotyping, predictive policing of intent |
 
-**Mechanism:** Recursive zk-STARK Chain Proofs bind (1) a neural/biometric anchor, (2) periodic **cognitive-integrity signals** from approved channels, (3) witness corroboration, and (4) TEE-backed node attestation. If domains disagree or a channel lacks valid attestation, the membrane **severs** — blocking routed inference, closing BCI sessions, or degrading to offline-safe mode.
+**Mechanism:** Recursive zk-STARK Chain Proofs bind (1) a neural/biometric anchor, (2) periodic **cognitive-integrity signals** from approved channels, (3) **Intent Authorization Certificates** before decode or router action, (4) witness corroboration, and (5) TEE-backed node attestation. If domains disagree or a channel lacks valid attestation, the membrane **severs** — blocking routed inference, closing BCI sessions, or degrading to offline-safe mode.
 
 **What this is NOT:**
 - Proof of consciousness or qualia.
@@ -53,6 +53,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - [Executive Summary](#executive-summary)
 - [Glossary](#glossary)
 - [0. The Cognitive Boundary Problem](#0-the-cognitive-boundary-problem)
+- [0.2 Epistemic Capture and Sequestration](#02-epistemic-capture-and-sequestration)
 - [0.1 What This Architecture Cannot Do](#01-what-this-architecture-cannot-do)
 - [0.5 Research Status and Scope](#05-research-status-and-scope)
 - [0.7 Local Control (Design Constraints)](#07-local-control-design-constraints)
@@ -64,11 +65,14 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - [4. Protocol Layers](#4-protocol-layers)
  - [4.1 Layer 0: Cognitive Anchor (T₀)](#41-layer-0-cognitive-anchor-t₀)
  - [4.2 Layer 1: Cognitive-Integrity Channels](#42-layer-1-cognitive-integrity-channels)
+ - [4.2.1 Intent Authorization Certificates](#421-intent-authorization-certificates)
+ - [4.2.2 LLM Router Session Chain Proofs](#422-llm-router-session-chain-proofs)
  - [4.3 Layer 2: Social Graph Consensus](#43-layer-2-social-graph-consensus)
  - [4.4 Layer 3: Substrate Transition Gate](#44-layer-3-substrate-transition-gate)
  - [4.5 Layer 4: Recursive Attestation (RFA)](#45-layer-4-recursive-firewall-attestation-rfa)
  - [4.6 Neuralink Primitives Integration](#46-neuralink-primitives-integration)
  - [4.7 Agent-to-Agent Attestation Mode](#47-agent-to-agent-attestation-mode)
+ - [4.8 Policy Enforcement vs Channel Continuity](#48-policy-enforcement-vs-channel-continuity)
 - [5. Formal Specification](#5-formal-specification)
 - [6. Security Analysis](#6-security-analysis)
 - [7. Recovery Mechanisms](#7-recovery-mechanisms)
@@ -108,6 +112,10 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **Δt** | The maximum acceptable time between valid CPs before the system fails closed. |
 | **K** | Minimum number of valid witness signatures required for a CP to pass social-graph consensus. |
 | **AIR** | Algebraic Intermediate Representation. The format used to define the execution trace constraints in a zk-STARK. |
+| **IAC** | Intent Authorization Certificate. A subject-signed scope file binding permitted channels, models, and context bounds before decode or router action. |
+| **Epistemic capture** | Progressive loss of perceptible boundary between endogenous reasoning and routed inference — the subject cannot tell native cognition from model output. |
+| **Cognitive identity drift** | Effective reasoning path migrates to external LLM/BCI channels while the attestation chain still appears valid; sovereignty erodes without cryptographic failure. |
+| **Neural template drift** | Biological change (plasticity, injury, device degradation) that shifts fuzzy biometric/neural commitments over time. Distinct from cognitive identity drift. |
 
 ---
 
@@ -131,6 +139,22 @@ The Membrane treats these as **boundary violations** when they occur outside att
 ```
 
 **Design goal:** Give the subject a verifiable, severable boundary — not a product that interprets thought content.
+
+---
+
+## 0.2 Epistemic Capture and Sequestration
+
+When cognition is routed through external systems, the boundary between **native reasoning** and **mediated output** can disappear without any single cryptographic break:
+
+| Order | Subject experience | Engineering read |
+|-------|-------------------|------------------|
+| **1st** | User knows they use an LLM or BCI | Channel is visible; membrane can register and attest it |
+| **2nd** | UI hides what was read, stored, or forked | Boundary is edited; session CP and context-hash commitments are required |
+| **3rd** | LLM + BCI becomes the **only** cognitive I/O | **Sequestration:** endogenous loop is bypassed or unreadable; user cannot distinguish native thought from routed completion |
+
+**Epistemic capture** is the third-order failure mode: not a stolen key, but a **substituted reasoning path** that feels continuous. The Membrane does not adjudicate thought content; it detects when attested channels diverge from signed intent (§4.2.1), when router sessions lack valid CPs (§4.2.2), or when BCI and router domains disagree — the classic closed-loop path described in open research on EEG→LLM coupling.[^21]
+
+**Cognitive identity drift** (glossary) is the long-term erosion of sovereignty when routing becomes habitual while attestations remain superficially valid. **Neural template drift** is the separate biological problem of fuzzy-commitment tolerance over years (§13, open problem 3).
 
 ---
 
@@ -430,6 +454,7 @@ The architecture attests channels and anchors, not mental content.[^3]
 4. **Recursive attestation (RFA).** Each CP commits to the prior node state; forgery requires sustained multi-node compromise.[^5]
 5. **Minimal disclosure.** zk-STARKs prove channel integrity without publishing raw neural or behavioral payloads.
 6. **Local severance.** Subject holds keys, chooses witnesses, and can cut all links via dead-man's key.
+7. **Substrate parity.** The same CP format applies across human BCI, local LLM router gate, VR session, and delegated agent — one membrane, multiple crossing types.
 
 ---
 
@@ -465,6 +490,47 @@ Each Chain Proof includes commitments from **registered channels** that may cros
 - **Attestation object:** NOSTR kind `31990` with Merkle roots of channel commitments, hybrid timestamp, prior CP hash.
 - **ZK circuit:** Proves temporal and continuity constraints without revealing raw neural or behavioral payloads.
 - **Fail closed:** Unregistered or stale channel → membrane severs that path.
+
+#### 4.2.1 Intent Authorization Certificates
+
+Adapted from the [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard) pattern: **the decoded signal or model completion is not the authorization; the signed certificate is.**[^22]
+
+Before any BCI decode→action mapping or LLM session crosses the membrane, the subject signs an **Intent Authorization Certificate (IAC)**:
+
+| Field | Purpose |
+|-------|---------|
+| `scope_id` | Unique session or task identifier |
+| `permitted_channels` | e.g. `local-llm`, `bci-decode`, `agent-delegate` |
+| `model_allowlist` | Hash or id of approved weights/checkpoints |
+| `context_merkle_bound` | Maximum committed context root (prevents silent context expansion) |
+| `forbidden_exports` | e.g. no cloud telemetry, no training retention |
+| `valid_until` | Short TTL aligned with Δt |
+| `parent_cp_hash` | Binds intent to current Chain Proof |
+
+**Gate rule:** No valid IAC → no decode→action, no router session, no agent delegation on behalf of the subject. Firmware or software that expands permissions without a fresh IAC triggers fail closed.
+
+This layer blocks **capability drift** (silent model swap, expanded API scope, decoder retrain without subject sign-off) without reading thought content.
+
+#### 4.2.2 LLM Router Session Chain Proofs
+
+Router sessions require a dedicated CP fragment published alongside the main liveness CP:
+
+**NOSTR:** kind `31990`, tag `["k", "the-membrane-router"]`
+
+| Public input | Semantics |
+|--------------|-----------|
+| `model_id` | Approved checkpoint hash or registry id (must match IAC allowlist) |
+| `context_merkle_root` | Merkle root over ingested context chunks for this session |
+| `session_nonce` | Monotonic per-subject nonce; detects parallel fork |
+| `parent_cp_hash` | Links session to biological or agent anchor CP |
+| `iac_hash` | Hash of active Intent Authorization Certificate |
+
+**BCI channel tag:** kind `31990`, tag `["k", "the-membrane-bci"]` — same CP machinery with `pub_neural_root` and implant/device id in tags.
+
+**Fail closed:**
+- Cloud or copilot route active without fresh router CP within Δt → sever inference channel.
+- `model_id` or `context_merkle_root` diverges from IAC without new subject signature → sever.
+- BCI decode and router session both active but cross-domain hashes disagree → sever (closed-loop sequestration path).
 
 ### 4.3 Layer 2: Social Graph Consensus
 
@@ -659,6 +725,30 @@ When Agent A initiates contact with Agent B:
 | 4 | Full recursive composition at scale | High-value agent economies |
 | 5 | Sovereign agent economies | Agents that own their own keys, host their own TEEs, and negotiate autonomously |
 
+#### Hybrid Human–AI Membrane
+
+The biological T₀ anchor can gate **hybrid** stacks without merging human and agent sovereignty:
+
+1. **Human holds T₀** and signs IACs for which channels may operate.
+2. **Local or attested LLM** is a registered router channel (§4.2.2), not a silent default.
+3. **Delegated agents** must chain CPs to `pub_parent_task_cp` referencing the human's latest CP — preventing "my agent acted, but it wasn't me" drift.
+4. **Fail closed** applies uniformly: agent without valid parent CP + IAC cannot act on the subject's behalf across the membrane.
+
+This preserves compatibility with invasive BCI paths (§4.6) and pure-silicon A2A mode (§4.7) under one attestation framework.
+
+### 4.8 Policy Enforcement vs Channel Continuity
+
+Readers comparing agent-governance products should note a structural difference from systems such as SPQR Aegis:[^20]
+
+| Dimension | Policy enforcement (e.g. SPQR Aegis) | The Membrane |
+|-----------|--------------------------------------|--------------|
+| **Question answered** | Did the agent obey policy? | Which channels were open and continuous? |
+| **Proof object** | Proof of Conduct / ILK decision log | Chain Proof of channel + anchor state |
+| **Trust locus** | Operator, compliance, audit | Subject-local severance |
+| **Failure mode** | Policy violation report | Membrane severance; channel kill |
+
+The two approaches are **composable**, not competing: ILK-style decision logs (§Liveness-A) can feed operator audit while the Membrane gives the **subject** a fail-closed boundary against routing and surveillance. SPQR benchmarks (238ms verify, 9.4ms publish) remain performance targets for Membrane CP generation (§9.2, §10.1).
+
 ---
 
 ## 5. Formal Specification
@@ -702,6 +792,8 @@ CP(t) = zk-STARK_PROVE(
 | **Replay / rollback** | Prevented by hash-chain linking CP(t) to CP(t-1) and hybrid timestamping. | Requires rewriting chain from T₀. Does not prevent T₀ compromise at genesis. |
 | **Sensor stream injection** | Merkle root binds to specific sensor data. | If sensors or upstream pipeline compromised before Merkle root, injection is possible. |
 | **Coerced channel use** | CP proves access to keys and registered devices. | Cannot distinguish willing use from coercion. Witnesses may detect anomalies (heuristic). |
+| **LLM routing / sequestration** | Router CP + IAC bind model id and context root; cross-domain disagreement fails closed. | Cannot detect routing through channels that never touch the membrane. |
+| **Cognitive identity drift** | IAC TTL and session nonce raise cost of silent habituation to external inference. | Cannot prove subject still reasons endogenously when attestations remain valid. |
 
 ### Extended Attack Matrix (Neuralink + A2A)
 
@@ -756,6 +848,9 @@ This section defines explicit recovery paths for T₀ loss, acknowledging that r
 | Neuralink firmware mismatch | All other domains OK | **Fail closed.** Surgical or remote re-anchoring required before resuming neural attestation. |
 | Agent substrate canary fails | All other domains OK | Degraded mode: require fresh CP within shortened window, alert operator and peers. |
 | Agent delegation chain break | Parent + other children OK | Isolate the broken branch, alert downstream agents, require re-attestation before resuming delegation. |
+| Router session stale or `model_id` mismatch | Liveness + WoT + node OK | **Sever LLM channel.** Require fresh router CP + IAC or offline-only mode. |
+| BCI + router active without cross-domain agreement | Either domain alone OK | **Fail closed.** Typical closed-loop sequestration path (EEG→LLM→output). |
+| IAC expired or scope exceeded | Channels otherwise OK | **Fail closed** on affected channels until subject signs new IAC. |
 
 ---
 
@@ -803,11 +898,12 @@ Phase 0 demonstrates a **self-hosted cognitive firewall** without requiring impl
 **MVP components:**
 1. Self-hosted NOSTR relay
 2. TEE node (single AMD SEV-SNP or Intel TDX instance)
-3. **AI router gate:** Local or attested inference session with context-hash commitment in CP
-4. **Optional BCI/sensor path:** Smartphone or EEG feature Merkle root (Liveness-1/2 circuit)
-5. Witness set: K=2–3 trusted humans (WoT)
-6. zk-STARK circuit: channel commitments + timestamp + witness count
-7. Dead-man's key: hardware token for emergency severance
+3. **Intent gate:** Subject-signed IAC before router or BCI decode (§4.2.1)
+4. **AI router gate:** Local or attested inference session with context-hash commitment in CP (§4.2.2)
+5. **Optional BCI/sensor path:** Smartphone or EEG feature Merkle root (Liveness-1/2 circuit)
+6. Witness set: K=2–3 trusted humans (WoT)
+7. zk-STARK circuit: channel commitments + timestamp + witness count
+8. Dead-man's key: hardware token for emergency severance
 
 The MVP proves a subject can maintain membrane-gated channels without routing cognition through unattested corporate endpoints by default.
 
@@ -964,6 +1060,8 @@ These are explicitly unresolved and invite community contribution. **Top-priorit
 9. **Economic sustainability without tokens.** The no-token incentive model relies on altruism and self-interest. Long-term sustainability of relay and witness networks is unproven.
 
 10. **Agent sovereignty vs. operator ownership.** The protocol proves agent integrity, but does not resolve legal or economic ownership. If an operator owns the hardware, can they claim to own the agent's attestations? This is a governance and legal problem, not a cryptographic one.
+
+⭐ **11. Cognitive identity drift detection.** Distinct from neural template drift (problem 3): the attestation chain remains valid while the subject's effective reasoning migrates to external LLM/BCI closed loops. Detecting routing substitution and epistemic capture **without reading thought content** — using IAC scope, router CP consistency, and cross-domain disagreement only — is an open problem tied to §0.2 and §4.2.[^21]
 
 ---
 
@@ -1219,6 +1317,9 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 **NOSTR bus:**
 - CP events: kind `31990`, tags `["e", <prev_event_id>]`, `["p", <firewall_npub>]`, `["k", "the-membrane-liveness"]`
 - Neural-enhanced CP events: kind `31990`, tags `["k", "the-membrane-liveness-neural"]` (optional)
+- BCI channel CP events: kind `31990`, tags `["k", "the-membrane-bci"]` (optional)
+- Router session CP events: kind `31990`, tags `["k", "the-membrane-router"]`, plus `["model", <model_id>]`, `["ctx", <context_merkle_root>]` (optional)
+- IAC events: kind `31990`, tags `["k", "the-membrane-iac"]`, content = signed scope JSON (optional)
 - Agent CP events: kind `31990`, tags `["k", "the-membrane-agent"]` (optional)
 - Relays: self-hosted + 2+ public for redundancy. **Caveat:** relays can censor or partition.[^14]
 
@@ -1245,6 +1346,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.3 | 2026-06-14 | IAC layer (§4.2.1), router session CPs (§4.2.2), epistemic capture (§0.2), substrate parity, SPQR foil (§4.8), hybrid human–AI membrane, cognitive identity drift open problem |
 | v0.9.2 | 2026-06-14 | Appendix B: open research & Phase 0 stack; published to GitHub |
 | v0.9.1 | 2026-06-14 | Remove cultured tissue (§4.8) and Related Work (§14) |
 | v0.9 | 2026-06-14 | Refocus on cognitive firewall; remove DojoPop conflation |
@@ -1294,6 +1396,10 @@ Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-researc
 
 [^19]: National Institute of Standards and Technology (NIST). *SP 800-207: Zero Trust Architecture*. https://doi.org/10.6028/NIST.SP.800-207 — **Standards (T1).** Vendor-neutral reference for Zero Trust Architecture. The Membrane implements these principles via cryptographic consensus rather than network segmentation.
 
-[^20]: Mazzocchetti, A. M. (2026). *The Aegis Architecture for Verifiable Policy Enforcement in Autonomous AI Systems*. arXiv:2603.16938v1 [cs.CR]. https://arxiv.org/abs/2603.16938 — **Implementation / competitor (T2).** SPQR Technologies' live product using zk-STARKs for AI agent governance. Reports 238ms median verification latency, 9.4ms publication overhead, 2 live deployments. Conceptual overlap in primitives (STARKs, TEEs, recursive attestation) but opposite vector: policy enforcement vs. identity sovereignty. Cited as foil and benchmark target.
+[^20]: Mazzocchetti, A. M. (2026). *The Aegis Architecture for Verifiable Policy Enforcement in Autonomous AI Systems*. arXiv:2603.16938v1 [cs.CR]. https://arxiv.org/abs/2603.16938 — **Implementation / competitor (T2).** SPQR Technologies' live product using zk-STARKs for AI agent governance. Reports 238ms median verification latency, 9.4ms publication overhead, 2 live deployments. Conceptual overlap in primitives (STARKs, TEEs, recursive attestation) but opposite vector: policy enforcement vs. channel continuity. Cited as foil and benchmark target (§4.8).
+
+[^21]: NeuroLM, SYNAPTICON, Brain-LLM Interface — see [appendix-open-research.md](./appendix-open-research.md). **Conceptual / active research (T3).** Closed-loop EEG→LLM pipelines illustrate sequestration and identity drift threats; not production security claims.
+
+[^22]: Grokipaedia. *iba-neural-guard*. https://github.com/Grokipaedia/iba-neural-guard — **Implementation reference (T2).** Intent certificate pattern: decoded neural signal ≠ authorization. Adapted for Membrane IAC layer (§4.2.1).
 
 *Tags: #the-membrane #whitepaper #zk-stark #identity-attestation #process-continuity #sovereignty #nostr #agent-attestation*

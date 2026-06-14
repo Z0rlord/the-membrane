@@ -1,6 +1,8 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md). Last updated: 2026-06-14.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.3). Last updated: 2026-06-14.
+
+IAC and router session CP schemas: whitepaper §4.2.1–§4.2.2.
 
 ## Neuralink: what is public
 

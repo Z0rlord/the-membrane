@@ -8,7 +8,7 @@ The Membrane does not read minds. It attests **which channels may cross the boun
 
 | File | Description |
 |------|-------------|
-| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.2) |
+| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.3) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 
 ## Core idea
