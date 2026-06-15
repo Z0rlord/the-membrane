@@ -1,6 +1,6 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md) (v0.9.11). Last updated: 2026-06-14.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.12). Last updated: 2026-06-14.
 
 IAC and router session CP schemas: §4.2.1–§4.2.2. Merkle trees: §5.1. Attestation transport and cold anchoring: §11.3–§11.4.
 
@@ -18,7 +18,7 @@ Treat invasive cortical implants as a **future Liveness-2 target**, not a Phase 
 
 ---
 
-## Merkle trees (required)
+## Merkle trees
 
 All bulk commitments use **SHA-256 Merkle trees** per whitepaper §5.1:
 
@@ -39,16 +39,16 @@ The protocol is **transport-agnostic**. Pick a hot bus for every-Δt CPs; add co
 
 | Profile | When | Implementation sketch |
 |---------|------|------------------------|
-| **Hot (required)** | Every Δt | Self-hosted append-only log + bus Merkle root in each CP |
-| **Warm (optional)** | Hourly+ | IPFS or object store for STARK bundles + signed rollup JSON |
-| **Cold A (optional)** | Weekly+ | Arweave bundle containing rollup + `.ots` |
-| **Cold B (optional)** | Daily+ | L2 calldata commit of `cp_chain_root` |
-| **Cold C (optional)** | Daily+ | [OpenTimestamps](https://opentimestamps.org/) on `ots_digest` (§5.1) |
+| **Hot** | Every Δt | Self-hosted append-only log + bus Merkle root in each CP |
+| **Warm** | Hourly+ | IPFS or object store for STARK bundles + signed rollup JSON |
+| **Cold A** | Weekly+ | Arweave bundle containing rollup + `.ots` |
+| **Cold B** | Daily+ | L2 calldata commit of `cp_chain_root` |
+| **Cold C** | Daily+ | [OpenTimestamps](https://opentimestamps.org/) on `ots_digest` (§5.1) |
 
-### Cold C: OpenTimestamps rollup (recommended Bitcoin anchor)
+### Cold C: OpenTimestamps rollup
 
 ```bash
-# 1. Export daily rollup (hypothetical CLI)
+# 1. Export daily rollup
 membrane export-rollup --day 2026-06-14 --out rollup.json
 # rollup.json contains cp_chain_root, last_bus_root, subject_pubkey, period_*
 
@@ -63,7 +63,7 @@ ots stamp rollup.signed.json
 ots upgrade rollup.signed.json.ots
 ots verify rollup.signed.json.ots
 
-# 5. Optional: announce on hot bus before Bitcoin confirms
+# 5. Announce on hot bus before Bitcoin confirms
 # MembraneEvent type membrane.anchor.ots { target: ots_digest, ots_b64, period_end }
 ```
 
@@ -149,7 +149,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 └─────────────┘     │ · channel Merkle     └─────────────────────────┘
 ┌─────────────┐     │ · CP prover   │              │
 │ Local LLM   │◄───►│ · session gate│────► Fail closed: no CP →
-│ (optional)  │     └──────────────┘      kill LLM + BCI decode
+│             │     └──────────────┘      kill LLM + BCI decode
 └─────────────┘              │
                              └── Daily: cp_chain_root rollup → OTS stamp
                                  (optional Arweave/L2 weekly)
@@ -161,7 +161,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 2. **Channel registry** — YAML list of permitted paths (BCI app, local LLM port, forbidden cloud URLs).
 3. **Merkle + Winterfell Liveness-1** — prove `pub_merkle_root` over feature vectors + timestamp (§Part 2).
 4. **Intent gate** — adapt [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard): no signed scope → no decode→action mapping.
-5. **Attestation bus** — append signed `MembraneEvent`; maintain bus Merkle tree; optional NOSTR backend.
+5. **Attestation bus** — append signed `MembraneEvent`; maintain bus Merkle tree; NOSTR relay profile if used.
 6. **Daily OTS rollup** — sign `RollupBundle`, `ots stamp`, `ots upgrade` when confirmed.
 7. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video).
 

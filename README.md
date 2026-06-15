@@ -9,7 +9,7 @@ The Membrane does not read minds. It attests **which channels may cross the boun
 
 | File | Description |
 |------|-------------|
-| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.11) |
+| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.12) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
 | [docs/the-membrane-complete.pdf](docs/the-membrane-complete.pdf) | PDF export with table of contents |

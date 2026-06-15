@@ -4,7 +4,7 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-14
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, whitepaper]
-version: "0.9.11"
+version: "0.9.12"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -43,7 +43,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - Cognitive-integrity signals are probabilistic; replay, injection, and coercion remain.
 - Fork detection is chain-bound; hidden parallel readers are out of scope.
 
-**Data structures:** SHA-256 Merkle trees for channel features, bus events, witness sets, and periodic CP rollups; optional [OpenTimestamps](https://opentimestamps.org/) cold anchor (§5.1, §11.4).
+**Data structures:** SHA-256 Merkle trees for channel features, bus events, witness sets, and periodic CP rollups; OpenTimestamps cold anchor on daily rollup (§5.1, §11.4).
 
 **Phase 0 prototype:** Self-hosted attestation bus, TEE node, `Liveness-2`-ready neural/sensor commitment circuit, and K=2–3 personal witnesses. See §9.
 
@@ -87,7 +87,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
  - [10.1 Hardware Acceleration: CUDA and GPU Support](#101-hardware-acceleration-cuda-and-gpu-support)
 - [11. Open Source, Audit, and Interoperability](#11-open-source-audit-and-interoperability)
  - [11.3 Attestation transport (hot path)](#113-attestation-transport-hot-path)
- - [11.4 Optional anchoring profiles](#114-optional-anchoring-profiles)
+ - [11.4 Cold anchoring profiles](#114-cold-anchoring-profiles)
 - [12. Ethical Considerations](#12-ethical-considerations)
 - [13. Known Open Problems](#13-known-open-problems)
 - [Part 2: zk-STARK Circuit Architecture](#part-2-zk-stark-circuit-architecture)
@@ -349,7 +349,7 @@ stateDiagram-v2
 
 | Feature | Platform passkeys | Video-based PoP | Biometric PoP | Social-graph PoP | **The Membrane** | **The Membrane + invasive BCI** | **The Membrane + A2A** |
 |---------|-------------------|-----------------|---------------|------------------|----------------|------------------------------|---------------------|
-| **Identity proof** | Cryptographic key possession | Video + CAPTCHA | Iris / face scan | Social graph | Biometric + WoT + TEE | Biometric + neural + WoT + TEE | Code hash + TEE + operator endorsement (optional) |
+| **Identity proof** | Cryptographic key possession | Video + CAPTCHA | Iris / face scan | Social graph | Biometric + WoT + TEE | Biometric + neural + WoT + TEE | Code hash + TEE + operator endorsement |
 | **Liveness** | None | Weak | Weak | None | Channel CP + ZK proof | Neural/BCI + ZK proof | Substrate canary |
 | **Fork detection** | None | None | None | None | Recursive CP chain + RFA | Recursive CP chain + RFA | Recursive CP chain + RFA |
 | **Substrate agnostic** | No | No | No | No | **Yes** (bio ↔ silicon) | **Yes** (bio ↔ silicon) | **Yes** (silicon ↔ silicon) |
@@ -440,7 +440,7 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 
 ---
 
-## 2. Three Boundaries (Explicitly Separated)
+## 2. Three Boundaries
 
 | Boundary | Definition | Tractability | Membrane role |
 |----------|------------|--------------|---------------|
@@ -521,7 +521,7 @@ This layer blocks **capability drift** (silent model swap, expanded API scope, d
 
 Router sessions require a dedicated CP fragment published alongside the main liveness CP.
 
-**Event type:** `membrane.cp.router` (see §11.3)
+**Event type:** `membrane.cp.router`
 
 | Public input | Semantics |
 |--------------|-----------|
@@ -603,7 +603,7 @@ The Membrane is substrate-agnostic and designed to leverage **high-bandwidth inv
 - **Limit:** If the neural template changes due to plasticity, injury, or device degradation, the fuzzy commitment must tolerate drift. This is harder than static biometric templates.
 
 **2. Neural-Enhanced Liveness Canary (Liveness-2 Circuit)**
-Add as optional parallel domain:
+Parallel domain for registered BCI channels:
 - **Neural Canary Event**: Participant performs a simple standardized mental or motor task (e.g., imagined movement, mental arithmetic, or specific imagery).
 - The implant streams processed neural features (spike rates, LFP power in key frequency bands, population vector activity) to the Membrane node.
 - The node generates a Merkle root over these features and includes it in the CP.
@@ -670,7 +670,7 @@ For pure-silicon agents, the biological T₀ anchor and human liveness provider 
 
 **1. Agent anchor (silicon T₀)**
 - A new agent is instantiated inside a TEE with a fresh keypair.
-- Initial CP references the code hash, model weights commitment (e.g., via Merkle root or zk-proof of weights), owner/operator identity (optional), and deployment configuration.
+- Initial CP references the code hash, model weights commitment (Merkle root or zk-proof of weights), owner/operator identity when set, and deployment configuration.
 - Published to the attestation bus or a dedicated agent mesh.
 
 **2. Agent Liveness / Substrate Canary**
@@ -794,7 +794,7 @@ CP(t) = zk-STARK_PROVE(
 
 ### 5.1 Merkle commitment trees
 
-The Membrane uses **SHA-256 binary Merkle trees** at every layer where bulk data must be committed without disclosure. Leaves are domain-separated where noted (`0x00` = feature chunk, `0x01` = bus event, `0x02` = CP hash, `0x03` = witness key).
+The Membrane uses **SHA-256 binary Merkle trees** wherever bulk data is committed without disclosure. Leaf prefixes: `0x00` feature chunk, `0x01` bus event, `0x02` CP hash, `0x03` witness key.
 
 | Tree | Leaf | Root field | Verified by |
 |------|------|------------|-------------|
@@ -803,7 +803,7 @@ The Membrane uses **SHA-256 binary Merkle trees** at every layer where bulk data
 | **Bus** | `H(0x01 \|\| canonical_event_bytes_i)` | `bus_root` in CP public inputs | Node + WoT (recompute from event log) |
 | **CP chain rollup** | `H(0x02 \|\| cp_hash_i)` | `cp_chain_root` in cold-anchor bundle | OTS / Arweave / L2 verifiers |
 
-**Construction:** Sort leaves lexicographically by digest before pairing (deterministic across implementations). Odd leaf count duplicates the last leaf. Inclusion paths are optional on the hot bus; STARK circuits prove root correctness from witness chunks.
+**Construction:** Sort leaves lexicographically by digest before pairing. Odd leaf count duplicates the last leaf. Inclusion paths need not be published on the bus; STARK circuits prove root correctness from witness chunks.
 
 **Router context tree:** Ingested prompt/context is chunked (e.g. 4–64 KiB); `context_merkle_root` is the channel-tree root over `H(chunk_j)`. IAC `context_merkle_bound` caps the maximum allowed root.
 
@@ -821,7 +821,7 @@ signed_rollup = Sign(subject, canonical_json(RollupBundle))
 ots_digest    = SHA256(canonical_json(RollupBundle) || signature)
 ```
 
-`ots_digest` is stamped via OpenTimestamps (Profile Cold C). The signed bundle is retained locally and on warm storage; only the digest enters Bitcoin.
+`ots_digest` is stamped via OpenTimestamps (Cold C). The signed bundle is retained locally and on warm storage; only the digest enters Bitcoin.
 
 ---
 
@@ -855,7 +855,7 @@ ots_digest    = SHA256(canonical_json(RollupBundle) || signature)
 
 ## 7. Recovery Mechanisms
 
-This section defines explicit recovery paths for T₀ loss, acknowledging that real systems must handle failure while preserving sovereignty.
+Recovery paths for T₀ loss while preserving sovereignty.
 
 ### 7.1 Lost T₀ Anchor (Hardware Failure)
 
@@ -945,10 +945,10 @@ Phase 0 demonstrates a **self-hosted cognitive firewall** without requiring impl
 2. TEE node (single AMD SEV-SNP or Intel TDX instance)
 3. **Intent gate:** Subject-signed IAC before router or BCI decode (§4.2.1)
 4. **AI router gate:** Local or attested inference session with context-hash commitment in CP (§4.2.2)
-5. **Optional BCI/sensor path:** Smartphone or EEG feature Merkle root (Liveness-1/2 circuit)
+5. **BCI/sensor path:** Smartphone or EEG feature Merkle root (Liveness-1/2 circuit)
 6. Witness set: K=2–3 trusted humans (WoT)
 7. zk-STARK circuit: channel commitments + timestamp + witness count
-8. Merkle rollup + optional OTS cold anchor (daily `cp_chain_root`)
+8. Daily Merkle rollup + OTS cold anchor (`cp_chain_root`)
 9. Dead-man's key: hardware token for emergency severance
 
 The MVP proves a subject can maintain membrane-gated channels without routing cognition through unattested corporate endpoints by default.
@@ -995,9 +995,9 @@ The MVP proves a subject can maintain membrane-gated channels without routing co
 | 3 | Social graph witness protocol | WoT over attestation bus[^9] | Social layer compromise, witness coercion |
 | 4 | Substrate transition gate | VR runtime integration[^10] | VR runtime itself is a massive TCB |
 | 5 | Recursive node attestation | Multi-party STARK composition[^2] | 2/3 compromise threshold is hard limit |
-| 6 | Invasive BCI extension (optional) | Implant API + Winterfell AIR extension[^18] | Medical device maturity, corporate API availability, FDA validation |
+| 6 | Invasive BCI extension | Implant API + Winterfell AIR extension[^18] | Medical device maturity, corporate API availability, FDA validation |
 | 7 | Agent-to-Agent mode | Pure-silicon CP + handshake protocol + delegation chains | Performance overhead, incentive design, TEE availability for agents |
-| 8 | GPU acceleration (optional) | CUDA kernels + Winterfell backend | NVIDIA dependency, driver-level trust, mobile power constraints |
+| 8 | GPU acceleration | CUDA kernels + Winterfell backend | NVIDIA dependency, driver-level trust, mobile power constraints |
 
 ### 10.1 Hardware Acceleration: CUDA and GPU Support (Proposed Extension)
 
@@ -1030,7 +1030,7 @@ Proof generation remains one of the primary practical blockers for frequent atte
 | Phase | Milestone | Benefit |
 |-------|-----------|---------|
 | 1+ | CUDA-accelerated polynomial & hash kernels | Faster MVP proving on desktops/servers |
-| 2+ | Integrated Winterfell GPU backend (optional feature) | Mobile-friendly liveness proofs |
+| 2+ | Integrated Winterfell GPU backend | Mobile-friendly liveness proofs |
 | 3+ | GPU-optimized recursive composition | Practical high-frequency A2A & invasive BCI use |
 
 ---
@@ -1075,34 +1075,34 @@ The Membrane protocol is **transport-agnostic**. Cryptography, T₀ enrollment, 
 | `payload` | Type-specific public inputs (Merkle roots, model_id, iac_hash, STARK bytes or URI) |
 | `signature` | Over canonical serialization |
 
-Each appended event updates the running **bus Merkle tree** (§5.1); `bus_root` in the next CP commits to the full event sequence. Witnesses subscribe to the bus (or receive events out-of-band), verify STARKs, recompute `bus_root`, and return signatures. The membrane node fails closed if the bus is stale, partitioned, or missing required event types.
+Each appended event updates the running **bus Merkle tree** (§5.1); `bus_root` in the next CP commits to the full event sequence. Witnesses subscribe to the bus (or receive events out-of-band), verify STARKs, recompute `bus_root`, and return signatures. The membrane node fails closed if the bus is stale, partitioned, or missing events for active channels.
 
-### 11.4 Optional anchoring profiles (cold path)
+### 11.4 Cold anchoring profiles
 
-Periodic CP publication on the **hot bus** is required for liveness. **Cold anchoring** is optional — for audit durability or third-party timestamping, not for minute-scale severance.
+Cold anchors supply audit durability and third-party timestamps. Fail-closed severance reads the hot bus only.
 
 | Profile | Role | Cadence | Examples | Tradeoffs |
 |---------|------|---------|----------|-----------|
-| **Hot (required)** | Liveness, WoT gossip, severance | Every Δt | Self-hosted append-only log; relay-style pub/sub; MQTT; Hypercore; local file + sync | Must be fast and subject-controlled |
-| **Warm (optional)** | Shareable snapshots | Hourly–daily | IPFS / self-hosted object store | Not a liveness source |
-| **Cold A (optional)** | Permanent audit trail | Weekly+ | [Arweave](https://www.arweave.org/) bundle of CP chain | Pay-once storage; slow; public permanence[^23] |
-| **Cold B (optional)** | Timestamp / root commit | Daily+ | Ethereum L2 calldata with `cp_chain_root` | Gas cost; public chain; not every-Δt[^24] |
-| **Cold C (optional)** | Bitcoin time anchor | Daily+ | [OpenTimestamps](https://opentimestamps.org/) over `ots_digest` (§5.1) | Hours to confirm; digest-only on chain; calendar pending until upgrade[^25] |
+| **Hot** | Liveness, WoT gossip, severance | Every Δt | Self-hosted append-only log; relay-style pub/sub; MQTT; Hypercore; local file + sync | Low latency; subject-controlled |
+| **Warm** | Shareable snapshots | Hourly–daily | IPFS / self-hosted object store | Audit copies only |
+| **Cold A** | Permanent audit trail | Weekly+ | [Arweave](https://www.arweave.org/) bundle of CP chain | Pay-once storage; slow; public permanence[^23] |
+| **Cold B** | Timestamp / root commit | Daily+ | Ethereum L2 calldata with `cp_chain_root` | Gas cost; public chain; not every-Δt[^24] |
+| **Cold C** | Bitcoin time anchor | Daily+ | [OpenTimestamps](https://opentimestamps.org/) over `ots_digest` (§5.1) | Hours to confirm; digest-only on chain; calendar pending until upgrade[^25] |
 
 **Cold C procedure:**
 
 1. Build `RollupBundle` with `cp_chain_root` = Merkle root over all `H(CP)` in the period.
 2. Sign bundle; compute `ots_digest = SHA256(canonical_json(bundle) || signature)` (same binding as NIP-3B `id+sig` for signed attestations).
 3. `ots stamp` → submit to ≥2 calendar pools → `ots upgrade` when Bitcoin confirms.
-4. Optionally publish `membrane.anchor.ots` on the hot bus with `{ target: ots_digest, ots_b64, period_end }` so witnesses see intent before Bitcoin confirms.
+4. Publish `membrane.anchor.ots` on the hot bus with `{ target: ots_digest, ots_b64, period_end }` so witnesses see intent before Bitcoin confirms.
 
-**Design rule:** Fail-closed logic reads the **hot bus only**. Arweave and Ethereum never substitute for a missing router CP or stale witness set. NOSTR is one **example hot-bus implementation** — see Appendix B.
+**Design rule:** Fail-closed logic reads the hot bus only. Arweave, Ethereum, and Bitcoin OTS do not substitute for a missing router CP or stale witness set. NOSTR relay profile: Appendix B.
 
 ### 11.5 Interoperability
 
 - **TEE ecosystems:** Targets AMD SEV-SNP and Intel TDX via standard attestation APIs. ARM CCA as future target.
-- **Identity bridges:** Optional DID:web or DID:ion mapping for compatibility with W3C decentralized identity systems. No dependency.
-- **ZK ecosystems:** STARK proofs verifiable on StarkNet or Cairo VM for optional cold anchoring (Profile Cold B). Not required for core operation.
+- **Identity bridges:** DID:web or DID:ion mapping for W3C decentralized identity interop.
+- **ZK ecosystems:** STARK proofs verifiable on StarkNet or Cairo VM; usable for Cold B root commits.
 - **Invasive BCI:** Requires proprietary manufacturer API/SDK. If unavailable, the protocol falls back to Liveness-1 without degradation.
 - **A2A frameworks:** Can be layered over MCP, A2A, or custom agent communication protocols. CP exchange remains bus-agnostic.
 
@@ -1279,11 +1279,11 @@ This creates a **proof chain**. An adversary compromising the node at T must for
 
 ---
 
-## Liveness-2 Neural Extension (Optional)
+## Liveness-2 Neural Extension
 
 ### Overview
 
-The `Liveness-2` circuit extends `Liveness-1` by adding a **neural feature accumulator** column. It is designed for BCI-equipped users (high-bandwidth cortical implant) and operates as an optional parallel domain. The protocol accepts either `Liveness-1` or `Liveness-2` signals, or both for higher confidence.
+The `Liveness-2` circuit extends `Liveness-1` by adding a **neural feature accumulator** column. It is designed for BCI-equipped users (high-bandwidth cortical implant) and operates as a parallel domain when BCI is registered. The protocol accepts either `Liveness-1` or `Liveness-2` signals, or both for higher confidence.
 
 ### Additional Public Inputs
 
@@ -1335,7 +1335,7 @@ neural_acc' = Hash(neural_acc || priv_neural_data[row])
 
 ### Overview
 
-The `Liveness-A` circuit is a simplified variant for pure-silicon agents. It removes the biological/social witness layer and replaces it with substrate attestation, an Immutable Logging Kernel (ILK) for complete decision audit trails, and optional operator endorsement.
+The `Liveness-A` circuit is a simplified variant for pure-silicon agents. It removes the biological/social witness layer and replaces it with substrate attestation, an Immutable Logging Kernel (ILK) for complete decision audit trails, and operator endorsement when configured.
 
 ### Public Inputs
 
@@ -1409,18 +1409,20 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 
 ## Integration: Attestation Bus + Local Automation
 
-**Hot path (§11.3):** Publish `MembraneEvent` records to the self-hosted attestation bus after each proof cycle. Event types include `membrane.cp.liveness`, `membrane.cp.router`, `membrane.cp.bci`, `membrane.iac`, `membrane.cp.agent`, and `membrane.anchor.ots`. Optional cold anchors (§11.4): daily Merkle `cp_chain_root` rollup; stamp `ots_digest` with OpenTimestamps (Cold C); weekly Arweave bundle (Cold A) or L2 commit (Cold B) if needed.
+**Hot path (§11.3):** Publish `MembraneEvent` records to the self-hosted attestation bus after each proof cycle: `membrane.cp.liveness`, `membrane.cp.router`, `membrane.cp.bci`, `membrane.iac`, `membrane.cp.agent`, `membrane.anchor.ots`.
+
+**Cold path (§11.4):** Daily `cp_chain_root` rollup; OpenTimestamps stamp on `ots_digest` (Cold C); Arweave bundle (Cold A) or L2 commit (Cold B) on slower cadence.
 
 **Local automation (e.g., cron or sensor trigger):**
 - Trigger: IMU threshold or cron.
 - Action: Compile sensor data → generate STARK → append signed event to bus.
 - Fallback: Proof failure or missing witnesses → emit `membrane.alert.degraded` → fail closed.
 
-**Example mapping (NOSTR profile):** Appendix B maps `MembraneEvent` types to NOSTR kinds `31990`/`31991` for implementers who choose that hot-bus backend.
+**NOSTR profile:** Appendix B maps `MembraneEvent` types to kinds `31990`/`31991`.
 
 ---
 
-## Citation Tiers (Explicit Epistemic Weight)
+## Citation Tiers
 
 | Tier | Type | Citations |
 |------|------|-----------|
@@ -1436,6 +1438,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.12 | 2026-06-14 | Editorial pass: remove redundant required/optional labels; tighten Merkle and anchoring prose |
 | v0.9.11 | 2026-06-14 | Merkle tree spec (§5.1); OpenTimestamps Cold C; de-sci-fi Gated I/O layer; trim mystical framing |
 | v0.9.10 | 2026-06-14 | Transport-agnostic attestation bus; optional Arweave/L2 cold profiles; NOSTR demoted to appendix example |
 | v0.9.9 | 2026-06-14 | Restore sovereignty terminology; single affiliation disclaimer |
@@ -1474,7 +1477,7 @@ Treat invasive cortical implants as a **future Liveness-2 target**, not a Phase 
 
 ---
 
-## Merkle trees (required)
+## Merkle trees
 
 All bulk commitments use **SHA-256 Merkle trees** per whitepaper §5.1:
 
@@ -1495,16 +1498,16 @@ The protocol is **transport-agnostic**. Pick a hot bus for every-Δt CPs; add co
 
 | Profile | When | Implementation sketch |
 |---------|------|------------------------|
-| **Hot (required)** | Every Δt | Self-hosted append-only log + bus Merkle root in each CP |
-| **Warm (optional)** | Hourly+ | IPFS or object store for STARK bundles + signed rollup JSON |
-| **Cold A (optional)** | Weekly+ | Arweave bundle containing rollup + `.ots` |
-| **Cold B (optional)** | Daily+ | L2 calldata commit of `cp_chain_root` |
-| **Cold C (optional)** | Daily+ | [OpenTimestamps](https://opentimestamps.org/) on `ots_digest` (§5.1) |
+| **Hot** | Every Δt | Self-hosted append-only log + bus Merkle root in each CP |
+| **Warm** | Hourly+ | IPFS or object store for STARK bundles + signed rollup JSON |
+| **Cold A** | Weekly+ | Arweave bundle containing rollup + `.ots` |
+| **Cold B** | Daily+ | L2 calldata commit of `cp_chain_root` |
+| **Cold C** | Daily+ | [OpenTimestamps](https://opentimestamps.org/) on `ots_digest` (§5.1) |
 
-### Cold C: OpenTimestamps rollup (recommended Bitcoin anchor)
+### Cold C: OpenTimestamps rollup
 
 ```bash
-# 1. Export daily rollup (hypothetical CLI)
+# 1. Export daily rollup
 membrane export-rollup --day 2026-06-14 --out rollup.json
 # rollup.json contains cp_chain_root, last_bus_root, subject_pubkey, period_*
 
@@ -1519,7 +1522,7 @@ ots stamp rollup.signed.json
 ots upgrade rollup.signed.json.ots
 ots verify rollup.signed.json.ots
 
-# 5. Optional: announce on hot bus before Bitcoin confirms
+# 5. Announce on hot bus before Bitcoin confirms
 # MembraneEvent type membrane.anchor.ots { target: ots_digest, ots_b64, period_end }
 ```
 
@@ -1605,7 +1608,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 └─────────────┘     │ · channel Merkle     └─────────────────────────┘
 ┌─────────────┐     │ · CP prover   │              │
 │ Local LLM   │◄───►│ · session gate│────► Fail closed: no CP →
-│ (optional)  │     └──────────────┘      kill LLM + BCI decode
+│             │     └──────────────┘      kill LLM + BCI decode
 └─────────────┘              │
                              └── Daily: cp_chain_root rollup → OTS stamp
                                  (optional Arweave/L2 weekly)
@@ -1617,7 +1620,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 2. **Channel registry** — YAML list of permitted paths (BCI app, local LLM port, forbidden cloud URLs).
 3. **Merkle + Winterfell Liveness-1** — prove `pub_merkle_root` over feature vectors + timestamp (§Part 2).
 4. **Intent gate** — adapt [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard): no signed scope → no decode→action mapping.
-5. **Attestation bus** — append signed `MembraneEvent`; maintain bus Merkle tree; optional NOSTR backend.
+5. **Attestation bus** — append signed `MembraneEvent`; maintain bus Merkle tree; NOSTR relay profile if used.
 6. **Daily OTS rollup** — sign `RollupBundle`, `ots stamp`, `ots upgrade` when confirmed.
 7. **WoT** — K=2 human witnesses sign CP validity out-of-band (Signal/video).
 
@@ -1673,7 +1676,7 @@ Implement the MVP (§9) using the stacks in [Appendix B](#appendix-b-open-resear
 
 [^13]: Ben-Sasson, E. et al. (2018). *Scalable, transparent, and post-quantum secure computational integrity*. IACR ePrint. — **Formal (T1).** Foundational STARK paper. Winterfell (Rust) and Cairo are production implementations.
 
-[^14]: Attestation transport examples (pub/sub meshes, append-only logs). NOSTR NIPs: https://github.com/nostr-protocol/nips — **Implementation (T2).** One optional hot-bus profile; not normative for the protocol.
+[^14]: Attestation transport examples (pub/sub meshes, append-only logs). NOSTR NIPs: https://github.com/nostr-protocol/nips — **Implementation (T2).** Example hot-bus profile; not normative.
 
 [^15]: National Institute of Standards and Technology (NIST). *Post-Quantum Cryptography Standardization*. — **Standards (T1).** SPHINCS+ selected as hash-based post-quantum signature. Shares hash-function assumptions with zk-STARKs.
 
@@ -1687,10 +1690,10 @@ Implement the MVP (§9) using the stacks in [Appendix B](#appendix-b-open-resear
 
 [^22]: Grokipaedia. *iba-neural-guard*. https://github.com/Grokipaedia/iba-neural-guard — **Implementation reference (T2).** Intent certificate pattern: decoded neural signal ≠ authorization. Adapted for Membrane IAC layer (§4.2.1).
 
-[^23]: Arweave permaweb. https://www.arweave.org/ — **Implementation (T2).** Optional cold-profile storage for CP chain snapshots. Unsuitable as hot-path liveness bus (latency, pub/sub model).
+[^23]: Arweave permaweb. https://www.arweave.org/ — **Implementation (T2).** Cold A storage for CP chain snapshots. Unsuitable as hot-path liveness bus (latency, pub/sub model).
 
 [^25]: OpenTimestamps. https://opentimestamps.org/ — **Implementation (T2).** Batched Bitcoin timestamp proofs. Stamp `ots_digest` from signed rollup bundle; verify with `opentimestamps-client` + Bitcoin headers. Not a liveness bus.
 
-[^24]: Ethereum / L2 rollups. — **Implementation (T2).** Optional cold-profile root commits (`H(CP_root)`). Unsuitable for per-Δt CP publication (cost, latency, public mempool).
+[^24]: Ethereum / L2 rollups. — **Implementation (T2).** Cold B root commits (`H(CP_root)`). Unsuitable for per-Δt CP publication (cost, latency, public mempool).
 
 *Tags: #the-membrane #whitepaper #zk-stark #identity-attestation #process-continuity #sovereignty #agent-attestation*

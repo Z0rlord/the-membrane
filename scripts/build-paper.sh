@@ -60,6 +60,7 @@ if command -v pandoc >/dev/null 2>&1; then
     pandoc "$OUT_MD" -o "$OUT_PDF" \
       --pdf-engine=weasyprint \
       -V papersize=a4 \
+      -V author="Zorie R. Barber" \
       --toc --toc-depth=3 \
       -f markdown+footnotes
     echo "Wrote $OUT_PDF"
