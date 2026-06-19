@@ -1,6 +1,6 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md) (v0.9.13). Last updated: 2026-06-19.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.14). Last updated: 2026-06-19.
 
 IAC and router session CP schemas: §4.2.1–§4.2.2. Merkle trees: §5.1. Attestation transport and cold anchoring: §11.3–§11.4.
 
@@ -34,6 +34,31 @@ Empirical and commercial closed-loop read/write systems ground Membrane assumpti
 2. **Bind `task_id` + `stimulation_policy` in IAC.** Neural Merkle roots are task- and session-conditioned; replay resistance assumes matched closed-loop history.
 3. **Δt must respect minute-scale plasticity.** Measurable electrophysiological change within ~5 minutes of closed-loop embodiment; attestation cadence cannot assume static neural fingerprints.
 4. **Do not import "sentience" marketing.** Source paper uses a narrow active-inference definition; Cortical Labs consumer copy escalates further. Membrane attests channels, not phenomenology.
+
+---
+
+## Formal membrane lineage (Păun, Gorla, SN P)
+
+The Membrane name overlaps with **membrane computing** (Păun 1998) and **security membranes** (Gorla et al.). See whitepaper §0.6 for the four-way distinction. These are **formal and security precedents** — not claims that Cortical Labs runs P-system simulators.
+
+| Resource | URL | Use for Membrane |
+|----------|-----|------------------|
+| Păun (2000) — *Computing with Membranes* | [DOI](https://doi.org/10.1006/jcss.2000.1773) · [Scholarpedia overview](http://www.scholarpedia.org/article/Membrane_Computing) | P systems: compartments, symport/antiport, dissolution → IAC passage rules, severance |
+| Păun & Rozenberg (2002) — symport/antiport | [New Generation Computing](https://doi.org/10.1007/BF03036382) | Paired in/out transport → bidirectional BCI `stimulation_policy` |
+| Ionescu, Păun, Yokomori (2006) — SN P systems | [Fundamenta Informaticae](https://doi.org/10.3233/FI-2006-712-308) | Spike timing as object type → Liveness-2 commitment design |
+| Gorla, Hennessy, Sassone (2002) — security membranes | [ENTCS](https://doi.org/10.1016/S1571-0661(05)05109-1) | Site filter on agent/code entry → membrane-as-firewall precedent |
+
+### P-system → Membrane primitive map
+
+| P system | Membrane |
+|----------|----------|
+| Skin / environment | Endogenous vs exogenous cognition |
+| Symport / antiport | IAC-gated read/write channels |
+| Promoter / inhibitor | IAC scope, TTL, allowlists |
+| Membrane dissolution | Fail-closed severance |
+| SN P spike trains | Liveness-2 `priv_neural_data` rows |
+
+**Do not conflate:** Păun's field studies abstract cell-inspired computation. Cortical Labs ships **physical** closed-loop electrophysiology. The Membrane attests **which couplings are authorized**.
 
 ---
 
@@ -151,6 +176,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 | NeuroLM | [github.com/935963004/NeuroLM](https://github.com/935963004/NeuroLM) | EEG treated as "foreign language" inside an LLM — native cognition absorbed into model space |
 | SYNAPTICON | [github.com/AlbertBarqueDuran/SYNAPTICON](https://github.com/AlbertBarqueDuran/SYNAPTICON) | EEG → text → LLM → output closed loop |
 | Brain-LLM Interface | [arXiv:2603.16897](https://arxiv.org/html/2603.16897) | EEG gates LLM refinement at inference time |
+| **BioLLM (CL1 + LLM)** | [GitHub: 4R7I5T/CL1_LLM_Encoder](https://github.com/4R7I5T/CL1_LLM_Encoder) | **Class I:** wetware re-weights token logits inside router loop — requires linked `membrane.cp.router` + `membrane.cp.bci` |
 
 ### Wetware closed-loop (no LLM in path)
 
@@ -158,12 +184,13 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 |---------|-----|----------------|
 | Cortical Labs CL1 | [corticallabs.com](https://corticallabs.com) | Local code-deployable biological computer — cognition routed through external neurons |
 | Cortical Cloud | [corticallabs.com](https://corticallabs.com) | Remote biological compute API — substrate-transition / Class H threat |
+| Bio-datacenter prototypes (2026) | [NUS Medicine](https://medicine.nus.edu.sg/news/biological-data-centre-prototype-established-at-nus-medicine/) · [DCD](https://www.datacenterdynamics.com/en/news/australian-startup-cortical-labs-unveils-biological-data-center-prototype/) | Melbourne (~120 CL1) + Singapore (phased); wetware at datacenter scale |
 | DishBrain (research) | [Neuron 2022](https://doi.org/10.1016/j.neuron.2022.09.001) | Defines minimal closed-loop mechanics: read → act → feedback required for plasticity |
 
 | Membrane term | Meaning in this stack |
 |---------------|----------------------|
 | **Identity drift** | Decoder or LLM updates, session fork, model swap without new Chain Proof |
-| **Sequestration** | Cognition lives in external inference (LLM **or wetware closed-loop**); endogenous loop bypassed or unreadable |
+| **Sequestration** | Cognition lives in external inference (LLM **or wetware**, including **BioLLM hybrids**); endogenous loop bypassed or unreadable |
 | **Firewall job** | Gate which channels may couple; sever on missing/stale CP; **sever feedback** when bidirectional policy breaks |
 
 ---
@@ -210,6 +237,10 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 
 ## References to add to implementation issues
 
+- Păun, G. (2000). *Computing with Membranes*. J. Comput. System Sci. https://doi.org/10.1006/jcss.2000.1773 — P-system formal lineage (§0.6).
+- Ionescu, M., Păun, G., & Yokomori, T. (2006). *Spiking neural P systems*. Fundamenta Informaticae — Liveness-2 spike objects (§Part 2).
+- Gorla, D., Hennessy, M., & Sassone, V. (2002). *Security Policies as Membranes*. ENTCS — security-boundary precedent (§0.6).
+- BioLLM / CL1_LLM_Encoder demos (2026) — Class I hybrid threat; GitHub `4R7I5T/CL1_LLM_Encoder`.
 - Kagan, B. J. et al. (2022). *In vitro neurons learn and exhibit sentience when embodied in a simulated game-world*. Neuron. https://doi.org/10.1016/j.neuron.2022.09.001 — closed-loop feedback mechanics; minute-scale plasticity (§0.2, §4.6).
 - Cortical Labs. CL1 / Cortical Cloud product pages. https://corticallabs.com — commercial wetware closed-loop precedents (Class H); descriptive only.
 - Khan, E. (2026). *Brain Hacking: AI for Safeguarding Against Dangerous AI*. [Preprints.org](https://www.preprints.org/manuscript/202601.0156) — cognitive firewall framing (T3).

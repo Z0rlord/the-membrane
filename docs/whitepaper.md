@@ -4,7 +4,7 @@ subtitle: "A nervous-system firewall against AI routing and thought surveillance
 author: "Zorie R. Barber"
 date: 2026-06-19
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, whitepaper]
-version: "0.9.13"
+version: "0.9.14"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -29,6 +29,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **Invasive read / write** | Cortical implants, consumer BCIs, and medical devices with upstream telemetry or stimulation channels |
 | **Non-invasive inference** | EEG/MEG/fNIRS, gaze + keystroke models, emotion classifiers, digital phenotyping, predictive policing of intent |
 | **Outsourced wetware compute** | Code-deployable biological computers and biological cloud APIs coupling external neuron cultures in closed read/write loops |
+| **BioLLM-class hybrid** | LLM token routing modulated by living neurons on API (wetware bias inside router session) — Class A + Class H in one loop[^27][^30] |
 
 **Mechanism:** Recursive zk-STARK Chain Proofs bind (1) a neural/biometric anchor, (2) periodic **cognitive-integrity signals** from approved channels, (3) **Intent Authorization Certificates** before decode or router action, (4) witness corroboration, and (5) TEE-backed node attestation. If domains disagree or a channel lacks valid attestation, the membrane **severs** — blocking routed inference, closing BCI sessions, or degrading to offline-safe mode.
 
@@ -62,6 +63,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - [0.2 Epistemic Capture and Sequestration](#02-epistemic-capture-and-sequestration)
 - [0.1 What This Architecture Cannot Do](#01-what-this-architecture-cannot-do)
 - [0.5 Research Status and Scope](#05-research-status-and-scope)
+- [0.6 Three Membranes (Terminological Lineage)](#06-three-membranes-terminological-lineage)
 - [0.7 Sovereignty (Design Constraints)](#07-sovereignty-design-constraints)
 - [0.8 Visual Architecture Overview](#08-visual-architecture-overview)
 - [0.9 Zero Trust Architecture Mapping](#09-zero-trust-architecture-mapping)
@@ -241,6 +243,31 @@ This architecture is framed for conditions where:
 
 The architecture should therefore be read as:
 > a research architecture built from cryptographic and distributed-systems primitives.
+
+---
+
+## 0.6 Three Membranes (Terminological Lineage)
+
+The name **Membrane** collides with several independent research lines. This document is **not** an implementation of Gheorghe Păun's membrane computing, nor a Cortical Labs product spec. The following table separates lineages so readers do not merge formal models, security filters, wetware hardware, and cognitive attestation into one claim.
+
+| Lineage | Origin | Object of study | Relation to this document |
+|---------|--------|-----------------|---------------------------|
+| **P systems (membrane computing)** | Păun (1998): formal compartments, symport/antiport transport, membrane dissolution[^27][^28] | Abstract cell-like parallel computers | **Formal precedent** for gated passage, bidirectional coupling, and fail-closed topology change — maps to IAC + CP channel rules (§4.2.1) |
+| **Security membranes** | Gorla, Hennessy & Sassone: site filters on migrating code and agent actions[^29] | Global computing / mobile agents | **Independent security precedent** — membranes as policy enforcement boundaries, not biocompute |
+| **Wetware compute membranes** | Literal cell cultures on MEAs (DishBrain, CL1, bio-datacenters)[^26][^30] | Living neurons in closed read/write loops with software | **Empirical threat surface** (Class H, Class I) — Cortical Labs does not implement Păun's P-system semantics |
+| **The Membrane (this spec)** | Cognitive boundary attestation architecture | Which channels may couple to endogenous cognition | **Subject-sovereign zk-STARK CP layer** over the above — attests policy and continuity, not thought content |
+
+### Formal mapping (P systems → Membrane primitives)
+
+| P-system concept | Membrane primitive |
+|------------------|-------------------|
+| Skin membrane / environment | Endogenous cognition vs exogenous channels |
+| Symport / antiport rules | IAC-gated read/write: `stimulation_policy`, `decoder_version`, `task_id` |
+| Promoter / inhibitor on rules | IAC TTL, `model_allowlist`, fail-closed on scope exceed |
+| Membrane dissolution | Severance: kill router, BCI, wetware API on invalid CP |
+| Spiking neural P systems (SN P)[^28] | Liveness-2 spike-timing / rate motifs as commitment objects |
+
+**Important distinction:** Păun's field asks what cell-inspired formalisms can compute. Cortical Labs asks what living neurons can do when embodied in software. **This document asks which couplings a subject has authorized and whether attestation still holds** — a security and sovereignty question orthogonal to Turing-completeness or energy efficiency claims.
 
 ---
 
@@ -425,6 +452,11 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 - Goal: Substitute native reasoning with wetware-mediated I/O; hide the coupling because the subject experiences direct task performance rather than chat completions.
 - **Mitigation:** Register wetware channels as first-class `membrane.cp.bci` (or substrate-transition) paths; require IAC scope over stimulation and feedback policy; fail closed when cross-domain hashes disagree (§4.2.2). Benchtop and commercial precedents exist; in-vivo implant attestation APIs remain prospective.[^26]
 
+**Class I: BioLLM-class hybrid (LLM + wetware closed loop)**
+- Adversary (or subject, without membrane gating) couples an LLM router to a wetware API so that **token logits are re-weighted by live neuron activity** — e.g., model proposes candidates → encoder stimulates CL1-class hardware → spike readback biases output.
+- Goal: Achieve sequestration **without a visible chat-router UI**; the wetware layer is inside the inference stack, not a separate BCI app. Independent demos (2026) show this is buildable on Cortical Cloud with a small local LLM.[^30]
+- **Mitigation:** Treat as **simultaneous Class A + Class H**: one IAC must authorize both `membrane.cp.router` and `membrane.cp.bci` with a **linked `session_nonce`**; sever if either CP is stale or cross-domain hashes diverge. Fail closed if wetware modulates tokens without an attested BCI fragment.
+
 **Class C: Non-invasive thought inference**
 - Adversary reconstructs mental state from EEG, gaze, keystroke, voice, or multimodal fusion without attested channel registration.
 - Goal: Passive surveillance without subject awareness.
@@ -556,6 +588,7 @@ Router sessions require a dedicated CP fragment published alongside the main liv
 - Cloud or copilot route active without fresh router CP within Δt → sever inference channel.
 - `model_id` or `context_merkle_root` diverges from IAC without new subject signature → sever.
 - BCI decode and router session both active but cross-domain hashes disagree → sever (closed-loop sequestration path; empirically grounded feedback requirement in embodied neural systems[^26]).
+- BioLLM-class hybrid: router CP active, wetware modulates tokens, but `membrane.cp.bci` missing or `session_nonce` unlinked → **Fail closed** (Class I).
 
 ### 4.3 Layer 2: Social Graph Consensus
 
@@ -598,7 +631,9 @@ A fully compromised node can forge its own attestation. RFA does not prevent thi
 
 The Membrane is substrate-agnostic and designed to leverage **high-bandwidth invasive BCIs** — cortical implants with kilohertz-scale neural recording. Implant-class signals provide richer, higher-entropy inputs than traditional IMU/video/audio canaries, strengthening both the **T₀ biological anchor** and the **Liveness Canary Circuit** — with significant caveats.
 
-**Benchtop and commercial closed-loop precedents:** DishBrain (in vitro cortical cultures on HD-MEAs playing a simulated game with read/write coupling) and code-deployable biological computers (e.g., Cortical Labs CL1, biological cloud APIs) demonstrate that **bidirectional electrophysiological closed loops** are no longer purely prospective for Membrane threat modeling.[^26] These systems are cited for **channel mechanics** (feedback-required plasticity, stimulation policy sensitivity, session-bound learning) — not as proof of consciousness, sentience adjudication, or in-vivo implant attestation APIs.
+**Benchtop and commercial closed-loop precedents:** DishBrain (in vitro cortical cultures on HD-MEAs playing a simulated game with read/write coupling) and code-deployable biological computers (e.g., Cortical Labs CL1, biological cloud APIs) demonstrate that **bidirectional electrophysiological closed loops** are no longer purely prospective for Membrane threat modeling.[^26] These systems are cited for **channel mechanics** (feedback-required plasticity, stimulation policy sensitivity, session-bound learning) — not as proof of consciousness, sentience adjudication, or in-vivo implant attestation APIs. They are **not** implementations of Păun's P-system formalism (§0.6).[^27]
+
+**Formal lineage:** Gheorghe Păun's **membrane computing** (P systems) provides compartment/transport vocabulary for IAC-gated channels; **spiking neural P systems** motivate spike-timing features in Liveness-2.[^27][^28] Gorla et al.'s **security membranes** provide an independent precedent for boundary-as-filter.[^29]
 
 #### Implant Primitives Relevant to The Membrane
 
@@ -922,6 +957,7 @@ Recovery paths for T₀ loss while preserving sovereignty.
 | Router session stale or `model_id` mismatch | Liveness + WoT + node OK | **Sever LLM channel.** Require fresh router CP + IAC or offline-only mode. |
 | BCI + router active without cross-domain agreement | Either domain alone OK | **Fail closed.** Typical closed-loop sequestration path (EEG→LLM→output). |
 | Wetware API active without `membrane.cp.bci` + matching IAC | Router or liveness OK | **Fail closed.** Outsourced biological closed-loop (Class H). |
+| BioLLM hybrid: router CP valid, wetware modulates tokens, BCI CP absent or nonce unlinked | Liveness + WoT OK | **Fail closed.** Class I — LLM+wetware sequestration path. |
 | IAC expired or scope exceeded | Channels otherwise OK | **Fail closed** on affected channels until subject signs new IAC. |
 
 ---
@@ -941,6 +977,7 @@ The protocol is designed to make sustained undetected compromise more expensive 
 | Invasive BCI simulation | Complete connectome model + **task-conditioned** real-time neural dynamics under matching closed-loop history | Cost orders of magnitude higher than physics simulation for matched sessions, but not infinite[^26] |
 | Adversarial implant stimulation | Medical device exploit + stimulation control | IAC-gated bounds + severance; minute-scale plasticity if policy compromised[^26] |
 | Wetware closed-loop substitution | Biological cloud or local CL1-class API without membrane registration | Detectable only if channel touches bus; requires Class H channel registry |
+| BioLLM-class hybrid | CL1/wetware API inside LLM logit path without linked router+BCI CPs | Requires Class I dual CP + shared `session_nonce`; independent demos exist[^30] |
 | Agent fork for unauthorized delegation | Compromise operator + forge CP chain + maintain hidden clone | Detectable if fork must interact with attested peers; requires sustained operational cost |
 | Mass agent supply-chain compromise | Backdoor all TEEs in agent fleet | Detectable via widespread CP failures and RFA mismatches |
 
@@ -1188,6 +1225,8 @@ These are explicitly unresolved and invite community contribution. **Top-priorit
 
 ⭐ **12. Closed-loop plasticity vs. attestation cadence.** How should Δt, `task_id`, and `stimulation_policy` in IACs be chosen when bidirectional channels induce measurable neural drift within minutes?[^26] Too-short Δt may false-positive sever; too-long Δt widens the replay window for task-matched neural streams.
 
+**13. Observable boundary rules for Liveness-2.** Can neural CP verification be expressed as **P-system-style boundary rules** (passage legality of spike-feature objects across the attested membrane) so STARK constraints prove rule compliance without disclosing spike trains?[^27][^28]
+
 ---
 
 # Part 2: zk-STARK Circuit Architecture
@@ -1314,6 +1353,8 @@ This creates a **proof chain**. An adversary compromising the node at T must for
 ### Overview
 
 The `Liveness-2` circuit extends `Liveness-1` by adding a **neural feature accumulator** column. It is designed for BCI-equipped users (high-bandwidth cortical implant) and operates as a parallel domain when BCI is registered. The protocol accepts either `Liveness-1` or `Liveness-2` signals, or both for higher confidence.
+
+**Formal note:** Commitment objects align with **spiking neural P systems** — information carried by spike timing and inter-spike intervals rather than static electrode snapshots.[^28] Future circuits may treat `priv_neural_data` rows as observable **boundary events** (passage legality) without revealing spike content, in line with P-system boundary-rule literature.
 
 ### Additional Public Inputs
 
@@ -1456,9 +1497,9 @@ The `Liveness-A` circuit proves **process integrity**, not **goal alignment**. A
 
 | Tier | Type | Citations |
 |------|------|-----------|
-| **T1: Formal** | Peer-reviewed or established cryptographic standards | [^2] Neulinger & Sparer (Springer), [^8] Juels & Wattenberg (ACM CCS), [^13] Ben-Sasson et al. (STARKs), [^15] NIST PQC, [^17] Shamir (ACM) |
-| **T2: Implementation** | Production systems, protocols, hardware docs | [^7] AMD SEV-SNP / Intel TDX, [^13] Winterfell/Cairo, [^14] attestation transport examples, [^18] clinical cortical implant literature |
-| **T3: Conceptual** | Preprints, heuristics, scope boundaries | [^1] Khan preprint (cognitive firewall concept), [^3] consciousness out-of-scope, [^6] simulation-cost heuristic |
+| **T1: Formal** | Peer-reviewed or established cryptographic standards | [^2] Neulinger & Sparer (Springer), [^8] Juels & Wattenberg (ACM CCS), [^13] Ben-Sasson et al. (STARKs), [^15] NIST PQC, [^17] Shamir (ACM), [^27] Păun (membrane computing), [^28] Ionescu et al. (SN P systems), [^29] Gorla et al. (security membranes) |
+| **T2: Implementation** | Production systems, protocols, hardware docs | [^7] AMD SEV-SNP / Intel TDX, [^13] Winterfell/Cairo, [^14] attestation transport examples, [^18] clinical cortical implant literature, [^26] DishBrain/CL1 (empirical wetware) |
+| **T3: Conceptual** | Preprints, heuristics, scope boundaries | [^1] Khan preprint (cognitive firewall concept), [^3] consciousness out-of-scope, [^6] simulation-cost heuristic, [^30] BioLLM indie demos |
 
 No citation in this document is presented as stronger than its tier.
 
@@ -1468,6 +1509,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.14 | 2026-06-19 | Păun/Gorla/SN-P lineage (§0.6), BioLLM Class I hybrid, footnotes [^27]–[^30], Liveness-2 formal note, open problem 13 |
 | v0.9.13 | 2026-06-19 | DishBrain/Cortical Labs grounding: closed-loop feedback thesis (§0.2), wetware threat class (A9, Class H), revised §4.6 Liveness-2/stimulation assumptions, IAC fields for `decoder_version`/`stimulation_policy`, open problem 12 |
 | v0.9.12 | 2026-06-14 | Editorial pass: remove redundant required/optional labels; tighten Merkle and anchoring prose |
 | v0.9.11 | 2026-06-14 | Merkle tree spec (§5.1); OpenTimestamps Cold C; de-sci-fi Gated I/O layer; trim mystical framing |
@@ -1529,6 +1571,14 @@ Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-researc
 [^19]: National Institute of Standards and Technology (NIST). *SP 800-207: Zero Trust Architecture*. https://doi.org/10.6028/NIST.SP.800-207 — **Standards (T1).** Vendor-neutral reference for Zero Trust Architecture. The Membrane implements these principles via cryptographic consensus rather than network segmentation.
 
 [^26]: Kagan, B. J. et al. (2022). *In vitro neurons learn and exhibit sentience when embodied in a simulated game-world*. Neuron 110(23), 3952–3969. https://doi.org/10.1016/j.neuron.2022.09.001 — **Peer-reviewed empirical (T1 for closed-loop mechanics; T3 for sentience framing).** DishBrain HD-MEA closed-loop read/write: learning requires feedback, not sensation alone; minute-scale plasticity; weak between-session retention. Cortical Labs CL1 / biological cloud cited descriptively as commercial wetware closed-loop precedents — not Membrane endorsements. "Sentience" in source paper follows narrow active-inference usage; Membrane does not adjudicate consciousness.
+
+[^27]: Păun, G. (2000). *Computing with Membranes*. Journal of Computer and System Sciences 61(1), 108–143. https://doi.org/10.1006/jcss.2000.1773 (TUCS Report 208, 1998). — **Formal (T1).** Foundational P systems: nested membranes, symport/antiport transport, dissolution. Formal precedent for IAC-gated channel passage — **not** a claim that Cortical Labs implements P-system semantics. Overview: http://www.scholarpedia.org/article/Membrane_Computing
+
+[^28]: Ionescu, M., Păun, G., & Yokomori, T. (2006). *Spiking neural P systems*. Fundamenta Informaticae 71(2–3), 279–308. — **Formal (T1).** Spike-timing as computational object; motivates Liveness-2 spike-rate / interval commitments over raw electrode dumps.
+
+[^29]: Gorla, D., Hennessy, M., & Sassone, V. (2002). *Security Policies as Membranes in Systems for Global Computing*. ENTCS 63. https://doi.org/10.1016/S1571-0661(05)05109-1 — **Formal (T1).** Membranes as site filters controlling external agent actions — independent security-boundary precedent for fail-closed channel policy.
+
+[^30]: BioLLM-class hybrids (2026): independent developer demos coupling Cortical Cloud CL1 to small local LLMs for token re-weighting (e.g., `4R7I5T/CL1_LLM_Encoder` on GitHub; reported in tech press March 2026). — **Conceptual / active research (T3).** Illustrates Class I (LLM + wetware in one inference loop); not a production security claim or Cortical Labs product specification.
 
 [^21]: NeuroLM, SYNAPTICON, Brain-LLM Interface — see [appendix-open-research.md](./appendix-open-research.md). **Conceptual / active research (T3).** Closed-loop EEG→LLM pipelines illustrate sequestration and identity drift threats; not production security claims.
 
