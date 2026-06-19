@@ -2,9 +2,9 @@
 title: "The Membrane: Cognitive Boundary Architecture"
 subtitle: "A nervous-system firewall against AI routing and thought surveillance"
 author: "Zorie R. Barber"
-date: 2026-06-14
+date: 2026-06-19
 tags: [the-membrane, cognitive-firewall, bci, zk-stark, thought-surveillance, whitepaper]
-version: "0.9.12"
+version: "0.9.13"
 ---
 
 # The Membrane: Cognitive Boundary Architecture
@@ -28,6 +28,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **AI routing** | Assistants, copilots, and agent frameworks that ingest context, propose completions, and shape decisions through off-device models |
 | **Invasive read / write** | Cortical implants, consumer BCIs, and medical devices with upstream telemetry or stimulation channels |
 | **Non-invasive inference** | EEG/MEG/fNIRS, gaze + keystroke models, emotion classifiers, digital phenotyping, predictive policing of intent |
+| **Outsourced wetware compute** | Code-deployable biological computers and biological cloud APIs coupling external neuron cultures in closed read/write loops |
 
 **Mechanism:** Recursive zk-STARK Chain Proofs bind (1) a neural/biometric anchor, (2) periodic **cognitive-integrity signals** from approved channels, (3) **Intent Authorization Certificates** before decode or router action, (4) witness corroboration, and (5) TEE-backed node attestation. If domains disagree or a channel lacks valid attestation, the membrane **severs** — blocking routed inference, closing BCI sessions, or degrading to offline-safe mode.
 
@@ -41,6 +42,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 - Covert surveillance with no attested channel may be undetectable.
 - TEEs and BCIs are best-available anchors, not absolute roots of trust.
 - Cognitive-integrity signals are probabilistic; replay, injection, and coercion remain.
+- Closed-loop BCI or wetware coupling induces **minute-scale neural drift**; liveness commitments must bind task, decoder, and stimulation policy — not static biometrics alone.[^26]
 - Fork detection is chain-bound; hidden parallel readers are out of scope.
 
 **Data structures:** SHA-256 Merkle trees for channel features, bus events, witness sets, and periodic CP rollups; OpenTimestamps cold anchor on daily rollup (§5.1, §11.4).
@@ -125,7 +127,7 @@ The Membrane is a research architecture for a **cognitive boundary** — a firew
 | **IAC** | Intent Authorization Certificate. A subject-signed scope file binding permitted channels, models, and context bounds before decode or router action. |
 | **Epistemic capture** | Progressive loss of perceptible boundary between endogenous reasoning and routed inference — the subject cannot tell native cognition from model output. |
 | **Cognitive identity drift** | Effective reasoning path migrates to external LLM/BCI channels while the attestation chain still appears valid; sovereignty erodes without cryptographic failure. |
-| **Neural template drift** | Biological change (plasticity, injury, device degradation) that shifts fuzzy biometric/neural commitments over time. Distinct from cognitive identity drift. |
+| **Neural template drift** | Biological change (plasticity, injury, device degradation, **closed-loop session use**) that shifts fuzzy biometric/neural commitments over time — from minutes (gameplay-scale plasticity) to years. Distinct from cognitive identity drift. |
 
 ---
 
@@ -138,6 +140,8 @@ Human cognition today crosses many surfaces that are not under the subject's con
 2. **Invasive neural channels** — BCIs and implants (medical or consumer) create read paths from cortex to telemetry. Firmware, cloud pairing, and operator access can exfiltrate neural features without the subject's ongoing consent.
 
 3. **Non-invasive reconstruction** — EEG caps, gaze tracking, keystroke dynamics, voice stress, and multimodal fusion approximate mental state without surgery. These channels are often invisible to the subject.
+
+4. **Outsourced wetware compute** — Code-deployable biological computers and biological cloud platforms route inference through external neuron cultures in closed read/write loops. The subject may not perceive a silicon LLM in the path at all.
 
 The Membrane treats these as **boundary violations** when they occur outside attested, subject-approved channels. The architecture does not read minds; it attests **which channels are open**, **whether they match prior commitments**, and **whether cross-domain consensus still holds**.
 
@@ -164,7 +168,13 @@ When cognition is routed through external systems, the boundary between **native
 
 **Epistemic capture** is the third-order failure mode: not a stolen key, but a **substituted reasoning path** that feels continuous. The Membrane does not adjudicate thought content; it detects when attested channels diverge from signed intent (§4.2.1), when router sessions lack valid CPs (§4.2.2), or when BCI and router domains disagree — the classic closed-loop path described in open research on EEG→LLM coupling.[^21]
 
-**Cognitive identity drift** (glossary) is the long-term erosion of sovereignty when routing becomes habitual while attestations remain superficially valid. **Neural template drift** is the separate biological problem of fuzzy-commitment tolerance over years (§13, open problem 3).
+**Closed-loop coupling is structurally load-bearing.** Empirical work on embodied in vitro neural networks (DishBrain) shows that goal-directed plasticity emerges only when read paths are tied to **causal feedback** on action — not from sensory input alone. Open-loop stimulation without consequence produces no learning; withholding feedback while preserving sensation still leaves weaker coupling than full closed-loop embodiment.[^26] For Membrane engineering this implies:
+
+- **Severing feedback** (stimulation policy, decode→act mapping, or router output loop) is a meaningful defense — not merely blocking telemetry export.
+- **IAC scope** must bind `stimulation_policy`, `decoder_version`, and `task_id` alongside `model_id` when bidirectional BCI or wetware channels are registered.
+- **Cross-domain disagreement** (BCI `pub_neural_root` vs router `context_merkle_root` under the same IAC) is the operational signature of sequestration, not an edge case.
+
+**Cognitive identity drift** (glossary) is the long-term erosion of sovereignty when routing becomes habitual while attestations remain superficially valid. **Neural template drift** is the separate biological problem of fuzzy-commitment tolerance — including **session- and task-conditioned** drift on minute scales during closed-loop use, not only years-long aging (§13, open problems 3 and 12).
 
 ---
 
@@ -192,7 +202,7 @@ What it can do: require that sustained AI routing, BCI exfiltration, or session 
 
 ### 0.1.3 Cognitive-Integrity Signals Are Not Cryptographic Proofs
 
-Neural features, behavioral classifiers, and router session logs provide **continuity evidence**, not proof of mental content. They remain vulnerable to replay, model inversion, upstream device compromise, and coercion. They are one domain among several in a Byzantine consensus model.[^6]
+Neural features, behavioral classifiers, and router session logs provide **continuity evidence**, not proof of mental content. They remain vulnerable to replay, model inversion, upstream device compromise, and coercion. Under closed-loop BCI or wetware use, population-level neural statistics can shift on **minute-scale** timelines during attested sessions — replay resistance is therefore **task- and recency-conditioned**, not a property of high-dimensional streams in general.[^26] They are one domain among several in a Byzantine consensus model.[^6]
 
 ### 0.1.4 TEEs and BCIs Are Best-Available Anchors, Not Absolute Roots of Trust
 
@@ -396,6 +406,7 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 | **Platform operator (A6)** | Controls VR substrate or cloud silicon | Lock-in, data extraction, compliance | Substrate canary detects unauthorized migration. Exit proof prevents silent rollback. |
 | **Implant supply-chain actor (A7)** | Controls BCI firmware, manufacturing, or surgical insertion | Neural surveillance, backdoor insertion | Can backdoor implant at T₀ enrollment. Detected only if firmware attestation diverges from audited reference.[^18] |
 | **Agent operator (A8)** | Controls agent deployment, weights, infrastructure | Hidden fork, unauthorized delegation | Substrate canary + CP chain if agent must re-attest to interact. |
+| **Wetware-compute operator (A9)** | Operates code-deployable biological computers or biological cloud APIs (e.g., MEA-hosted cultures with closed-loop read/write) | Cognition outsourced to external neurons; covert closed-loop without LLM in path | Requires `membrane.cp.bci` or wetware channel CP + IAC binding `task_id` and stimulation policy; cross-domain severance on policy drift.[^26] |
 
 ### 1.2 Attack Classes
 
@@ -407,7 +418,12 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 **Class B: Invasive neural read / write**
 - Adversary exfiltrates BCI telemetry, rolls back implant firmware, or injects stimulation outside approved bounds.
 - Goal: Reconstruct neural state, coerce response, or create a forked neural channel the subject cannot see.
-- **Mitigation:** Liveness-2 neural commitments + TEE verification + cross-node consensus (§4.6).
+- **Mitigation:** Liveness-2 neural commitments + TEE verification + cross-node consensus (§4.6). Commitments must include **task id, decoder version, and stimulation policy** when channels are bidirectional — closed-loop coupling induces plasticity on minute scales.[^26]
+
+**Class H: Outsourced wetware compute**
+- Adversary routes inference or control through external neuron cultures (local biological computer or biological cloud API) in a closed read/write loop without an attested LLM router in the path.
+- Goal: Substitute native reasoning with wetware-mediated I/O; hide the coupling because the subject experiences direct task performance rather than chat completions.
+- **Mitigation:** Register wetware channels as first-class `membrane.cp.bci` (or substrate-transition) paths; require IAC scope over stimulation and feedback policy; fail closed when cross-domain hashes disagree (§4.2.2). Benchtop and commercial precedents exist; in-vivo implant attestation APIs remain prospective.[^26]
 
 **Class C: Non-invasive thought inference**
 - Adversary reconstructs mental state from EEG, gaze, keystroke, voice, or multimodal fusion without attested channel registration.
@@ -430,6 +446,7 @@ The Membrane maps directly onto NIST Zero Trust Architecture principles (SP 800-
 
 **Class B (continued): Implant-specific attacks**
 - Adversarial stimulation via bidirectional BCI; firmware rollback; supply-chain backdoor at manufacture.
+- **Adversarial closed-loop plasticity:** Unpredictable or coercive stimulation paired with sensory feedback can reshape population activity within minutes in embodied systems — functionally similar to negative-feedback learning in benchtop closed-loop electrophysiology.[^26]
 - **Caveat:** Implant telemetry is one input among many in cross-domain consensus, not standalone truth.[^18]
 
 **Class G: Untrusted AI delegate (A2A)**
@@ -484,7 +501,7 @@ Each Chain Proof includes commitments from **registered channels** that may cros
 | Channel type | Examples | Membrane function |
 |--------------|----------|-------------------|
 | **AI router** | Local LLM, self-hosted inference, attested API session | Session CP binds context hash + model id; unapproved routes sever |
-| **BCI read/write** | Implant telemetry, consumer BCI BLE stream | Liveness-2 neural feature Merkle root (§4.6) |
+| **BCI read/write** | Implant telemetry, consumer BCI BLE stream, **wetware compute API** | Liveness-2 neural feature Merkle root (§4.6); wetware paths require `task_id` + stimulation policy in IAC |
 | **Non-invasive sensor** | EEG cap, gaze tracker (if registered) | Bounded feature commitments; raw data stays local |
 | **Behavioral** | Keystroke, device usage (opt-in) | Heuristic domain only; never sole signal |
 | **Hardware** | TEE attestation, TPM quote | Substrate integrity for local prover |
@@ -505,9 +522,11 @@ Before any BCI decode→action mapping or LLM session crosses the membrane, the 
 
 | Field | Purpose |
 |-------|---------|
-| `scope_id` | Unique session or task identifier |
-| `permitted_channels` | e.g. `local-llm`, `bci-decode`, `agent-delegate` |
+| `scope_id` | Unique session or task identifier (`task_id` for BCI/wetware canaries) |
+| `permitted_channels` | e.g. `local-llm`, `bci-decode`, `wetware-api`, `agent-delegate` |
 | `model_allowlist` | Hash or id of approved weights/checkpoints |
+| `decoder_version` | Committed BCI or wetware decoder hash (retrain requires fresh IAC) |
+| `stimulation_policy` | Hash of approved bidirectional stimulation/feedback bounds (empty if read-only) |
 | `context_merkle_bound` | Maximum committed context root (prevents silent context expansion) |
 | `forbidden_exports` | e.g. no cloud telemetry, no training retention |
 | `valid_until` | Short TTL aligned with Δt |
@@ -536,7 +555,7 @@ Router sessions require a dedicated CP fragment published alongside the main liv
 **Fail closed:**
 - Cloud or copilot route active without fresh router CP within Δt → sever inference channel.
 - `model_id` or `context_merkle_root` diverges from IAC without new subject signature → sever.
-- BCI decode and router session both active but cross-domain hashes disagree → sever (closed-loop sequestration path).
+- BCI decode and router session both active but cross-domain hashes disagree → sever (closed-loop sequestration path; empirically grounded feedback requirement in embodied neural systems[^26]).
 
 ### 4.3 Layer 2: Social Graph Consensus
 
@@ -579,48 +598,54 @@ A fully compromised node can forge its own attestation. RFA does not prevent thi
 
 The Membrane is substrate-agnostic and designed to leverage **high-bandwidth invasive BCIs** — cortical implants with kilohertz-scale neural recording. Implant-class signals provide richer, higher-entropy inputs than traditional IMU/video/audio canaries, strengthening both the **T₀ biological anchor** and the **Liveness Canary Circuit** — with significant caveats.
 
+**Benchtop and commercial closed-loop precedents:** DishBrain (in vitro cortical cultures on HD-MEAs playing a simulated game with read/write coupling) and code-deployable biological computers (e.g., Cortical Labs CL1, biological cloud APIs) demonstrate that **bidirectional electrophysiological closed loops** are no longer purely prospective for Membrane threat modeling.[^26] These systems are cited for **channel mechanics** (feedback-required plasticity, stimulation policy sensitivity, session-bound learning) — not as proof of consciousness, sentience adjudication, or in-vivo implant attestation APIs.
+
 #### Implant Primitives Relevant to The Membrane
 
 | Primitive | Description | The Membrane Application | Security Properties |
 |-----------|-------------|------------------------|---------------------|
-| **High-density electrode array** | 1,000+ electrodes on flexible leads recording spikes and local field potentials (LFPs) at high sampling rates (~20 kHz). | Primary source for neural liveness signals and biometric template refresh. | High-entropy neural patterns are difficult to forge or replay perfectly. |
+| **High-density electrode array** | Clinical implants: 1,000+ electrodes on flexible leads at ~20 kHz. HD-MEA bench systems may expose far more physical sites (e.g., 26,000) but **multiplex** to far fewer simultaneous read channels (e.g., ~1,024) and fewer independently controlled stimulation sites (e.g., ~8). Coverage is often **spatially uneven**. | Primary source for neural liveness via **population statistics** — band power, connectivity motifs, symmetry features — not raw per-electrode replay tokens. | Replay resistance is **task- and session-conditioned**; asymmetry in cell or electrode coverage can mimic drift or compromise. |
 | **Wireless telemetry & secure pairing** | Bluetooth Low Energy with out-of-band pairing and AES-256 encryption. | Attested data channel from implant to node. | Cryptographic binding of implant to authorized devices; resists MITM. |
 | **On-implant processing** | Low-power amplification, digitization, and initial spike detection. | Trusted execution environment for generating commitments before wireless transmission. | Reduces attack surface on raw neural data. |
-| **Bidirectional capability** | Recording + stimulation (emerging). | Challenge-response protocols: node can issue neural "challenges" (subtle stimulation patterns) and verify responses. | Active liveness proof beyond passive recording. |
+| **Bidirectional capability** | Recording + stimulation (emerging in implants; **shipping** in HD-MEA research platforms). | **IAC-gated** stimulation and feedback policies; optional challenge-response under clinically validated bounds — not covert perturbation. | Closed-loop read/write enables plasticity and coercion paths; policy attestation is mandatory. |
 | **Device telemetry & state** | Implant health metrics, lead integrity, power status, firmware attestation. | Feed into Recursive Attestation (RFA) and substrate transition proofs. | Enables hardware-rooted continuity checks. |
 
 **Caveats:**
 - Current clinical cortical implants are investigational medical devices with evolving long-term reliability (e.g., lead retraction in early trials).[^18]
-- Full third-party remote attestation APIs are not publicly documented as of 2026; integration would require manufacturer SDK exposure or custom firmware extensions.
+- Full third-party remote attestation APIs are not publicly documented as of 2026; integration would require manufacturer SDK exposure or custom firmware extensions. Commercial wetware platforms likewise ship **compute APIs**, not third-party membrane attestation SDKs.
 - Neural data is extremely sensitive — all commitments must use strong privacy techniques (fuzzy extractors, homomorphic commitments, or zk-proofs over embeddings).[^8]
 - The implant is a **single point of failure** inside the skull. If compromised at the hardware level, no software protocol can recover trust without surgical replacement.
+- Third-party wetware marketing may use anthropomorphic capability language ("sentience," "actual intelligence"). The Membrane attests **channel state and policy**, not phenomenology or goal-content.[^26]
 
 #### Integration Points
 
 **1. Enhanced T₀ Biological Anchor**
-- During the T₀ initialization, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** an implant-derived neural signature (e.g., resting-state or task-evoked neural fingerprint).
+- During the T₀ initialization, derive the fuzzy biometric commitment from a combination of traditional biometrics **and** an implant-derived neural signature captured under a **standardized resting-state or task protocol** (fixed `task_id`, no closed-loop feedback during enrollment).
 - Publish only the commitment + helper data to the attestation bus. The raw high-dimensional neural template never leaves the secure channel.
-- **Limit:** If the neural template changes due to plasticity, injury, or device degradation, the fuzzy commitment must tolerate drift. This is harder than static biometric templates.
+- **Limit:** Neural templates drift from plasticity, injury, device degradation, **and closed-loop session use**. DishBrain reports measurable connectivity and performance changes within **~5 minutes** of gameplay-scale closed-loop embodiment; between-session retention is weak in cortical monolayer cultures.[^26] Fuzzy commitments must tolerate drift across **minutes-to-years** timescales — harder than static biometric templates.
 
 **2. Neural-Enhanced Liveness Canary (Liveness-2 Circuit)**
 Parallel domain for registered BCI channels:
-- **Neural Canary Event**: Participant performs a simple standardized mental or motor task (e.g., imagined movement, mental arithmetic, or specific imagery).
-- The implant streams processed neural features (spike rates, LFP power in key frequency bands, population vector activity) to the Membrane node.
+- **Neural Canary Event**: Participant performs a simple standardized mental or motor task (e.g., imagined movement, mental arithmetic, or specific imagery) under a committed `task_id` and `decoder_version`.
+- The implant streams processed neural features (spike rates, LFP power in key frequency bands, population vector activity, connectivity summaries) to the Membrane node.
 - The node generates a Merkle root over these features and includes it in the CP.
 - **ZK circuit augmentation:** The `Liveness-1` circuit gains an additional column `neural_acc` that accumulates hash commitments of neural feature vectors. Boundary constraints verify the neural Merkle root against `pub_neural_root`.
 
-**What this actually adds:** Higher-entropy, harder-to-simulate liveness evidence. The adversary must now simulate not just physics and optics, but the specific neural dynamics of a conscious brain performing a task.[^6]
+**What this actually adds:** Higher-entropy, harder-to-simulate liveness evidence **for the committed task and recent plasticity state**. The adversary must simulate task-conditioned neural dynamics, not merely replay a high-dimensional stream captured under different closed-loop conditions.[^6][^26]
 
-**What it does not add:** Proof of consciousness. A sufficiently advanced adversary with a complete connectome model could still simulate the neural response. The cost is higher, not infinite.
+**What it does not add:** Proof of consciousness. A sufficiently advanced adversary with a complete connectome model could still simulate the neural response. The cost is higher, not infinite. DishBrain's use of "sentience" follows a narrow active-inference definition ("responsive to sensory impressions"); it must not be conflated with Membrane channel attestation.[^26]
 
 **3. Neural Challenge-Response (Active Liveness)**
-When bidirectional stimulation matures:
-- The node issues a pseudorandom stimulation pattern (subtle, below perceptual threshold).
+When bidirectional stimulation is IAC-authorized:
+- The node issues a **policy-bounded** stimulation pattern drawn from clinically validated parameters and recorded in the active IAC `stimulation_policy` field.
 - The implant records the evoked neural response.
-- The node verifies that the response matches the expected signature for that identity and challenge.
+- The node verifies that the response matches the expected signature for that identity, challenge, and `task_id`.
 - This creates an **active** liveness proof: the entity being attested must have a live neural substrate capable of responding to perturbation, not just replaying pre-recorded data.
 
-**Caveat:** Stimulation safety is medical-critical. Any challenge-response protocol must operate within clinically validated parameters. This is a medical ethics boundary, not just an engineering one.[^18]
+**Caveats (revised):**
+- Stimulation is **not assumed covert.** Benchtop closed-loop systems use explicit predictable/unpredictable feedback bursts that directly shape behavior and plasticity.[^26] In-vivo challenge-response must be **consent-gated, medically bounded, and IAC-authorized** — otherwise it becomes a coercion vector (Class B continued).
+- Stimulation safety is medical-critical. Any challenge-response protocol must operate within clinically validated parameters. This is a medical ethics boundary, not just an engineering one.[^18]
+- An adversary who controls stimulation within authorized bounds may induce **compliance-shaped dynamics** on minute scales; detection requires cross-domain consensus and policy severance, not response-pattern oracle tests alone.
 
 **4. Implant Telemetry as RFA Input**
 - Implant firmware version, lead integrity metrics, and power state are included as public inputs to the node's RFA STARK.
@@ -631,12 +656,13 @@ When bidirectional stimulation matures:
 
 | Attack | Without invasive BCI | With invasive BCI |
 |--------|----------------------|-------------------|
-| Replay pre-recorded sensor stream | Possible if video/IMU captured | Much harder: neural features are high-dimensional and task-specific |
+| Replay pre-recorded sensor stream | Possible if video/IMU captured | Harder only when replay matches **committed task_id, decoder_version, and recent closed-loop history**; minute-scale plasticity narrows the valid window[^26] |
 | Deepfake video injection | Possible with generative AI | Does not bypass neural channel |
-| Coerced channel use | Possible under duress | Active challenge-response may detect stress signatures (heuristic, not proof) |
+| Coerced channel use | Possible under duress | IAC-gated stimulation may be coercive if authorized; stress signatures remain heuristic, not proof |
 | Hidden clone (never re-enters chain) | Undetectable | Still undetectable |
 | Device compromise upstream | Possible if phone/wearable hacked | Requires compromising the implant itself or the BLE secure channel |
-| Adversarial stimulation | N/A | Possible if attacker controls stimulation. Mitigated by medical-safety bounds and cross-domain consensus. |
+| Adversarial stimulation | N/A | Closed-loop plasticity and compliance shaping on minute scales if stimulation policy is compromised; mitigated by IAC bounds, severance, and cross-domain consensus[^26] |
+| Outsourced wetware compute | N/A (silicon path) | Closed-loop API to external cultures bypasses LLM router visibility; requires wetware channel registration and substrate-transition CPs (Class H) |
 
 #### Integration Roadmap
 
@@ -895,6 +921,7 @@ Recovery paths for T₀ loss while preserving sovereignty.
 | Agent delegation chain break | Parent + other children OK | Isolate the broken branch, alert downstream agents, require re-attestation before resuming delegation. |
 | Router session stale or `model_id` mismatch | Liveness + WoT + node OK | **Sever LLM channel.** Require fresh router CP + IAC or offline-only mode. |
 | BCI + router active without cross-domain agreement | Either domain alone OK | **Fail closed.** Typical closed-loop sequestration path (EEG→LLM→output). |
+| Wetware API active without `membrane.cp.bci` + matching IAC | Router or liveness OK | **Fail closed.** Outsourced biological closed-loop (Class H). |
 | IAC expired or scope exceeded | Channels otherwise OK | **Fail closed** on affected channels until subject signs new IAC. |
 
 ---
@@ -911,8 +938,9 @@ The protocol is designed to make sustained undetected compromise more expensive 
 | Maintain fork for 30 days | Continuous CP generation + social maintenance + no detection | Time-bounded liveness + out-of-band witness contact increases operational burden |
 | Silent TEE compromise | Side-channel lab + physical access + firmware exploit | Cross-node consensus requires compromising 2/3 independent nodes |
 | Perfect VR simulation | Requires synchronized multi-domain CP forgery | Cost heuristic only: full-world simulation may exceed attacker budget[^6]; not a cryptographic bound |
-| Invasive BCI simulation | Complete connectome model + real-time neural dynamics simulation | Cost orders of magnitude higher than physics simulation, but not infinite |
-| Adversarial implant stimulation | Medical device exploit + stimulation control | Constrained by medical safety bounds; cross-domain consensus detects anomalies |
+| Invasive BCI simulation | Complete connectome model + **task-conditioned** real-time neural dynamics under matching closed-loop history | Cost orders of magnitude higher than physics simulation for matched sessions, but not infinite[^26] |
+| Adversarial implant stimulation | Medical device exploit + stimulation control | IAC-gated bounds + severance; minute-scale plasticity if policy compromised[^26] |
+| Wetware closed-loop substitution | Biological cloud or local CL1-class API without membrane registration | Detectable only if channel touches bus; requires Class H channel registry |
 | Agent fork for unauthorized delegation | Compromise operator + forge CP chain + maintain hidden clone | Detectable if fork must interact with attested peers; requires sustained operational cost |
 | Mass agent supply-chain compromise | Backdoor all TEEs in agent fleet | Detectable via widespread CP failures and RFA mismatches |
 
@@ -1140,7 +1168,7 @@ These are explicitly unresolved and invite community contribution. **Top-priorit
 
 **2. High-frequency A2A attestation overhead.** zk-STARK generation may be too slow for real-time agent handshakes. Lightweight alternatives (cached proofs + Merkle state diffs) or GPU acceleration (§10.1) need research.
 
-**3. Long-term neural template drift and fuzzy extractor stability.** Neural patterns change over time due to plasticity, aging, injury, and device degradation. Fuzzy commitments that tolerate this drift while maintaining security are an open research problem.[^8][^18]
+**3. Long-term neural template drift and fuzzy extractor stability.** Neural patterns change over time due to plasticity, aging, injury, and device degradation. **Closed-loop BCI and wetware sessions additionally shift population statistics on minute scales** during attested use — replay windows and fuzzy-commitment tolerance must account for both session-conditioned and long-term drift.[^8][^18][^26]
 
 4. **Mobile STARK generation.** Current provers are too slow for smartphone-native proof generation. Requires circuit optimization or delegated proving with privacy preservation.
 
@@ -1157,6 +1185,8 @@ These are explicitly unresolved and invite community contribution. **Top-priorit
 10. **Agent sovereignty vs. operator ownership.** The protocol proves agent integrity, but does not resolve legal or economic ownership. If an operator owns the hardware, can they claim to own the agent's attestations? This is a governance and legal problem, not a cryptographic one.
 
 ⭐ **11. Cognitive identity drift detection.** Distinct from neural template drift (problem 3): the attestation chain remains valid while the subject's effective reasoning migrates to external LLM/BCI closed loops. Detecting routing substitution and epistemic capture **without reading thought content** — using IAC scope, router CP consistency, and cross-domain disagreement only — is an open problem tied to §0.2 and §4.2.[^21]
+
+⭐ **12. Closed-loop plasticity vs. attestation cadence.** How should Δt, `task_id`, and `stimulation_policy` in IACs be chosen when bidirectional channels induce measurable neural drift within minutes?[^26] Too-short Δt may false-positive sever; too-long Δt widens the replay window for task-matched neural streams.
 
 ---
 
@@ -1438,6 +1468,7 @@ No citation in this document is presented as stronger than its tier.
 
 | Version | Date | Notes |
 |---------|------|-------|
+| v0.9.13 | 2026-06-19 | DishBrain/Cortical Labs grounding: closed-loop feedback thesis (§0.2), wetware threat class (A9, Class H), revised §4.6 Liveness-2/stimulation assumptions, IAC fields for `decoder_version`/`stimulation_policy`, open problem 12 |
 | v0.9.12 | 2026-06-14 | Editorial pass: remove redundant required/optional labels; tighten Merkle and anchoring prose |
 | v0.9.11 | 2026-06-14 | Merkle tree spec (§5.1); OpenTimestamps Cold C; de-sci-fi Gated I/O layer; trim mystical framing |
 | v0.9.10 | 2026-06-14 | Transport-agnostic attestation bus; optional Arweave/L2 cold profiles; NOSTR demoted to appendix example |
@@ -1496,6 +1527,8 @@ Implement the MVP (§9) using the stacks in [Appendix B](./appendix-open-researc
 [^18]: Clinical cortical implant literature (e.g., high-density electrode ASIC platforms, investigational device trials). **Implementation / medical device (T2).** As of 2026, consumer-accessible third-party attestation APIs for invasive BCIs are not publicly available. Thread/lead retraction and firmware rollback remain documented clinical risks. All Membrane integration claims are prospective.
 
 [^19]: National Institute of Standards and Technology (NIST). *SP 800-207: Zero Trust Architecture*. https://doi.org/10.6028/NIST.SP.800-207 — **Standards (T1).** Vendor-neutral reference for Zero Trust Architecture. The Membrane implements these principles via cryptographic consensus rather than network segmentation.
+
+[^26]: Kagan, B. J. et al. (2022). *In vitro neurons learn and exhibit sentience when embodied in a simulated game-world*. Neuron 110(23), 3952–3969. https://doi.org/10.1016/j.neuron.2022.09.001 — **Peer-reviewed empirical (T1 for closed-loop mechanics; T3 for sentience framing).** DishBrain HD-MEA closed-loop read/write: learning requires feedback, not sensation alone; minute-scale plasticity; weak between-session retention. Cortical Labs CL1 / biological cloud cited descriptively as commercial wetware closed-loop precedents — not Membrane endorsements. "Sentience" in source paper follows narrow active-inference usage; Membrane does not adjudicate consciousness.
 
 [^21]: NeuroLM, SYNAPTICON, Brain-LLM Interface — see [appendix-open-research.md](./appendix-open-research.md). **Conceptual / active research (T3).** Closed-loop EEG→LLM pipelines illustrate sequestration and identity drift threats; not production security claims.
 

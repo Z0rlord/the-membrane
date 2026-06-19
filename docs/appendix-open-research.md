@@ -1,6 +1,6 @@
 # Appendix B: Open Research & Prototype Stack
 
-Companion to [whitepaper.md](./whitepaper.md) (v0.9.12). Last updated: 2026-06-14.
+Companion to [whitepaper.md](./whitepaper.md) (v0.9.13). Last updated: 2026-06-19.
 
 IAC and router session CP schemas: §4.2.1–§4.2.2. Merkle trees: §5.1. Attestation transport and cold anchoring: §11.3–§11.4.
 
@@ -15,6 +15,25 @@ High-bandwidth invasive BCIs have **no open third-party attestation SDK** suitab
 | Wearable BCI security (Argus) | [arXiv:2201.07711](https://arxiv.org/abs/2201.07711) | Information-flow control patterns for neural data paths |
 
 Treat invasive cortical implants as a **future Liveness-2 target**, not a Phase 0 build dependency.
+
+---
+
+## Closed-loop wetware: DishBrain & commercial precedents
+
+Empirical and commercial closed-loop read/write systems ground Membrane assumptions in §0.2, §4.6, and Class H (outsourced wetware compute). Cited for **channel mechanics only** — not consciousness, sentience adjudication, or third-party attestation SDK availability.
+
+| Resource | URL | Use for Membrane |
+|----------|-----|------------------|
+| DishBrain (Kagan et al., Neuron 2022) | [Neuron](https://www.cell.com/neuron/fulltext/S0896-6273(22)00806-6) · [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC9747182/) · [DOI](https://doi.org/10.1016/j.neuron.2022.09.001) | **Feedback required for goal-directed plasticity**; open-loop sensation insufficient; minute-scale connectivity drift during gameplay; weak between-session retention; HD-MEA multiplexing (many physical electrodes, fewer read/stim channels) |
+| Cortical Labs (CL1, biological cloud) | [corticallabs.com](https://corticallabs.com) | **Code-deployable wetware compute** — closed-loop API threat without LLM in path; no public membrane attestation SDK |
+| OpenMEA | [bioRxiv 2022.11.11.516234](https://www.biorxiv.org/content/10.1101/2022.11.11.516234v1) | Benchtop closed-loop electrophysiology (lighter-weight precedent than DishBrain) |
+
+### Engineering takeaways (from DishBrain)
+
+1. **Sever feedback, not only reads.** Unpredictable feedback following "incorrect" motor output drives learning; sensory input without causal consequence does not.
+2. **Bind `task_id` + `stimulation_policy` in IAC.** Neural Merkle roots are task- and session-conditioned; replay resistance assumes matched closed-loop history.
+3. **Δt must respect minute-scale plasticity.** Measurable electrophysiological change within ~5 minutes of closed-loop embodiment; attestation cadence cannot assume static neural fingerprints.
+4. **Do not import "sentience" marketing.** Source paper uses a narrow active-inference definition; Cortical Labs consumer copy escalates further. Membrane attests channels, not phenomenology.
 
 ---
 
@@ -106,6 +125,7 @@ Other hot-bus options: MQTT broker, Hypercore feed, SQLite append log + Tailscal
 |---------|-------|
 | [Iris-128](https://github.com/openic-org/iris-128) | Open 128-ch headstage (CERN-OHL) |
 | [OpenMEA](https://www.biorxiv.org/content/10.1101/2022.11.11.516234v1) | Benchtop closed-loop electrophysiology |
+| DishBrain / MaxOne HD-MEA | See [Closed-loop wetware](#closed-loop-wetware-dishbrain--commercial-precedents) — strongest empirical closed-loop precedent cited in v0.9.13 |
 
 ---
 
@@ -132,11 +152,19 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 | SYNAPTICON | [github.com/AlbertBarqueDuran/SYNAPTICON](https://github.com/AlbertBarqueDuran/SYNAPTICON) | EEG → text → LLM → output closed loop |
 | Brain-LLM Interface | [arXiv:2603.16897](https://arxiv.org/html/2603.16897) | EEG gates LLM refinement at inference time |
 
+### Wetware closed-loop (no LLM in path)
+
+| Project | URL | Why it matters |
+|---------|-----|----------------|
+| Cortical Labs CL1 | [corticallabs.com](https://corticallabs.com) | Local code-deployable biological computer — cognition routed through external neurons |
+| Cortical Cloud | [corticallabs.com](https://corticallabs.com) | Remote biological compute API — substrate-transition / Class H threat |
+| DishBrain (research) | [Neuron 2022](https://doi.org/10.1016/j.neuron.2022.09.001) | Defines minimal closed-loop mechanics: read → act → feedback required for plasticity |
+
 | Membrane term | Meaning in this stack |
 |---------------|----------------------|
 | **Identity drift** | Decoder or LLM updates, session fork, model swap without new Chain Proof |
-| **Sequestration** | Cognition lives in external inference; endogenous loop bypassed or unreadable |
-| **Firewall job** | Gate which channels may couple; sever on missing/stale CP |
+| **Sequestration** | Cognition lives in external inference (LLM **or wetware closed-loop**); endogenous loop bypassed or unreadable |
+| **Firewall job** | Gate which channels may couple; sever on missing/stale CP; **sever feedback** when bidirectional policy breaks |
 
 ---
 
@@ -158,7 +186,7 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 ### Build order
 
 1. **BrainFlow + LSL** — stream EEG features; Merkle-commit chunks locally; never publish raw traces.
-2. **Channel registry** — YAML list of permitted paths (BCI app, local LLM port, forbidden cloud URLs).
+2. **Channel registry** — YAML list of permitted paths (BCI app, local LLM port, wetware API endpoints, forbidden cloud URLs).
 3. **Merkle + Winterfell Liveness-1** — prove `pub_merkle_root` over feature vectors + timestamp (§Part 2).
 4. **Intent gate** — adapt [iba-neural-guard](https://github.com/Grokipaedia/iba-neural-guard): no signed scope → no decode→action mapping.
 5. **Attestation bus** — append signed `MembraneEvent`; maintain bus Merkle tree; NOSTR relay profile if used.
@@ -182,6 +210,8 @@ Active research on **closed-loop brain → LLM routing** — where identity drif
 
 ## References to add to implementation issues
 
+- Kagan, B. J. et al. (2022). *In vitro neurons learn and exhibit sentience when embodied in a simulated game-world*. Neuron. https://doi.org/10.1016/j.neuron.2022.09.001 — closed-loop feedback mechanics; minute-scale plasticity (§0.2, §4.6).
+- Cortical Labs. CL1 / Cortical Cloud product pages. https://corticallabs.com — commercial wetware closed-loop precedents (Class H); descriptive only.
 - Khan, E. (2026). *Brain Hacking: AI for Safeguarding Against Dangerous AI*. [Preprints.org](https://www.preprints.org/manuscript/202601.0156) — cognitive firewall framing (T3).
 - Li et al. BCI cybersecurity survey — [arXiv:2007.09466](https://arxiv.org/abs/2007.09466) — implant companion-app threat model.
 - Argus wearable BCI security — [arXiv:2201.07711](https://arxiv.org/abs/2201.07711).
