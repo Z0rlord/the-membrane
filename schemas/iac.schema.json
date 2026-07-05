@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-membrane.xyz/schemas/iac.schema.json",
+  "title": "IntentAuthorizationCredential",
+  "description": "Subject-signed scope file before decode or router action (whitepaper §4.2.1)",
+  "type": "object",
+  "required": [
+    "version",
+    "scope_id",
+    "permitted_channels",
+    "model_allowlist",
+    "context_merkle_bound",
+    "forbidden_exports",
+    "valid_until",
+    "parent_cp_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "0.9.14"
+    },
+    "scope_id": { "type": "string", "minLength": 1 },
+    "permitted_channels": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "model_allowlist": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "decoder_version": { "type": "string" },
+    "stimulation_policy": { "type": "string" },
+    "context_merkle_bound": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "forbidden_exports": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "valid_until": { "type": "integer", "minimum": 0 },
+    "parent_cp_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{128}$"
+    }
+  }
+}

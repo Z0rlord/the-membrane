@@ -1,0 +1,15 @@
+# Phase 0 channel registry — local paths the gate may open.
+permitted_channels:
+  - local-llm
+
+forbidden_exports:
+  - cloud-telemetry
+  - training-retention
+
+model_allowlist:
+  - sha256:demo-model
+
+delta_t_secs: 300
+
+# llama.cpp server base (OpenAI-compatible /v1/chat/completions; mock if unreachable)
+llama_cpp_url: http://127.0.0.1:8080
