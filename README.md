@@ -37,6 +37,21 @@ See [appendix-open-research.md](docs/appendix-open-research.md) for libraries an
 
 ## Phase 0 prototype — Nostr attestation bus
 
+**Production relay (Hetzner Nuremberg):**
+
+| | |
+|---|---|
+| Tailnet | `ws://relay-2:7778` |
+| Public | `wss://membrane-relay.dojopop.live` (after tunnel DNS — see `deploy/relay/`) |
+| Kinds | 31990, 31991 only |
+| Deploy | `./deploy/relay/deploy.sh` |
+
+```bash
+export MEMBRANE_RELAY_URL='wss://membrane-relay.dojopop.live'
+# or tailnet-only:
+export MEMBRANE_RELAY_URL='ws://relay-2:7778'
+```
+
 **Stack choice:** Rust workspace (`membrane-core`, `membrane-gate`, `membrane-cli`) — aligns with Winterfell STARK path (Phase 1) and Ed25519/Nostr signing. AGPL-3.0 for code.
 
 ### Layout
@@ -99,9 +114,11 @@ cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 
 Common tags: `p` (subject pubkey), `e` (prior event id). Content is canonical `MembraneEvent` JSON (metadata only).
 
-### dojopop relay
+### dojopop relay (legacy note)
 
-Production [DojoPop relay](https://github.com/Z0rlord/nostr-pop/tree/main/relay) (`ws://relay-2:7777`, `wss://relay.dojopop.live`) allowlists kinds and pubkeys — add `31990`, `31991` and your pubkey to `config.toml` for integration tests. Phase 0 defaults to **local** `ws://127.0.0.1:7777`.
+Do **not** use `relay.dojopop.live` for Membrane attestation — it allowlists DojoPop kinds only.
+Use the dedicated bus above. For integration smoke tests against DojoPop infra, you would need
+to add kinds 31990/31991 to that relay separately (not recommended).
 
 ## Status
 
