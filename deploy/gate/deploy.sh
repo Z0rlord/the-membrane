@@ -56,7 +56,7 @@ cd "\$REMOTE_DIR"
 if ! docker run --rm -v membrane-llama-models:/models alpine \
   test -f "/models/\$MODEL_FILE" 2>/dev/null; then
   echo "==> Downloading \${MODEL_FILE} (~400MB) into llama-models volume..."
-  docker run --rm \
+  docker run --rm --user root \
     -v membrane-llama-models:/models \
     curlimages/curl:8.12.1 -fL \
     "\$MODEL_URL" -o "/models/\$MODEL_FILE"

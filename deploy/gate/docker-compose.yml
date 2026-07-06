@@ -18,8 +18,7 @@ services:
       - "4"
       - --ctx-size
       - "2048"
-    ports:
-      - "127.0.0.1:8080:8080"
+    ports: []
     deploy:
       resources:
         limits:
