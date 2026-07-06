@@ -31,8 +31,10 @@ services:
     depends_on:
       - llama
     environment:
-      MEMBRANE_RELAY_URL: ${MEMBRANE_RELAY_URL:-wss://membrane-relay.dojopop.live}
+      MEMBRANE_RELAY_URL: ${MEMBRANE_RELAY_URL:-ws://host.docker.internal:7778}
       NOSTR_NSEC: ${NOSTR_NSEC:?NOSTR_NSEC required in .env}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./channel-registry.prod.yaml:/config/registry.yaml:ro
       - ./iac.prod.json:/config/iac.json:ro
@@ -48,7 +50,7 @@ services:
       - --iac
       - /config/iac.json
       - --relay
-      - ${MEMBRANE_RELAY_URL:-wss://membrane-relay.dojopop.live}
+      - ${MEMBRANE_RELAY_URL:-ws://host.docker.internal:7778}
 
 volumes:
   llama-models:
