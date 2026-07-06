@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-membrane.xyz/schemas/membrane-cp-router.schema.json",
+  "title": "membrane.cp.router payload",
+  "description": "Router session Chain Proof fragment (whitepaper §4.2.2)",
+  "type": "object",
+  "required": [
+    "model_id",
+    "context_merkle_root",
+    "session_nonce",
+    "parent_cp_hash",
+    "iac_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "model_id": { "type": "string", "minLength": 1 },
+    "context_merkle_root": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "session_nonce": { "type": "integer", "minimum": 0 },
+    "parent_cp_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "iac_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    }
+  }
+}

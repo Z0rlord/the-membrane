@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "membrane-core",
+    "membrane-gate",
+    "membrane-cli",
+]
+default-members = ["membrane-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+repository = "https://github.com/Z0rlord/the-membrane"
+authors = ["Zorie R. Barber"]
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+axum = "0.8"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+hex = "0.4"
+nostr = "0.38"
+nostr-sdk = "0.38"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+membrane-core = { path = "membrane-core" }
+membrane-gate = { path = "membrane-gate" }

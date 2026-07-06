@@ -1,0 +1,23 @@
+# Minimal nostr-rs-relay config for local Membrane Phase 0 bus.
+# Usage: docker run --rm -p 7777:8080 -v $PWD/tools/relay-local.toml:/config.toml \
+#   scsibug/nostr-rs-relay:0.10.0
+
+[info]
+relay_url = "ws://127.0.0.1:7777"
+name = "Membrane Local Bus"
+description = "Self-hosted attestation bus for The Membrane Phase 0 (kinds 31990/31991)"
+
+[database]
+engine = "sqlite"
+data_directory = "/tmp/membrane-relay-db"
+
+[network]
+address = "0.0.0.0"
+port = 8080
+
+[limits]
+event_kind_allowlist = [31990, 31991]
+
+# Uncomment to restrict writes; omitted = open local dev relay
+# [authorization]
+# pubkey_whitelist = ["<your-hex-pubkey>"]

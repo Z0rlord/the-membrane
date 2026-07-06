@@ -1,0 +1,37 @@
+# Membrane attestation bus — nostr-rs-relay configuration
+# Deployed on relay-2 (Hetzner Nuremberg), host port 7778.
+# Public: wss://membrane-relay.dojopop.live (Cloudflare Tunnel dojopop-relay)
+# Tailnet: ws://relay-2:7778
+
+[info]
+relay_url = "wss://membrane-relay.dojopop.live"
+name = "The Membrane Attestation Bus"
+description = "Self-hosted attestation bus for The Membrane (kinds 31990/31991 only)."
+pubkey = "b3d8544ddd5896f75ef66c210f5c0d6ded9f7925163ebcbc89e678bdc1e48c6a"
+contact = "mailto:admin@dojopop.live"
+
+[database]
+engine = "sqlite"
+data_directory = "/usr/src/app/db"
+
+[network]
+address = "0.0.0.0"
+port = 8080
+
+[options]
+reject_future_seconds = 1800
+
+[limits]
+messages_per_sec = 20
+max_event_bytes = 131072
+max_ws_message_bytes = 262144
+max_ws_frame_bytes = 262144
+# Membrane Phase 0 kinds only (Appendix B)
+event_kind_allowlist = [31990, 31991]
+
+[authorization]
+# Operator pubkey(s) allowed to publish attestation events.
+# Add more hex pubkeys as needed (one per line).
+pubkey_whitelist = [
+  "b3d8544ddd5896f75ef66c210f5c0d6ded9f7925163ebcbc89e678bdc1e48c6a",
+]

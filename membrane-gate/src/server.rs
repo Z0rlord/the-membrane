@@ -1,0 +1,151 @@
+use std::sync::Arc;
+
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json,
+};
+use membrane_core::iac::IntentAuthorizationCredential;
+use serde_json::json;
+use tokio::sync::Mutex;
+use tracing::{info, warn};
+
+use crate::proxy::{ChatRequest, ChatResponse, LlmProxy};
+use crate::{Gate, GateError, RouterSessionRequest};
+
+#[derive(Clone)]
+pub struct GateServerState {
+    pub gate: Arc<Gate>,
+    pub proxy: Arc<LlmProxy>,
+    pub default_iac: Option<IntentAuthorizationCredential>,
+    pub last_prev_event_id: Arc<Mutex<Option<String>>>,
+}
+
+pub async fn run_gate_server(
+    state: GateServerState,
+    listen: &str,
+) -> anyhow::Result<()> {
+    let app = axum::Router::new()
+        .route("/health", get(health))
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind(listen).await?;
+    info!(listen = %listen, "membrane gate listening");
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+async fn health() -> impl IntoResponse {
+    Json(json!({ "status": "ok", "gate": "membrane-phase-0" }))
+}
+
+async fn chat_completions(
+    State(state): State<GateServerState>,
+    headers: HeaderMap,
+    Json(mut req): Json<ChatRequest>,
+) -> Response {
+    match handle_chat(&state, &headers, &mut req).await {
+        Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
+        Err(err) => gate_error_response(err),
+    }
+}
+
+async fn handle_chat(
+    state: &GateServerState,
+    headers: &HeaderMap,
+    req: &ChatRequest,
+) -> Result<ChatResponse, GateError> {
+    let iac = load_iac(headers, state.default_iac.as_ref())?;
+    let now = now_secs();
+
+    state.gate.validate_iac(Some(&iac), now)?;
+
+    let context_chunks: Vec<Vec<u8>> = req
+        .messages
+        .iter()
+        .map(|m| {
+            serde_json::to_vec(m).map_err(|e| GateError::Registry(e.to_string()))
+        })
+        .collect::<Result<_, _>>()?;
+
+    let mut prev_lock = state.last_prev_event_id.lock().await;
+    let prev_event_id = prev_lock.clone();
+
+    let session_req = RouterSessionRequest {
+        model_id: req.model.clone(),
+        context_chunks,
+        session_nonce: now as u64,
+        parent_cp_hash: iac.parent_cp_hash.clone(),
+    };
+
+    let outcome = state
+        .gate
+        .open_router_session(Some(&iac), session_req, now, prev_event_id.as_deref())
+        .await?;
+
+    if let Some(id) = outcome.bus_event_id.clone() {
+        *prev_lock = Some(id);
+    }
+
+    state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))
+}
+
+fn load_iac(
+    headers: &HeaderMap,
+    default: Option<&IntentAuthorizationCredential>,
+) -> Result<IntentAuthorizationCredential, GateError> {
+    if let Some(raw) = headers.get("x-membrane-iac").and_then(|v| v.to_str().ok()) {
+        return parse_iac_header(raw);
+    }
+    if let Some(iac) = default {
+        return Ok(iac.clone());
+    }
+    Err(GateError::NoValidIac(
+        "missing X-Membrane-IAC header and no default IAC configured".into(),
+    ))
+}
+
+fn parse_iac_header(raw: &str) -> Result<IntentAuthorizationCredential, GateError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let trimmed = raw.trim();
+    let json = if trimmed.starts_with('{') {
+        trimmed.to_string()
+    } else {
+        let bytes = STANDARD
+            .decode(trimmed)
+            .map_err(|e| GateError::NoValidIac(format!("invalid base64 IAC: {e}")))?;
+        String::from_utf8(bytes)
+            .map_err(|e| GateError::NoValidIac(format!("invalid utf8 IAC: {e}")))?
+    };
+    serde_json::from_str(&json)
+        .map_err(|e| GateError::NoValidIac(format!("invalid IAC JSON: {e}")))
+}
+
+fn gate_error_response(err: GateError) -> Response {
+    warn!(error = %err, "gate fail-closed");
+    let status = match &err {
+        GateError::NoValidIac(_) | GateError::ChannelDenied(_) | GateError::ModelDenied(_)
+        | GateError::ExportForbidden(_) | GateError::ContextBoundExceeded => StatusCode::FORBIDDEN,
+        _ => StatusCode::BAD_REQUEST,
+    };
+    (
+        status,
+        Json(json!({
+            "error": {
+                "message": err.to_string(),
+                "type": "membrane_gate_error"
+            }
+        })),
+    )
+        .into_response()
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs() as i64
+}

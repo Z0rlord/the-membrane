@@ -35,9 +35,94 @@ OpenBCI or Muse → [Lab Streaming Layer](https://github.com/sccn/labstreamingla
 
 See [appendix-open-research.md](docs/appendix-open-research.md) for libraries and papers.
 
+## Phase 0 prototype — Nostr attestation bus
+
+**Production relay (Hetzner Nuremberg):**
+
+| | |
+|---|---|
+| Tailnet | `ws://relay-2:7778` |
+| Public | `wss://membrane-relay.dojopop.live` (after tunnel DNS — see `deploy/relay/`) |
+| Kinds | 31990, 31991 only |
+| Deploy | `./deploy/relay/deploy.sh` |
+
+```bash
+export MEMBRANE_RELAY_URL='wss://membrane-relay.dojopop.live'
+# or tailnet-only:
+export MEMBRANE_RELAY_URL='ws://relay-2:7778'
+```
+
+**Stack choice:** Rust workspace (`membrane-core`, `membrane-gate`, `membrane-cli`) — aligns with Winterfell STARK path (Phase 1) and Ed25519/Nostr signing. AGPL-3.0 for code.
+
+### Layout
+
+```text
+schemas/              JSON Schema (MembraneEvent, IAC, RollupBundle, membrane.cp.router)
+membrane-core/        Events, Merkle (§5.1), Nostr bus publisher/subscriber
+membrane-gate/        IAC fail-closed gate + llama.cpp HTTP proxy
+membrane-cli/         `membrane` binary
+tools/                channel registry YAML, local relay config
+```
+
+### Quick start
+
+1. **Local relay** (self-hosted bus per Appendix B — do not use public relays for writes):
+
+```bash
+docker run --rm -d --name membrane-relay -p 7777:8080 \
+  -v "$PWD/tools/relay-local.toml:/usr/src/app/config.toml:ro" \
+  scsibug/nostr-rs-relay:0.10.0
+```
+
+2. **Build:**
+
+```bash
+cargo build --release
+```
+
+3. **Set signing key** (never commit):
+
+```bash
+export NOSTR_NSEC='nsec1...'   # or: doppler run -- ...
+export MEMBRANE_RELAY_URL='ws://127.0.0.1:7777'
+```
+
+4. **Commands:**
+
+```bash
+cargo run -- bus publish-test          # kind 31990 test event
+cargo run -- bus subscribe             # fetch events + recompute bus_root
+cargo run -- demo                      # fail-closed without IAC → OK with IAC
+cargo run -- gate start                # HTTP gate on :8787 → llama.cpp :8080
+
+# Daily rollup (Appendix B Cold C)
+cargo run -- rollup export --day 2026-07-05 --out rollup.json
+cargo run -- rollup sign --input rollup.json --out rollup.signed.json
+cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
+```
+
+**llama.cpp:** run `llama-server` with OpenAI-compatible API (default `http://127.0.0.1:8080/v1/chat/completions`). The gate falls back to mock responses if llama.cpp is unreachable.
+
+**Gate HTTP:** `POST /v1/chat/completions` with OpenAI chat body. Pass IAC via `X-Membrane-IAC` header (JSON or base64 JSON), or rely on `--iac tools/demo-iac.json` default.
+
+### Nostr mapping (Appendix B)
+
+| MembraneEvent.type | Nostr kind | tag `k` |
+|--------------------|------------|---------|
+| `membrane.cp.*`, `membrane.iac`, `membrane.anchor.ots` | 31990 | `the-membrane-*` |
+| `membrane.alert.degraded` | 31991 | `the-membrane-alert-degraded` |
+
+Common tags: `p` (subject pubkey), `e` (prior event id). Content is canonical `MembraneEvent` JSON (metadata only).
+
+### dojopop relay (legacy note)
+
+Do **not** use `relay.dojopop.live` for Membrane attestation — it allowlists DojoPop kinds only.
+Use the dedicated bus above. For integration smoke tests against DojoPop infra, you would need
+to add kinds 31990/31991 to that relay separately (not recommended).
+
 ## Status
 
-Research specification only. No reference implementation in this repo yet.
+Phase 0 foundation: schemas, Merkle helper, Nostr bus, IAC fail-closed gate (HTTP + llama.cpp), daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
 
 ## License
 

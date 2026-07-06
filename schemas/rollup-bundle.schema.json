@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-membrane.xyz/schemas/rollup-bundle.schema.json",
+  "title": "RollupBundle",
+  "description": "Daily cold-anchor input (whitepaper §5.1)",
+  "type": "object",
+  "required": [
+    "version",
+    "subject_pubkey",
+    "period_start",
+    "period_end",
+    "cp_chain_root",
+    "last_bus_root",
+    "last_cp_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "0.9.14"
+    },
+    "subject_pubkey": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "period_start": { "type": "integer", "minimum": 0 },
+    "period_end": { "type": "integer", "minimum": 0 },
+    "cp_chain_root": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "last_bus_root": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "last_cp_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    }
+  }
+}

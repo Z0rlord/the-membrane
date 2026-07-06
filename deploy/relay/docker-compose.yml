@@ -1,0 +1,17 @@
+name: membrane
+
+services:
+  relay:
+    image: scsibug/nostr-rs-relay:0.10.0
+    container_name: membrane-relay
+    restart: unless-stopped
+    ports:
+      - "7778:8080"
+    volumes:
+      - ./config.toml:/usr/src/app/config.toml:ro
+      - relay-data:/usr/src/app/db
+    environment:
+      - RUST_LOG=warn,nostr_rs_relay=info
+
+volumes:
+  relay-data:
