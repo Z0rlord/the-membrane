@@ -1,0 +1,56 @@
+name: membrane
+
+services:
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: membrane-llama
+    restart: unless-stopped
+    volumes:
+      - llama-models:/models:ro
+    command:
+      - -m
+      - /models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --threads
+      - "4"
+      - --ctx-size
+      - "2048"
+    ports:
+      - "127.0.0.1:8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+
+  gate:
+    image: membrane-gate:local
+    container_name: membrane-gate
+    restart: unless-stopped
+    depends_on:
+      - llama
+    environment:
+      MEMBRANE_RELAY_URL: ${MEMBRANE_RELAY_URL:-wss://membrane-relay.dojopop.live}
+      NOSTR_NSEC: ${NOSTR_NSEC:?NOSTR_NSEC required in .env}
+    volumes:
+      - ./channel-registry.prod.yaml:/config/registry.yaml:ro
+      - ./iac.prod.json:/config/iac.json:ro
+    ports:
+      - "127.0.0.1:8787:8787"
+    command:
+      - gate
+      - start
+      - --listen
+      - "0.0.0.0:8787"
+      - --registry
+      - /config/registry.yaml
+      - --iac
+      - /config/iac.json
+      - --relay
+      - ${MEMBRANE_RELAY_URL:-wss://membrane-relay.dojopop.live}
+
+volumes:
+  llama-models:
+    name: membrane-llama-models

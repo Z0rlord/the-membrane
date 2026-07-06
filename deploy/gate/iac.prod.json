@@ -1,0 +1,10 @@
+{
+  "version": "0.9.14",
+  "scope_id": "relay-2-gate-001",
+  "permitted_channels": ["local-llm"],
+  "model_allowlist": ["qwen2.5-0.5b-instruct"],
+  "context_merkle_bound": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "forbidden_exports": ["cloud-telemetry", "training-retention"],
+  "valid_until": 4102444800,
+  "parent_cp_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+}
