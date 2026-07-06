@@ -59,11 +59,24 @@ echo "==> Tunnel ingress updated."
 
 TARGET="${TUNNEL_ID}.cfargotunnel.com"
 echo "==> DNS CNAME membrane-relay (zone ${DOJOPOP_ZONE_ID})..."
-curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/${DOJOPOP_ZONE_ID}/dns_records" \
+DNS_RESP=$(curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/${DOJOPOP_ZONE_ID}/dns_records" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"type\":\"CNAME\",\"name\":\"membrane-relay\",\"content\":\"${TARGET}\",\"proxied\":true}" \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); e=d.get('errors',[{}])[0]; print('  membrane-relay:', 'ok' if d.get('success') else e.get('message','failed'))"
+  -d "{\"type\":\"CNAME\",\"name\":\"membrane-relay\",\"content\":\"${TARGET}\",\"proxied\":true}")
+python3 -c "
+import json, sys
+d = json.loads(sys.argv[1])
+if d.get('success'):
+    print('  membrane-relay: ok')
+else:
+    errors = d.get('errors') or []
+    msg = errors[0].get('message', 'failed') if errors else 'failed'
+    if 'already exists' in msg.lower():
+        print('  membrane-relay: already exists (ok)')
+    else:
+        print('  membrane-relay:', msg)
+        sys.exit(1)
+" "$DNS_RESP"
 
 echo ""
 echo "Verify:"
