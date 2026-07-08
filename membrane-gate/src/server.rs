@@ -127,7 +127,8 @@ fn parse_iac_header(raw: &str) -> Result<IntentAuthorizationCredential, GateErro
 fn gate_error_response(err: GateError) -> Response {
     warn!(error = %err, "gate fail-closed");
     let status = match &err {
-        GateError::NoValidIac(_) | GateError::ChannelDenied(_) | GateError::ModelDenied(_)
+        GateError::NoValidIac(_) | GateError::InvalidIacSignature(_)
+        | GateError::ChannelDenied(_) | GateError::ModelDenied(_)
         | GateError::ExportForbidden(_) | GateError::ContextBoundExceeded => StatusCode::FORBIDDEN,
         _ => StatusCode::BAD_REQUEST,
     };

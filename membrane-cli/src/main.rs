@@ -40,6 +40,11 @@ enum Commands {
         #[command(subcommand)]
         command: RollupCommands,
     },
+    /// Intent Authorization Credential tools
+    Iac {
+        #[command(subcommand)]
+        command: IacCommands,
+    },
     /// Fail-closed demo: route without IAC, then with IAC
     Demo {
         #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
@@ -121,6 +126,39 @@ enum RollupCommands {
         #[arg(long)]
         mock: bool,
     },
+    /// Export, sign, and stamp rollup for a UTC day (default: yesterday)
+    Daily {
+        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        relay: String,
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long, value_name = "YYYY-MM-DD")]
+        day: Option<String>,
+        #[arg(long, default_value = "/var/lib/membrane/rollup")]
+        work_dir: PathBuf,
+        #[arg(long)]
+        mock: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum IacCommands {
+    /// Sign an IAC JSON file with NOSTR_NSEC
+    Sign {
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify IAC signature against a subject pubkey
+    Verify {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        pubkey: String,
+    },
 }
 
 #[tokio::main]
@@ -159,6 +197,17 @@ async fn main() -> Result<()> {
                 ots_out,
                 mock,
             } => rollup_stamp(&relay, nsec, &input, &ots_out, mock).await,
+            RollupCommands::Daily {
+                relay,
+                nsec,
+                day,
+                work_dir,
+                mock,
+            } => rollup_daily(&relay, nsec, day.as_deref(), &work_dir, mock).await,
+        },
+        Commands::Iac { command } => match command {
+            IacCommands::Sign { nsec, input, out } => iac_sign(nsec, &input, &out),
+            IacCommands::Verify { input, pubkey } => iac_verify(&input, &pubkey),
         },
         Commands::Demo {
             relay,
@@ -234,7 +283,6 @@ async fn gate_start(
         keys: keys.clone(),
     });
     let gate = Arc::new(Gate::new(registry.clone(), publisher));
-    let proxy = Arc::new(LlmProxy::new(registry.llama_cpp_url.clone()));
 
     gate.validate_iac(Some(&default_iac), now_secs())
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -245,6 +293,7 @@ async fn gate_start(
         .unwrap_or("<mock>");
     println!("gate: IAC ok, llama.cpp={llama}, listen={listen}");
 
+    let proxy = Arc::new(LlmProxy::new(registry.llama_cpp_url.clone()));
     let state = GateServerState {
         gate,
         proxy,
@@ -356,6 +405,53 @@ async fn rollup_stamp(
     Ok(())
 }
 
+fn iac_sign(nsec: Option<String>, input: &PathBuf, out: &PathBuf) -> Result<()> {
+    let keys = load_keys(nsec)?;
+    let mut iac: IntentAuthorizationCredential =
+        serde_json::from_str(&std::fs::read_to_string(input)?).context("parse IAC")?;
+    iac.sign(&keys).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let json = serde_json::to_string_pretty(&iac)?;
+    std::fs::write(out, json)?;
+    println!("signed IAC written to {}", out.display());
+    println!("  signer: {}", keys.public_key().to_hex());
+    Ok(())
+}
+
+fn iac_verify(input: &PathBuf, pubkey: &str) -> Result<()> {
+    let iac: IntentAuthorizationCredential =
+        serde_json::from_str(&std::fs::read_to_string(input)?).context("parse IAC")?;
+    iac.verify_signature(pubkey).map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!("IAC signature valid for pubkey {pubkey}");
+    Ok(())
+}
+
+async fn rollup_daily(
+    relay: &str,
+    nsec: Option<String>,
+    day: Option<&str>,
+    work_dir: &PathBuf,
+    mock: bool,
+) -> Result<()> {
+    let day = match day {
+        Some(d) => d.to_string(),
+        None => {
+            let yesterday = chrono::Utc::now() - chrono::Duration::days(1);
+            yesterday.format("%Y-%m-%d").to_string()
+        }
+    };
+
+    std::fs::create_dir_all(work_dir)?;
+    let rollup_path = work_dir.join(format!("rollup-{day}.json"));
+    let signed_path = work_dir.join(format!("rollup-{day}.signed.json"));
+    let ots_path = work_dir.join(format!("rollup-{day}.ots"));
+
+    rollup_export(relay, nsec.clone(), &day, &rollup_path).await?;
+    rollup_sign(nsec.clone(), &rollup_path, &signed_path)?;
+    rollup_stamp(relay, nsec, &signed_path, &ots_path, mock).await?;
+    println!("daily rollup complete for {day}");
+    Ok(())
+}
+
 async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) -> Result<()> {
     let keys = load_keys(nsec)?;
     let registry = ChannelRegistry::load(registry_path)?;
@@ -379,7 +475,7 @@ async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) ->
         Err(err) => println!("FAIL-CLOSED: {err}"),
     }
 
-    let iac = demo_iac(now);
+    let iac = demo_iac(&keys, now);
     println!("\n=== Step 2: open router with valid IAC (expect bus event) ===");
     let outcome = gate.open_router_session(Some(&iac), req, now, None).await?;
     println!("OK: membrane.cp.router published");
@@ -400,8 +496,8 @@ async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) ->
     Ok(())
 }
 
-fn demo_iac(now: i64) -> IntentAuthorizationCredential {
-    IntentAuthorizationCredential {
+fn demo_iac(keys: &nostr::Keys, now: i64) -> IntentAuthorizationCredential {
+    let mut iac = IntentAuthorizationCredential {
         version: IntentAuthorizationCredential::SCHEMA_VERSION.to_string(),
         scope_id: "demo-session-001".into(),
         permitted_channels: vec!["local-llm".into()],
@@ -413,7 +509,9 @@ fn demo_iac(now: i64) -> IntentAuthorizationCredential {
         valid_until: now + Duration::minutes(5).num_seconds(),
         parent_cp_hash: "0".repeat(64),
         signature: None,
-    }
+    };
+    iac.sign(keys).expect("demo IAC sign");
+    iac
 }
 
 fn now_secs() -> i64 {

@@ -1,10 +1,18 @@
 {
   "version": "0.9.14",
   "scope_id": "relay-2-gate-001",
-  "permitted_channels": ["local-llm"],
-  "model_allowlist": ["qwen2.5-0.5b-instruct"],
+  "permitted_channels": [
+    "local-llm"
+  ],
+  "model_allowlist": [
+    "qwen2.5-0.5b-instruct"
+  ],
   "context_merkle_bound": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-  "forbidden_exports": ["cloud-telemetry", "training-retention"],
+  "forbidden_exports": [
+    "cloud-telemetry",
+    "training-retention"
+  ],
   "valid_until": 4102444800,
-  "parent_cp_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  "parent_cp_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "signature": "b9e8f4c1afd8e5b7f4245dbc95b71c1ed4c5b324c83d1691841bde291f69d45d583626b8c771aa3088335cfeaab1f8bc67d4864d1957a6cd872280c6a16fba88"
 }

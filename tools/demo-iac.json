@@ -1,10 +1,18 @@
 {
   "version": "0.9.14",
   "scope_id": "gate-session-001",
-  "permitted_channels": ["local-llm"],
-  "model_allowlist": ["sha256:demo-model"],
+  "permitted_channels": [
+    "local-llm"
+  ],
+  "model_allowlist": [
+    "sha256:demo-model"
+  ],
   "context_merkle_bound": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-  "forbidden_exports": ["cloud-telemetry", "training-retention"],
+  "forbidden_exports": [
+    "cloud-telemetry",
+    "training-retention"
+  ],
   "valid_until": 4102444800,
-  "parent_cp_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  "parent_cp_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "signature": "434d8631c510637d71f0ab9bfb1299c361454b26b2c2a55e73c2bc8da505b9291056e1d1cea9843afdadbe3bf908e253ad388f2623e44a3856a7b5c4cd836fd3"
 }

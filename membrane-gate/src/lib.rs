@@ -10,6 +10,8 @@ use thiserror::Error;
 pub enum GateError {
     #[error("no valid IAC: {0}")]
     NoValidIac(String),
+    #[error("invalid IAC signature: {0}")]
+    InvalidIacSignature(String),
     #[error("channel not permitted: {0}")]
     ChannelDenied(String),
     #[error("model not in allowlist: {0}")]
@@ -49,6 +51,7 @@ impl ChannelRegistry {
 pub struct Gate {
     registry: ChannelRegistry,
     publisher: BusPublisher,
+    iac_signer_pubkey: String,
 }
 
 #[derive(Debug, Clone)]
@@ -68,9 +71,11 @@ pub struct RouterSessionOutcome {
 
 impl Gate {
     pub fn new(registry: ChannelRegistry, publisher: BusPublisher) -> Self {
+        let iac_signer_pubkey = publisher.keys().public_key().to_hex();
         Self {
             registry,
             publisher,
+            iac_signer_pubkey,
         }
     }
 
@@ -84,6 +89,8 @@ impl Gate {
         now: i64,
     ) -> Result<(), GateError> {
         let iac = iac.ok_or_else(|| GateError::NoValidIac("missing IAC".into()))?;
+        iac.verify_signature(&self.iac_signer_pubkey)
+            .map_err(|e| GateError::InvalidIacSignature(e.to_string()))?;
         if !iac.is_valid_at(now) {
             return Err(GateError::NoValidIac("IAC expired".into()));
         }

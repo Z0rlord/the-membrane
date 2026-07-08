@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Membrane daily rollup at 00:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 UTC
+Persistent=true
+Unit=membrane-rollup.service
+
+[Install]
+WantedBy=timers.target

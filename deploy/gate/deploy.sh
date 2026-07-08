@@ -68,6 +68,12 @@ docker build -f Dockerfile -t membrane-gate:local build-context/
 docker compose -p membrane-gate up -d --remove-orphans
 docker compose -p membrane-gate ps
 
+mkdir -p /opt/membrane/bin
+cid=\$(docker create membrane-gate:local)
+docker cp "\$cid:/usr/local/bin/membrane" /opt/membrane/bin/membrane
+docker rm "\$cid" >/dev/null
+chmod 755 /opt/membrane/bin/membrane
+
 echo "==> Gate health (tailnet): curl http://${HOST}:8787/health"
 REMOTE
 

@@ -12,7 +12,7 @@ pub use bus::{BusSubscriber, BusSubscriberConfig};
 pub use event::{
     EventType, MembraneEvent, MembranePayload, RouterSessionPayload, SCHEMA_VERSION,
 };
-pub use iac::{IntentAuthorizationCredential, RollupBundle};
+pub use iac::{IacVerifyError, IntentAuthorizationCredential, RollupBundle};
 pub use merkle::{Domain, MerkleTree};
 pub use nostr_bus::{
     BusPublisher, BusPublisherConfig, fetch_membrane_events, keys_from_nsec,
