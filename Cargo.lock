@@ -1073,13 +1073,17 @@ name = "membrane-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "chrono",
  "clap",
  "hex",
  "membrane-core",
  "membrane-gate",
  "nostr",
+ "reqwest",
+ "serde",
  "serde_json",
+ "serde_yaml",
  "tokio",
  "tracing",
  "tracing-subscriber",

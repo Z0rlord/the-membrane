@@ -15,7 +15,12 @@ use membrane_core::{
 use membrane_gate::{
     ChannelRegistry, Gate, GateServerState, LlmProxy, RouterSessionRequest, run_gate_server,
 };
-use tracing_subscriber::EnvFilter;
+
+mod chat;
+mod config;
+
+use chat::ChatClient;
+use config::{MembraneConfig, config_path, write_example_config};
 
 #[derive(Parser)]
 #[command(name = "membrane", about = "The Membrane Phase 0 prototype — Nostr attestation bus")]
@@ -46,6 +51,26 @@ enum Commands {
         #[command(subcommand)]
         command: IacCommands,
     },
+    /// Sovereign local LLM chat through the membrane gate (auto IAC + receipts)
+    Chat {
+        #[arg(long)]
+        message: Option<String>,
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long)]
+        gate_url: Option<String>,
+        #[arg(long, env = "MEMBRANE_RELAY_URL")]
+        relay_url: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// Session chain status and bus receipts
+    Session {
+        #[command(subcommand)]
+        command: SessionCommands,
+    },
+    /// Write default config to ~/.config/membrane/config.yaml
+    Init,
     /// Fail-closed demo: route without IAC, then with IAC
     Demo {
         #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
@@ -143,6 +168,28 @@ enum RollupCommands {
 }
 
 #[derive(Subcommand)]
+enum SessionCommands {
+    /// Show chain head, active IAC, and recent activity
+    Status {
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long, env = "MEMBRANE_RELAY_URL")]
+        relay_url: Option<String>,
+        #[arg(long)]
+        gate_url: Option<String>,
+    },
+    /// List router CP events from the attestation bus
+    Receipts {
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long, env = "MEMBRANE_RELAY_URL")]
+        relay_url: Option<String>,
+        #[arg(long, default_value = "86400")]
+        since_secs: i64,
+    },
+}
+
+#[derive(Subcommand)]
 enum IacCommands {
     /// Issue a short-lived session IAC bound to the current CP chain head
     Issue {
@@ -184,7 +231,10 @@ enum IacCommands {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("membrane=info".parse()?))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("membrane=info".parse()?),
+        )
         .init();
 
     let cli = Cli::parse();
@@ -256,7 +306,97 @@ async fn main() -> Result<()> {
             nsec,
             registry,
         } => run_demo(&relay, nsec, &registry).await,
+        Commands::Chat {
+            message,
+            nsec,
+            gate_url,
+            relay_url,
+            model,
+        } => run_chat(nsec, gate_url, relay_url, model, message).await,
+        Commands::Session { command } => match command {
+            SessionCommands::Status {
+                nsec,
+                relay_url,
+                gate_url,
+            } => run_session_status(nsec, relay_url, gate_url).await,
+            SessionCommands::Receipts {
+                nsec,
+                relay_url,
+                since_secs,
+            } => run_session_receipts(nsec, relay_url, since_secs).await,
+        },
+        Commands::Init => run_init(),
     }
+}
+
+async fn run_chat(
+    nsec: Option<String>,
+    gate_url: Option<String>,
+    relay_url: Option<String>,
+    model: Option<String>,
+    message: Option<String>,
+) -> Result<()> {
+    let keys = load_keys(nsec)?;
+    let mut cfg = MembraneConfig::load()?;
+    if let Some(u) = gate_url {
+        cfg.gate_url = u;
+    }
+    if let Some(u) = relay_url {
+        cfg.relay_url = u;
+    }
+    if let Some(m) = model {
+        cfg.model = m;
+    }
+
+    let mut client = ChatClient::new(cfg, keys).await?;
+    if let Some(msg) = message {
+        let reply = client.send_once(&msg).await?;
+        println!("{reply}");
+    } else {
+        client.run_repl().await?;
+    }
+    Ok(())
+}
+
+async fn run_session_status(
+    nsec: Option<String>,
+    relay_url: Option<String>,
+    gate_url: Option<String>,
+) -> Result<()> {
+    let keys = load_keys(nsec)?;
+    let mut cfg = MembraneConfig::load()?;
+    if let Some(u) = relay_url {
+        cfg.relay_url = u;
+    }
+    if let Some(u) = gate_url {
+        cfg.gate_url = u;
+    }
+    chat::session_status(&cfg, &keys).await
+}
+
+async fn run_session_receipts(
+    nsec: Option<String>,
+    relay_url: Option<String>,
+    since_secs: i64,
+) -> Result<()> {
+    let keys = load_keys(nsec)?;
+    let mut cfg = MembraneConfig::load()?;
+    if let Some(u) = relay_url {
+        cfg.relay_url = u;
+    }
+    chat::list_receipts(&cfg, &keys, since_secs).await
+}
+
+fn run_init() -> Result<()> {
+    let path = config_path().context("HOME not set")?;
+    if path.exists() {
+        println!("config already exists: {}", path.display());
+        return Ok(());
+    }
+    write_example_config(&path)?;
+    println!("wrote {}", path.display());
+    println!("edit gate_url / relay_url / model for your setup");
+    Ok(())
 }
 
 fn load_keys(nsec: Option<String>) -> Result<nostr::Keys> {

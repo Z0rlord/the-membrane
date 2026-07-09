@@ -183,5 +183,5 @@ pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
 pub mod proxy;
 pub mod server;
 
-pub use proxy::LlmProxy;
-pub use server::{GateServerState, run_gate_server};
+pub use proxy::{ChatMessage, ChatRequest, ChatResponse, LlmProxy};
+pub use server::{GateServerState, SessionReceipt, run_gate_server};

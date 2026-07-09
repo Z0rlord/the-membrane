@@ -112,6 +112,36 @@ cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 
 **Gate HTTP:** `POST /v1/chat/completions` with OpenAI chat body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` default is for dev only when the chain is at genesis.
 
+### Sovereign session (local LLM with receipts)
+
+For users who want **local inference with an audit trail** — no curl, no manual IAC headers:
+
+```bash
+# One-time setup
+membrane init    # writes ~/.config/membrane/config.yaml
+export NOSTR_NSEC='nsec1...'
+
+# Interactive chat (auto-issues session IAC, prints CP receipt each turn)
+membrane chat
+
+# One-shot
+membrane chat --message "summarize my threat model"
+
+# Audit your chain
+membrane session status
+membrane session receipts --since-secs 86400
+```
+
+Each turn returns `X-Membrane-CP-Hash`, `X-Membrane-Session-Nonce`, and related headers from the gate. Session logs are saved under `~/.local/share/membrane/sessions/`.
+
+**Tailnet example (relay-2):**
+
+```bash
+membrane chat --gate-url http://relay-2:8787 \
+  --relay-url ws://relay-2:7778 \
+  --model qwen2.5-0.5b-instruct
+```
+
 ### Nostr mapping (Appendix B)
 
 | MembraneEvent.type | Nostr kind | tag `k` |
@@ -129,7 +159,7 @@ to add kinds 31990/31991 to that relay separately (not recommended).
 
 ## Status
 
-Phase 0 foundation: schemas, Merkle helper, Nostr bus, session-scoped IAC + router CP chain on the gate (HTTP + llama.cpp), daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
+Phase 0 foundation: schemas, Merkle helper, Nostr bus, session-scoped IAC + router CP chain on the gate (HTTP + llama.cpp), sovereign `membrane chat` client, daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
 
 ## License
 

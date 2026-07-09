@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json,
@@ -16,6 +16,17 @@ use tracing::{info, warn};
 
 use crate::proxy::{ChatRequest, ChatResponse, LlmProxy};
 use crate::{Gate, GateError, RouterSessionRequest};
+
+/// Per-turn attestation receipt returned to sovereign clients (§4.2.2).
+#[derive(Debug, Clone)]
+pub struct SessionReceipt {
+    pub scope_id: String,
+    pub session_nonce: u64,
+    pub cp_hash: String,
+    pub context_merkle_root: String,
+    pub parent_cp_hash: String,
+    pub bus_event_id: Option<String>,
+}
 
 #[derive(Clone)]
 pub struct GateServerState {
@@ -50,7 +61,7 @@ async fn chat_completions(
     Json(mut req): Json<ChatRequest>,
 ) -> Response {
     match handle_chat(&state, &headers, &mut req).await {
-        Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
+        Ok((resp, receipt)) => chat_success_response(resp, &receipt),
         Err(err) => gate_error_response(err),
     }
 }
@@ -59,7 +70,7 @@ async fn handle_chat(
     state: &GateServerState,
     headers: &HeaderMap,
     req: &ChatRequest,
-) -> Result<ChatResponse, GateError> {
+) -> Result<(ChatResponse, SessionReceipt), GateError> {
     let iac = load_iac(headers, state.default_iac.as_ref())?;
     let now = now_secs();
 
@@ -75,7 +86,7 @@ async fn handle_chat(
     let new_scope = chain.begin_scope(&iac.scope_id);
     chain
         .validate_iac_anchor(&iac.parent_cp_hash, new_scope)
-        .map_err(|msg| GateError::NoValidIac(msg))?;
+        .map_err(GateError::NoValidIac)?;
 
     let parent_cp_hash = chain.next_parent_cp_hash(&iac.parent_cp_hash);
     let session_nonce = chain.next_session_nonce();
@@ -85,7 +96,7 @@ async fn handle_chat(
         model_id: req.model.clone(),
         context_chunks,
         session_nonce,
-        parent_cp_hash,
+        parent_cp_hash: parent_cp_hash.clone(),
     };
 
     let outcome = state
@@ -94,16 +105,58 @@ async fn handle_chat(
         .await?;
 
     let cp_hash = cp_hash_hex(&outcome.event).map_err(|e| GateError::Bus(e.into()))?;
-    chain.record_cp(cp_hash, outcome.bus_event_id.clone());
+    chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone());
+
+    let receipt = SessionReceipt {
+        scope_id: iac.scope_id.clone(),
+        session_nonce,
+        cp_hash: cp_hash.clone(),
+        context_merkle_root: outcome.context_merkle_root.clone(),
+        parent_cp_hash,
+        bus_event_id: outcome.bus_event_id.clone(),
+    };
 
     info!(
         scope_id = %iac.scope_id,
         session_nonce,
-        cp_hash = %chain.last_cp_hash,
+        cp_hash = %cp_hash,
         "membrane.cp.router published"
     );
 
-    state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))
+    let response = state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))?;
+    Ok((response, receipt))
+}
+
+fn chat_success_response(resp: ChatResponse, receipt: &SessionReceipt) -> Response {
+    let mut headers = HeaderMap::new();
+    set_header(&mut headers, "x-membrane-scope-id", &receipt.scope_id);
+    set_header(
+        &mut headers,
+        "x-membrane-session-nonce",
+        &receipt.session_nonce.to_string(),
+    );
+    set_header(&mut headers, "x-membrane-cp-hash", &receipt.cp_hash);
+    set_header(
+        &mut headers,
+        "x-membrane-context-root",
+        &receipt.context_merkle_root,
+    );
+    set_header(
+        &mut headers,
+        "x-membrane-parent-cp-hash",
+        &receipt.parent_cp_hash,
+    );
+    if let Some(id) = &receipt.bus_event_id {
+        set_header(&mut headers, "x-membrane-bus-event-id", id);
+    }
+
+    (StatusCode::OK, headers, Json(resp)).into_response()
+}
+
+fn set_header(headers: &mut HeaderMap, name: &'static str, value: &str) {
+    if let Ok(v) = HeaderValue::from_str(value) {
+        headers.insert(name, v);
+    }
 }
 
 fn load_iac(
