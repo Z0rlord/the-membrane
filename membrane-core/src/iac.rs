@@ -85,6 +85,30 @@ impl IntentAuthorizationCredential {
         self.model_allowlist.iter().any(|m| m == model_id)
     }
 
+    /// Build an unsigned session-scoped IAC (caller signs with `sign()`).
+    pub fn new_session(
+        scope_id: impl Into<String>,
+        model_id: impl Into<String>,
+        parent_cp_hash: impl Into<String>,
+        valid_until: i64,
+        permitted_channels: Vec<String>,
+        forbidden_exports: Vec<String>,
+    ) -> Self {
+        Self {
+            version: Self::SCHEMA_VERSION.to_string(),
+            scope_id: scope_id.into(),
+            permitted_channels,
+            model_allowlist: vec![model_id.into()],
+            decoder_version: None,
+            stimulation_policy: None,
+            context_merkle_bound: "f".repeat(64),
+            forbidden_exports,
+            valid_until,
+            parent_cp_hash: parent_cp_hash.into(),
+            signature: None,
+        }
+    }
+
     /// Sign the IAC with the subject's Nostr key (same digest binding as MembraneEvent).
     pub fn sign(&mut self, keys: &nostr::Keys) -> Result<(), IacVerifyError> {
         let bytes = crate::canonical::canonical_json_bytes(&self.signable_view())?;

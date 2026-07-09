@@ -8,6 +8,8 @@ use axum::{
     Json,
 };
 use membrane_core::iac::IntentAuthorizationCredential;
+use membrane_core::rollup::cp_hash_hex;
+use membrane_core::SessionChainState;
 use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
@@ -20,7 +22,7 @@ pub struct GateServerState {
     pub gate: Arc<Gate>,
     pub proxy: Arc<LlmProxy>,
     pub default_iac: Option<IntentAuthorizationCredential>,
-    pub last_prev_event_id: Arc<Mutex<Option<String>>>,
+    pub session_chain: Arc<Mutex<SessionChainState>>,
 }
 
 pub async fn run_gate_server(
@@ -66,19 +68,24 @@ async fn handle_chat(
     let context_chunks: Vec<Vec<u8>> = req
         .messages
         .iter()
-        .map(|m| {
-            serde_json::to_vec(m).map_err(|e| GateError::Registry(e.to_string()))
-        })
+        .map(|m| serde_json::to_vec(m).map_err(|e| GateError::Registry(e.to_string())))
         .collect::<Result<_, _>>()?;
 
-    let mut prev_lock = state.last_prev_event_id.lock().await;
-    let prev_event_id = prev_lock.clone();
+    let mut chain = state.session_chain.lock().await;
+    let new_scope = chain.begin_scope(&iac.scope_id);
+    chain
+        .validate_iac_anchor(&iac.parent_cp_hash, new_scope)
+        .map_err(|msg| GateError::NoValidIac(msg))?;
+
+    let parent_cp_hash = chain.next_parent_cp_hash(&iac.parent_cp_hash);
+    let session_nonce = chain.next_session_nonce();
+    let prev_event_id = chain.last_event_id.clone();
 
     let session_req = RouterSessionRequest {
         model_id: req.model.clone(),
         context_chunks,
-        session_nonce: now as u64,
-        parent_cp_hash: iac.parent_cp_hash.clone(),
+        session_nonce,
+        parent_cp_hash,
     };
 
     let outcome = state
@@ -86,9 +93,15 @@ async fn handle_chat(
         .open_router_session(Some(&iac), session_req, now, prev_event_id.as_deref())
         .await?;
 
-    if let Some(id) = outcome.bus_event_id.clone() {
-        *prev_lock = Some(id);
-    }
+    let cp_hash = cp_hash_hex(&outcome.event).map_err(|e| GateError::Bus(e.into()))?;
+    chain.record_cp(cp_hash, outcome.bus_event_id.clone());
+
+    info!(
+        scope_id = %iac.scope_id,
+        session_nonce,
+        cp_hash = %chain.last_cp_hash,
+        "membrane.cp.router published"
+    );
 
     state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))
 }

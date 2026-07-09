@@ -2,6 +2,7 @@ use membrane_core::event::{EventType, MembraneEvent, MembranePayload, RouterSess
 use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::merkle::{Domain, MerkleTree};
 use membrane_core::nostr_bus::BusPublisher;
+use membrane_core::rollup::cp_hash_hex;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
@@ -66,6 +67,7 @@ pub struct RouterSessionRequest {
 pub struct RouterSessionOutcome {
     pub event: MembraneEvent,
     pub context_merkle_root: String,
+    pub cp_hash: String,
     pub bus_event_id: Option<String>,
 }
 
@@ -161,9 +163,12 @@ impl Gate {
             .map_err(GateError::Bus)?
             .to_hex();
 
+        let cp_hash = cp_hash_hex(&event).map_err(|e| GateError::Bus(e.into()))?;
+
         Ok(RouterSessionOutcome {
             event,
             context_merkle_root,
+            cp_hash,
             bus_event_id: Some(bus_event_id),
         })
     }

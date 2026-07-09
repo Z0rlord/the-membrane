@@ -1,5 +1,8 @@
 //! Daily rollup bundle construction (whitepaper §5.1).
 
+pub const GENESIS_CP_HASH: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+
 use crate::canonical::canonical_json_bytes;
 use crate::event::{EventType, MembraneEvent};
 use crate::iac::RollupBundle;
@@ -23,6 +26,22 @@ pub fn cp_hash_bytes(event: &MembraneEvent) -> Result<[u8; 32]> {
 
 pub fn cp_hash_hex(event: &MembraneEvent) -> Result<String> {
     Ok(hex::encode(cp_hash_bytes(event)?))
+}
+
+pub fn last_cp_hash_from_events(events: &[MembraneEvent], subject_pubkey: &str) -> String {
+    let mut last = GENESIS_CP_HASH.to_string();
+    for event in events {
+        if event.subject_pubkey != subject_pubkey {
+            continue;
+        }
+        if !is_cp_event(event.event_type) {
+            continue;
+        }
+        if let Ok(hash) = cp_hash_hex(event) {
+            last = hash;
+        }
+    }
+    last
 }
 
 pub fn cp_chain_root_from_events(events: &[MembraneEvent]) -> Result<Option<String>> {

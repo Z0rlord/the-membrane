@@ -95,6 +95,13 @@ cargo run -- bus subscribe             # fetch events + recompute bus_root
 cargo run -- demo                      # fail-closed without IAC → OK with IAC
 cargo run -- gate start                # HTTP gate on :8787 → llama.cpp :8080
 
+# Session-scoped IAC (binds to current cp_chain head, short TTL)
+cargo run -- iac issue --model qwen2.5-0.5b-instruct --ttl-secs 3600 --out session-iac.json
+curl -s http://127.0.0.1:8787/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H "X-Membrane-IAC: $(cat session-iac.json)" \
+  -d '{"model":"qwen2.5-0.5b-instruct","messages":[{"role":"user","content":"hi"}]}'
+
 # Daily rollup (Appendix B Cold C)
 cargo run -- rollup export --day 2026-07-05 --out rollup.json
 cargo run -- rollup sign --input rollup.json --out rollup.signed.json
@@ -103,7 +110,7 @@ cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 
 **llama.cpp:** run `llama-server` with OpenAI-compatible API (default `http://127.0.0.1:8080/v1/chat/completions`). The gate falls back to mock responses if llama.cpp is unreachable.
 
-**Gate HTTP:** `POST /v1/chat/completions` with OpenAI chat body. Pass IAC via `X-Membrane-IAC` header (JSON or base64 JSON), or rely on `--iac tools/demo-iac.json` default.
+**Gate HTTP:** `POST /v1/chat/completions` with OpenAI chat body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` default is for dev only when the chain is at genesis.
 
 ### Nostr mapping (Appendix B)
 
@@ -122,7 +129,7 @@ to add kinds 31990/31991 to that relay separately (not recommended).
 
 ## Status
 
-Phase 0 foundation: schemas, Merkle helper, Nostr bus, IAC fail-closed gate (HTTP + llama.cpp), daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
+Phase 0 foundation: schemas, Merkle helper, Nostr bus, session-scoped IAC + router CP chain on the gate (HTTP + llama.cpp), daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
 
 ## License
 

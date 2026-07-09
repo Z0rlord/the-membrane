@@ -1,6 +1,7 @@
 use crate::bus::bus_root_from_events;
 use crate::canonical::canonical_json_bytes;
 use crate::event::{EventType, MembraneEvent};
+use crate::rollup::{is_cp_event, last_cp_hash_from_events};
 use anyhow::{Context, Result, bail};
 use nostr::event::builder::EventBuilder;
 use nostr::secp256k1::Message;
@@ -109,33 +110,11 @@ pub async fn fetch_membrane_events(
     since: Option<i64>,
     limit: usize,
 ) -> Result<Vec<MembraneEvent>> {
-    let client = Client::new(Keys::generate());
-    client.add_relay(relay_url).await?;
-    client.connect().await;
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    let mut filter = Filter::new()
-        .kind(Kind::Custom(KIND_MEMBRANE))
-        .kind(Kind::Custom(KIND_ALERT))
-        .limit(limit);
-    if let Some(s) = since {
-        filter = filter.since(Timestamp::from(s as u64));
-    }
-
-    let events = client
-        .fetch_events(vec![filter], Duration::from_secs(10))
-        .await?;
-    let mut parsed = Vec::new();
-
-    for event in events {
-        match parse_membrane_event(&event) {
-            Ok(me) => parsed.push(me),
-            Err(err) => warn!(event_id = %event.id.to_hex(), error = %err, "skip non-membrane event"),
-        }
-    }
-
-    parsed.sort_by_key(|e| e.timestamp);
-    Ok(parsed)
+    Ok(fetch_membrane_bus_events(relay_url, since, limit)
+        .await?
+        .into_iter()
+        .map(|e| e.event)
+        .collect())
 }
 
 pub fn parse_membrane_event(event: &Event) -> Result<MembraneEvent> {
@@ -159,6 +138,82 @@ pub async fn subscribe_and_compute_bus_root(
 
 pub fn keys_from_nsec(nsec: &str) -> Result<Keys> {
     Keys::parse(nsec).context("parse NOSTR_NSEC")
+}
+
+#[derive(Debug, Clone)]
+pub struct MembraneBusEvent {
+    pub id: EventId,
+    pub event: MembraneEvent,
+}
+
+pub async fn fetch_membrane_bus_events(
+    relay_url: &str,
+    since: Option<i64>,
+    limit: usize,
+) -> Result<Vec<MembraneBusEvent>> {
+    let client = Client::new(Keys::generate());
+    client.add_relay(relay_url).await?;
+    client.connect().await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let mut filter = Filter::new()
+        .kind(Kind::Custom(KIND_MEMBRANE))
+        .kind(Kind::Custom(KIND_ALERT))
+        .limit(limit);
+    if let Some(s) = since {
+        filter = filter.since(Timestamp::from(s as u64));
+    }
+
+    let events = client
+        .fetch_events(vec![filter], Duration::from_secs(10))
+        .await?;
+    let mut parsed = Vec::new();
+
+    for event in events {
+        match parse_membrane_event(&event) {
+            Ok(me) => parsed.push(MembraneBusEvent {
+                id: event.id,
+                event: me,
+            }),
+            Err(err) => warn!(event_id = %event.id.to_hex(), error = %err, "skip non-membrane event"),
+        }
+    }
+
+    parsed.sort_by_key(|e| e.event.timestamp);
+    Ok(parsed)
+}
+
+pub fn last_bus_event_id(
+    bus_events: &[MembraneBusEvent],
+    subject_pubkey: &str,
+) -> Option<String> {
+    bus_events
+        .iter()
+        .filter(|e| e.event.subject_pubkey == subject_pubkey)
+        .filter(|e| is_cp_event(e.event.event_type))
+        .last()
+        .map(|e| e.id.to_hex())
+}
+
+pub async fn fetch_session_chain_bootstrap(
+    relay_url: &str,
+    subject_pubkey: &str,
+) -> Result<(String, Option<String>, u64)> {
+    let since = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs() as i64)
+        - 86_400 * 7;
+    let bus_events = fetch_membrane_bus_events(relay_url, Some(since), 5_000).await?;
+    let membrane_events: Vec<_> = bus_events.iter().map(|e| e.event.clone()).collect();
+    let last_cp_hash = last_cp_hash_from_events(&membrane_events, subject_pubkey);
+    let last_event_id = last_bus_event_id(&bus_events, subject_pubkey);
+    let session_nonce = crate::session::SessionChainState::from_bus_events(
+        &membrane_events,
+        subject_pubkey,
+    )
+    .session_nonce;
+    Ok((last_cp_hash, last_event_id, session_nonce))
 }
 
 pub fn npub_from_keys(keys: &Keys) -> Result<String> {

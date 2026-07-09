@@ -7,9 +7,10 @@ use chrono::Duration;
 use clap::{Parser, Subcommand};
 use membrane_core::{
     BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper, IntentAuthorizationCredential,
-    MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SignedRollupBundle,
-    build_rollup_bundle, day_bounds_utc, fetch_membrane_events, keys_from_nsec, membrane_kind_for,
-    npub_from_keys, subscribe_and_compute_bus_root, validate_rollup_bundle,
+    MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SessionChainState,
+    SignedRollupBundle, build_rollup_bundle, day_bounds_utc, fetch_membrane_events,
+    fetch_session_chain_bootstrap, keys_from_nsec, membrane_kind_for, npub_from_keys,
+    subscribe_and_compute_bus_root, validate_rollup_bundle,
 };
 use membrane_gate::{
     ChannelRegistry, Gate, GateServerState, LlmProxy, RouterSessionRequest, run_gate_server,
@@ -143,6 +144,25 @@ enum RollupCommands {
 
 #[derive(Subcommand)]
 enum IacCommands {
+    /// Issue a short-lived session IAC bound to the current CP chain head
+    Issue {
+        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        relay: String,
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long)]
+        model: String,
+        #[arg(long)]
+        scope_id: Option<String>,
+        #[arg(long, default_value = "3600")]
+        ttl_secs: i64,
+        #[arg(long)]
+        parent_cp_hash: Option<String>,
+        #[arg(long, default_value = "local-llm")]
+        channel: Vec<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Sign an IAC JSON file with NOSTR_NSEC
     Sign {
         #[arg(long, env = "NOSTR_NSEC")]
@@ -206,6 +226,28 @@ async fn main() -> Result<()> {
             } => rollup_daily(&relay, nsec, day.as_deref(), &work_dir, mock).await,
         },
         Commands::Iac { command } => match command {
+            IacCommands::Issue {
+                relay,
+                nsec,
+                model,
+                scope_id,
+                ttl_secs,
+                parent_cp_hash,
+                channel,
+                out,
+            } => {
+                iac_issue(
+                    &relay,
+                    nsec,
+                    &model,
+                    scope_id.as_deref(),
+                    ttl_secs,
+                    parent_cp_hash.as_deref(),
+                    &channel,
+                    &out,
+                )
+                .await
+            }
             IacCommands::Sign { nsec, input, out } => iac_sign(nsec, &input, &out),
             IacCommands::Verify { input, pubkey } => iac_verify(&input, &pubkey),
         },
@@ -287,6 +329,17 @@ async fn gate_start(
     gate.validate_iac(Some(&default_iac), now_secs())
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
+    let pubkey = keys.public_key().to_hex();
+    let (last_cp_hash, last_event_id, session_nonce) =
+        fetch_session_chain_bootstrap(relay, &pubkey).await?;
+    let mut session_chain = SessionChainState::genesis();
+    session_chain.last_cp_hash = last_cp_hash.clone();
+    session_chain.last_event_id = last_event_id;
+    session_chain.session_nonce = session_nonce;
+    println!(
+        "gate: chain head cp_hash={last_cp_hash} session_nonce={session_nonce}"
+    );
+
     let llama = registry
         .llama_cpp_url
         .as_deref()
@@ -298,7 +351,7 @@ async fn gate_start(
         gate,
         proxy,
         default_iac: Some(default_iac),
-        last_prev_event_id: Arc::new(tokio::sync::Mutex::new(None)),
+        session_chain: Arc::new(tokio::sync::Mutex::new(session_chain)),
     };
 
     run_gate_server(state, listen).await
@@ -405,6 +458,52 @@ async fn rollup_stamp(
     Ok(())
 }
 
+async fn iac_issue(
+    relay: &str,
+    nsec: Option<String>,
+    model: &str,
+    scope_id: Option<&str>,
+    ttl_secs: i64,
+    parent_cp_hash: Option<&str>,
+    channels: &[String],
+    out: &PathBuf,
+) -> Result<()> {
+    let keys = load_keys(nsec)?;
+    let now = now_secs();
+    let scope_id = scope_id
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("session-{}", now));
+
+    let parent = match parent_cp_hash {
+        Some(hash) => hash.to_string(),
+        None => {
+            let (head, _, _) =
+                fetch_session_chain_bootstrap(relay, &keys.public_key().to_hex()).await?;
+            head
+        }
+    };
+
+    let mut iac = IntentAuthorizationCredential::new_session(
+        scope_id.clone(),
+        model,
+        parent.clone(),
+        now + ttl_secs,
+        channels.to_vec(),
+        vec!["cloud-telemetry".into(), "training-retention".into()],
+    );
+    iac.sign(&keys).map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    let json = serde_json::to_string_pretty(&iac)?;
+    std::fs::write(out, json)?;
+    println!("session IAC written to {}", out.display());
+    println!("  scope_id: {scope_id}");
+    println!("  model: {model}");
+    println!("  valid_until: {} (+{ttl_secs}s)", iac.valid_until);
+    println!("  parent_cp_hash: {parent}");
+    println!("  signer: {}", keys.public_key().to_hex());
+    Ok(())
+}
+
 fn iac_sign(nsec: Option<String>, input: &PathBuf, out: &PathBuf) -> Result<()> {
     let keys = load_keys(nsec)?;
     let mut iac: IntentAuthorizationCredential =
@@ -477,10 +576,26 @@ async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) ->
 
     let iac = demo_iac(&keys, now);
     println!("\n=== Step 2: open router with valid IAC (expect bus event) ===");
-    let outcome = gate.open_router_session(Some(&iac), req, now, None).await?;
+    let outcome = gate.open_router_session(Some(&iac), req.clone(), now, None).await?;
     println!("OK: membrane.cp.router published");
-    println!("  bus_event_id: {}", outcome.bus_event_id.unwrap_or_default());
+    println!("  bus_event_id: {}", outcome.bus_event_id.as_deref().unwrap_or_default());
     println!("  context_merkle_root: {}", outcome.context_merkle_root);
+    println!("  cp_hash: {}", outcome.cp_hash);
+
+    let req2 = RouterSessionRequest {
+        model_id: "sha256:demo-model".into(),
+        context_chunks: vec![b"second turn".to_vec()],
+        session_nonce: 43,
+        parent_cp_hash: outcome.cp_hash.clone(),
+    };
+    println!("\n=== Step 2b: chained router CP (parent = prior cp_hash) ===");
+    let outcome2 = gate
+        .open_router_session(Some(&iac), req2, now + 1, outcome.bus_event_id.as_deref())
+        .await?;
+    println!("  cp_hash: {}", outcome2.cp_hash);
+    if outcome.cp_hash == outcome2.cp_hash {
+        bail!("expected distinct cp hashes across chain");
+    }
 
     let events = fetch_membrane_events(relay, Some(now - 60), 100).await?;
     let root = membrane_core::bus_root_from_events(&events)?;
