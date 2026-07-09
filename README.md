@@ -157,6 +157,19 @@ Do **not** use `relay.dojopop.live` for Membrane attestation — it allowlists D
 Use the dedicated bus above. For integration smoke tests against DojoPop infra, you would need
 to add kinds 31990/31991 to that relay separately (not recommended).
 
+### Git backup (GRASP / gitworkshop)
+
+Self-hosted [ngit-grasp](https://ngit.dev/grasp/) on relay-2 mirrors this repo to Nostr git (syncs with [gitworkshop.dev](https://gitworkshop.dev)).
+
+| | |
+|---|---|
+| Public | `https://membrane-grasp.dojopop.live` |
+| Tailnet | `http://relay-2:7334` |
+| Clone | `nostr://npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/membrane-grasp.dojopop.live/the-membrane` |
+| Deploy / push | [`deploy/grasp/README.md`](deploy/grasp/README.md) |
+
+GitHub remains `origin` for day-to-day work; `grasp` (nostr) is the decentralized backup remote after `ngit init`.
+
 ## Status
 
 Phase 0 foundation: schemas, Merkle helper, Nostr bus, session-scoped IAC + router CP chain on the gate (HTTP + llama.cpp), sovereign `membrane chat` client, daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.

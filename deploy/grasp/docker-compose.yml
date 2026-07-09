@@ -1,0 +1,18 @@
+name: membrane-grasp
+
+services:
+  grasp:
+    build: .
+    image: membrane-grasp:local
+    container_name: membrane-grasp
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "7334:7334"
+    volumes:
+      - grasp-git:/data/git
+      - grasp-relay:/data/relay
+
+volumes:
+  grasp-git:
+  grasp-relay:
