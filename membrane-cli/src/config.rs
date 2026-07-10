@@ -13,6 +13,8 @@ pub struct MembraneConfig {
     pub model: String,
     #[serde(default = "default_ttl_secs")]
     pub ttl_secs: i64,
+    #[serde(default = "default_delta_t_secs")]
+    pub delta_t_secs: u64,
 }
 
 fn default_gate_url() -> String {
@@ -31,6 +33,10 @@ fn default_ttl_secs() -> i64 {
     3600
 }
 
+fn default_delta_t_secs() -> u64 {
+    300
+}
+
 impl Default for MembraneConfig {
     fn default() -> Self {
         Self {
@@ -38,6 +44,7 @@ impl Default for MembraneConfig {
             relay_url: default_relay_url(),
             model: default_model(),
             ttl_secs: default_ttl_secs(),
+            delta_t_secs: default_delta_t_secs(),
         }
     }
 }

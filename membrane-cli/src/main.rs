@@ -8,9 +8,9 @@ use clap::{Parser, Subcommand};
 use membrane_core::{
     BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper, IntentAuthorizationCredential,
     MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SessionChainState,
-    SignedRollupBundle, build_rollup_bundle, day_bounds_utc, fetch_membrane_events,
-    fetch_session_chain_bootstrap, keys_from_nsec, membrane_kind_for, npub_from_keys,
-    subscribe_and_compute_bus_root, validate_rollup_bundle,
+    SignedRollupBundle, build_rollup_bundle, day_bounds_utc, fetch_membrane_bus_events,
+    fetch_membrane_events, fetch_session_chain_bootstrap, keys_from_nsec, last_bus_event_id,
+    membrane_kind_for, npub_from_keys, subscribe_and_compute_bus_root, validate_rollup_bundle,
 };
 use membrane_gate::{
     ChannelRegistry, Gate, GateServerState, LlmProxy, RouterSessionRequest, run_gate_server,
@@ -68,6 +68,15 @@ enum Commands {
     Session {
         #[command(subcommand)]
         command: SessionCommands,
+    },
+    /// Sever the active session (publish degraded alert, invalidate IAC)
+    Sever {
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long, env = "MEMBRANE_RELAY_URL")]
+        relay_url: Option<String>,
+        #[arg(long)]
+        scope_id: Option<String>,
     },
     /// Write default config to ~/.config/membrane/config.yaml
     Init,
@@ -325,6 +334,11 @@ async fn main() -> Result<()> {
                 since_secs,
             } => run_session_receipts(nsec, relay_url, since_secs).await,
         },
+        Commands::Sever {
+            nsec,
+            relay_url,
+            scope_id,
+        } => run_sever(nsec, relay_url, scope_id).await,
         Commands::Init => run_init(),
     }
 }
@@ -385,6 +399,19 @@ async fn run_session_receipts(
         cfg.relay_url = u;
     }
     chat::list_receipts(&cfg, &keys, since_secs).await
+}
+
+async fn run_sever(
+    nsec: Option<String>,
+    relay_url: Option<String>,
+    scope_id: Option<String>,
+) -> Result<()> {
+    let keys = load_keys(nsec)?;
+    let mut cfg = MembraneConfig::load()?;
+    if let Some(u) = relay_url {
+        cfg.relay_url = u;
+    }
+    chat::sever_session(&cfg, &keys, scope_id.as_deref()).await
 }
 
 fn run_init() -> Result<()> {
@@ -470,15 +497,22 @@ async fn gate_start(
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let pubkey = keys.public_key().to_hex();
-    let (last_cp_hash, last_event_id, session_nonce) =
-        fetch_session_chain_bootstrap(relay, &pubkey).await?;
-    let mut session_chain = SessionChainState::genesis();
-    session_chain.last_cp_hash = last_cp_hash.clone();
-    session_chain.last_event_id = last_event_id;
-    session_chain.session_nonce = session_nonce;
+    let since = now_secs() - 86_400 * 7;
+    let bus_events = fetch_membrane_bus_events(relay, Some(since), 5_000).await?;
+    let membrane_events: Vec<_> = bus_events.iter().map(|e| e.event.clone()).collect();
+    let mut session_chain = SessionChainState::from_bus_events(&membrane_events, &pubkey);
+    session_chain.last_event_id = last_bus_event_id(&bus_events, &pubkey);
     println!(
-        "gate: chain head cp_hash={last_cp_hash} session_nonce={session_nonce}"
+        "gate: chain head cp_hash={} session_nonce={}",
+        session_chain.last_cp_hash, session_chain.session_nonce
     );
+    if let Some(scope) = &session_chain.degraded_scope_id {
+        println!(
+            "gate: degraded scope={scope} reason={}",
+            session_chain.degraded_reason.as_deref().unwrap_or("?")
+        );
+    }
+    println!("gate: Δt={}s", registry.delta_t_secs);
 
     let llama = registry
         .llama_cpp_url

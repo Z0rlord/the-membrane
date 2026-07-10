@@ -9,12 +9,13 @@ use axum::{
 };
 use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::rollup::cp_hash_hex;
-use membrane_core::SessionChainState;
+use membrane_core::{ALERT_REASON_DELTA_T_EXCEEDED, SessionChainState};
 use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::proxy::{ChatRequest, ChatResponse, LlmProxy};
+use crate::watchdog::spawn_delta_t_watchdog;
 use crate::{Gate, GateError, RouterSessionRequest};
 
 /// Per-turn attestation receipt returned to sovereign clients (§4.2.2).
@@ -40,6 +41,8 @@ pub async fn run_gate_server(
     state: GateServerState,
     listen: &str,
 ) -> anyhow::Result<()> {
+    spawn_delta_t_watchdog(state.gate.clone(), state.session_chain.clone());
+
     let app = axum::Router::new()
         .route("/health", get(health))
         .route("/v1/chat/completions", post(chat_completions))
@@ -51,8 +54,25 @@ pub async fn run_gate_server(
     Ok(())
 }
 
-async fn health() -> impl IntoResponse {
-    Json(json!({ "status": "ok", "gate": "membrane-phase-0" }))
+async fn health(State(state): State<GateServerState>) -> impl IntoResponse {
+    let now = now_secs();
+    let chain = state.session_chain.lock().await;
+    let delta_t_secs = state.gate.registry().delta_t_secs;
+    let last_cp_age_secs = chain.last_router_cp_age_secs(now);
+    let router_stale = chain.is_router_stale(now, delta_t_secs);
+    let active_scope = chain.active_scope_id.clone();
+    let degraded_scope = chain.degraded_scope_id.clone();
+
+    Json(json!({
+        "status": if router_stale || degraded_scope.is_some() { "degraded" } else { "ok" },
+        "gate": "membrane-phase-0",
+        "delta_t_secs": delta_t_secs,
+        "last_cp_age_secs": last_cp_age_secs,
+        "router_stale": router_stale,
+        "active_scope_id": active_scope,
+        "degraded_scope_id": degraded_scope,
+        "degraded_reason": chain.degraded_reason,
+    }))
 }
 
 async fn chat_completions(
@@ -76,14 +96,39 @@ async fn handle_chat(
 
     state.gate.validate_iac(Some(&iac), now)?;
 
-    let context_chunks: Vec<Vec<u8>> = req
-        .messages
-        .iter()
-        .map(|m| serde_json::to_vec(m).map_err(|e| GateError::Registry(e.to_string())))
-        .collect::<Result<_, _>>()?;
-
     let mut chain = state.session_chain.lock().await;
     let new_scope = chain.begin_scope(&iac.scope_id);
+
+    if new_scope {
+        chain.clear_degraded_for_scope(&iac.scope_id);
+    }
+
+    if let Err(err) = state.gate.check_session_liveness(&chain, &iac.scope_id, now) {
+        if matches!(err, GateError::SessionStale(_, _)) {
+            let age = chain.last_router_cp_age_secs(now);
+            let prev = chain.last_event_id.clone();
+            let cp_hash = chain.last_cp_hash.clone();
+            drop(chain);
+
+            state
+                .gate
+                .publish_alert_degraded(
+                    &iac.scope_id,
+                    ALERT_REASON_DELTA_T_EXCEEDED,
+                    now,
+                    &cp_hash,
+                    age,
+                    prev.as_deref(),
+                )
+                .await?;
+
+            let mut chain = state.session_chain.lock().await;
+            chain.mark_degraded(&iac.scope_id, ALERT_REASON_DELTA_T_EXCEEDED, now);
+            return Err(err);
+        }
+        return Err(err);
+    }
+
     chain
         .validate_iac_anchor(&iac.parent_cp_hash, new_scope)
         .map_err(GateError::NoValidIac)?;
@@ -94,7 +139,11 @@ async fn handle_chat(
 
     let session_req = RouterSessionRequest {
         model_id: req.model.clone(),
-        context_chunks,
+        context_chunks: req
+            .messages
+            .iter()
+            .map(|m| serde_json::to_vec(m).map_err(|e| GateError::Registry(e.to_string())))
+            .collect::<Result<_, _>>()?,
         session_nonce,
         parent_cp_hash: parent_cp_hash.clone(),
     };
@@ -105,7 +154,7 @@ async fn handle_chat(
         .await?;
 
     let cp_hash = cp_hash_hex(&outcome.event).map_err(|e| GateError::Bus(e.into()))?;
-    chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone());
+    chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone(), now);
 
     let receipt = SessionReceipt {
         scope_id: iac.scope_id.clone(),
@@ -122,6 +171,8 @@ async fn handle_chat(
         cp_hash = %cp_hash,
         "membrane.cp.router published"
     );
+
+    drop(chain);
 
     let response = state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))?;
     Ok((response, receipt))
@@ -195,7 +246,8 @@ fn gate_error_response(err: GateError) -> Response {
     let status = match &err {
         GateError::NoValidIac(_) | GateError::InvalidIacSignature(_)
         | GateError::ChannelDenied(_) | GateError::ModelDenied(_)
-        | GateError::ExportForbidden(_) | GateError::ContextBoundExceeded => StatusCode::FORBIDDEN,
+        | GateError::ExportForbidden(_) | GateError::ContextBoundExceeded
+        | GateError::SessionDegraded(_, _) | GateError::SessionStale(_, _) => StatusCode::FORBIDDEN,
         _ => StatusCode::BAD_REQUEST,
     };
     (

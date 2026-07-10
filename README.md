@@ -130,9 +130,15 @@ membrane chat --message "summarize my threat model"
 # Audit your chain
 membrane session status
 membrane session receipts --since-secs 86400
+
+# Sever active session (fail-closed; requires fresh IAC to resume)
+membrane sever
+membrane sever --scope-id sovereign-1234567890
 ```
 
 Each turn returns `X-Membrane-CP-Hash`, `X-Membrane-Session-Nonce`, and related headers from the gate. Session logs are saved under `~/.local/share/membrane/sessions/`.
+
+**Severance:** `membrane sever` publishes `membrane.alert.degraded` with `reason: subject_sever`, removes the local active IAC, and blocks further chat on that scope until you issue a fresh IAC (`membrane iac issue`). The gate also runs a Δt watchdog (default 300s): if no `membrane.cp.router` arrives within Δt, it publishes `membrane.alert.degraded` and rejects chat fail-closed. Check staleness via `membrane session status` or `GET /health` (`delta_t_secs`, `last_cp_age_secs`).
 
 **Tailnet example (relay-2):**
 

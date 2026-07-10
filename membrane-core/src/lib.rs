@@ -26,4 +26,7 @@ pub use rollup::{
     day_bounds_utc, filter_events_in_period, is_cp_event, last_cp_hash_from_events,
     validate_rollup_bundle, GENESIS_CP_HASH,
 };
-pub use session::SessionChainState;
+pub use session::{
+    ALERT_REASON_DELTA_T_EXCEEDED, ALERT_REASON_SUBJECT_SEVER, SessionChainState,
+    alert_degraded_fields, alert_degraded_payload,
+};

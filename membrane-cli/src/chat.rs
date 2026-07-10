@@ -5,6 +5,8 @@ use anyhow::{Context, Result, bail};
 use membrane_core::{
     EventType, IntentAuthorizationCredential, MembranePayload,
     fetch_membrane_events, fetch_session_chain_bootstrap,
+    ALERT_REASON_SUBJECT_SEVER, BusPublisher, BusPublisherConfig, SessionChainState,
+    alert_degraded_payload,
 };
 use membrane_gate::ChatMessage;
 use nostr::Keys;
@@ -256,31 +258,55 @@ pub async fn ensure_session_iac(
 
 pub async fn session_status(config: &MembraneConfig, keys: &Keys) -> Result<()> {
     let pubkey = keys.public_key().to_hex();
-    let (last_cp_hash, last_event_id, session_nonce) =
-        fetch_session_chain_bootstrap(&config.relay_url, &pubkey).await?;
+    let since = now_secs() - 86_400 * 7;
+    let events = fetch_membrane_events(&config.relay_url, Some(since), 5_000).await?;
+    let chain = SessionChainState::from_bus_events(&events, &pubkey);
+    let now = now_secs();
+    let delta_t = config.delta_t_secs;
+    let cp_age = chain.last_router_cp_age_secs(now);
 
     println!("Membrane session status");
     println!("  subject:       {pubkey}");
     println!("  relay:         {}", config.relay_url);
     println!("  gate:          {}", config.gate_url);
-    println!("  chain head:    {last_cp_hash}");
-    println!("  last event id: {}", last_event_id.unwrap_or_else(|| "<none>".into()));
-    println!("  last nonce:    {session_nonce}");
+    println!("  chain head:    {}", chain.last_cp_hash);
+    println!(
+        "  last event id: {}",
+        chain.last_event_id.as_deref().unwrap_or("<none>")
+    );
+    println!("  last nonce:    {}", chain.session_nonce);
+    println!("  Δt (liveness): {delta_t}s");
+    match cp_age {
+        Some(age) => {
+            let stale = age > delta_t as i64;
+            println!(
+                "  last router CP: {age}s ago{}",
+                if stale { " (STALE)" } else { "" }
+            );
+        }
+        None => println!("  last router CP: <none>"),
+    }
+
+    if let Some(scope) = &chain.degraded_scope_id {
+        println!(
+            "  DEGRADED:      scope={scope} reason={}",
+            chain.degraded_reason.as_deref().unwrap_or("unknown")
+        );
+    }
 
     if let Ok(path) = MembraneConfig::active_iac_path() {
         if path.exists() {
             let iac: IntentAuthorizationCredential =
                 serde_json::from_str(&std::fs::read_to_string(&path)?)?;
-            let valid = iac.is_valid_at(now_secs());
+            let valid = iac.is_valid_at(now);
+            let degraded = chain.is_scope_degraded(&iac.scope_id);
             println!(
-                "  active IAC:    scope={} valid_until={} valid={valid}",
+                "  active IAC:    scope={} valid_until={} valid={valid} degraded={degraded}",
                 iac.scope_id, iac.valid_until
             );
         }
     }
 
-    let since = now_secs() - 86_400;
-    let events = fetch_membrane_events(&config.relay_url, Some(since), 2_000).await?;
     let router_count = events
         .iter()
         .filter(|e| e.subject_pubkey == pubkey && e.event_type == EventType::CpRouter)
@@ -289,9 +315,92 @@ pub async fn session_status(config: &MembraneConfig, keys: &Keys) -> Result<()> 
         .iter()
         .filter(|e| e.subject_pubkey == pubkey && e.event_type == EventType::AnchorOts)
         .count();
-    println!("  router CPs (24h): {router_count}");
-    println!("  OTS anchors (24h): {anchor_count}");
+    println!("  router CPs (7d): {router_count}");
+    println!("  OTS anchors (7d): {anchor_count}");
+
+    if let Ok(health) = fetch_gate_health(&config.gate_url).await {
+        println!("  gate health:   {}", health.get("status").and_then(|v| v.as_str()).unwrap_or("?"));
+        if let Some(age) = health.get("last_cp_age_secs") {
+            println!("  gate CP age:   {age}");
+        }
+    }
+
     Ok(())
+}
+
+pub async fn sever_session(
+    config: &MembraneConfig,
+    keys: &Keys,
+    scope_id: Option<&str>,
+) -> Result<()> {
+    let pubkey = keys.public_key().to_hex();
+    let since = now_secs() - 86_400 * 7;
+    let events = fetch_membrane_events(&config.relay_url, Some(since), 5_000).await?;
+    let chain = SessionChainState::from_bus_events(&events, &pubkey);
+    let now = now_secs();
+
+    let scope_id = match scope_id {
+        Some(s) => s.to_string(),
+        None => {
+            if let Ok(path) = MembraneConfig::active_iac_path() {
+                if path.exists() {
+                    let iac: IntentAuthorizationCredential =
+                        serde_json::from_str(&std::fs::read_to_string(&path)?)?;
+                    iac.scope_id
+                } else {
+                    bail!("no --scope-id and no active IAC; pass --scope-id");
+                }
+            } else {
+                bail!("no --scope-id and no active IAC; pass --scope-id");
+            }
+        }
+    };
+
+    let publisher = BusPublisher::new(BusPublisherConfig {
+        relay_url: config.relay_url.clone(),
+        keys: keys.clone(),
+    });
+
+    let cp_age = chain.last_router_cp_age_secs(now);
+    let mut event = membrane_core::MembraneEvent::new(
+        membrane_core::EventType::AlertDegraded,
+        &pubkey,
+        &chain.last_cp_hash,
+        now,
+        alert_degraded_payload(
+            ALERT_REASON_SUBJECT_SEVER,
+            &scope_id,
+            cp_age,
+            config.delta_t_secs,
+        ),
+    );
+
+    let prev = chain.last_event_id.as_deref();
+    let event_id = publisher.publish(&mut event, prev).await?;
+    println!("published membrane.alert.degraded (subject sever)");
+    println!("  event id: {}", event_id.to_hex());
+    println!("  scope_id: {scope_id}");
+    println!("  reason:   {ALERT_REASON_SUBJECT_SEVER}");
+
+    if let Ok(path) = MembraneConfig::active_iac_path() {
+        if path.exists() {
+            let iac: IntentAuthorizationCredential =
+                serde_json::from_str(&std::fs::read_to_string(&path)?)?;
+            if iac.scope_id == scope_id {
+                std::fs::remove_file(&path)?;
+                println!("  removed active IAC at {}", path.display());
+            }
+        }
+    }
+
+    println!("issue fresh IAC with `membrane iac issue` before resuming chat");
+    Ok(())
+}
+
+async fn fetch_gate_health(gate_url: &str) -> Result<serde_json::Value> {
+    let url = format!("{}/health", gate_url.trim_end_matches('/'));
+    let resp = reqwest::get(&url).await?.error_for_status()?;
+    Ok(resp.json().await?)
 }
 
 pub async fn list_receipts(config: &MembraneConfig, keys: &Keys, since_secs: i64) -> Result<()> {
