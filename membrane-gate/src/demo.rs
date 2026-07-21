@@ -1,4 +1,4 @@
-//! Attestable local demo: signed authorizations, simulated tools, evidence packs.
+//! Membrane landing demo: signed authorizations, simulated tools, evidence packs.
 //!
 //! All `/demo/*` routes are demo-only. Production gate starts omit `DemoServerState`.
 
@@ -169,10 +169,10 @@ pub fn demo_router(state: DemoServerState) -> Router {
         .with_state(state)
 }
 
-pub async fn run_attestable_demo(state: DemoServerState, listen: &str) -> anyhow::Result<()> {
+pub async fn run_landing_demo(state: DemoServerState, listen: &str) -> anyhow::Result<()> {
     let app = demo_router(state);
     let listener = tokio::net::TcpListener::bind(listen).await?;
-    info!(listen = %listen, "attestable demo listening (demo-only endpoints enabled)");
+    info!(listen = %listen, "landing demo listening (demo-only endpoints enabled)");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -188,7 +188,7 @@ async fn demo_health(State(state): State<DemoServerState>) -> impl IntoResponse 
     let delta_t_secs = state.gate.registry().delta_t_secs;
     Json(json!({
         "status": "ok",
-        "gate": "attestable-demo",
+        "gate": "landing-demo",
         "demo": true,
         "simulation": true,
         "delta_t_secs": delta_t_secs,
@@ -210,7 +210,7 @@ async fn api_overview(State(state): State<DemoServerState>) -> impl IntoResponse
     let chain_fresh = !chain.is_router_stale(now, state.gate.registry().delta_t_secs);
 
     Json(json!({
-        "product": "Attestable",
+        "product": "The Membrane",
         "demo": true,
         "simulation": true,
         "disclaimer": "Only gateway-routed traffic is enforced and attested. Tool calls are simulated locally.",
@@ -364,7 +364,7 @@ async fn issue_authorization(state: &DemoServerState, ttl_secs: i64) -> Result<V
     let now = now_secs();
     let chain = state.session_chain.lock().await;
     // Fresh demo scope after sever: clear degraded for new scope issuance.
-    let scope_id = format!("attestable-demo-{now}");
+    let scope_id = format!("landing-demo-{now}");
     let parent = chain.last_cp_hash.clone();
     drop(chain);
 
@@ -668,7 +668,7 @@ async fn sever_session(state: &DemoServerState) -> Result<Value, GateError> {
             .as_ref()
             .map(|i| i.scope_id.clone())
             .or_else(|| None)
-            .unwrap_or_else(|| "attestable-demo".into())
+            .unwrap_or_else(|| "landing-demo".into())
     };
 
     let (cp_hash, prev, age) = {
@@ -739,13 +739,13 @@ async fn build_evidence_pack(state: &DemoServerState) -> EvidencePack {
     let runtime = state.runtime.lock().await;
     EvidencePack {
         version: "0.1.0".into(),
-        product: "Attestable".into(),
+        product: "The Membrane".into(),
         exported_at: now_secs(),
         issuer_pubkey: state.gate.publisher_pubkey_hex(),
         agent_id: runtime.agent_id.clone(),
         scope_id: runtime.active_iac.as_ref().map(|i| i.scope_id.clone()),
         simulation: true,
-        disclaimer: "Evidence covers gateway-routed Attestable demo traffic only. Tool side-effects are simulated.".into(),
+        disclaimer: "Evidence covers gateway-routed Membrane demo traffic only. Tool side-effects are simulated.".into(),
         authorization: runtime.active_iac.as_ref().map(public_iac_view),
         receipts: runtime.receipts.clone(),
         timeline: runtime.timeline.clone(),
@@ -878,7 +878,7 @@ fn demo_err(err: GateError) -> Response {
         Json(json!({
             "ok": false,
             "error": err.to_string(),
-            "type": "attestable_demo_error"
+            "type": "landing_demo_error"
         })),
     )
         .into_response()
@@ -900,7 +900,7 @@ mod tests {
     fn test_state() -> DemoServerState {
         let keys = Keys::generate();
         let publisher = BusPublisher::new(BusPublisherConfig {
-            relay_url: "memory://attestable-demo".into(),
+            relay_url: "memory://landing-demo".into(),
             keys,
         });
         let gate = Arc::new(Gate::new(demo_registry(), publisher));

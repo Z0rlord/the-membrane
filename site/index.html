@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Attestable — The fail-closed control point for AI agents with production access</title>
-  <meta name="description" content="Attestable is a fail-closed control point for AI agents with production access. Every model call and tool action carries a live, signed authorization, or it never reaches production." />
+  <title>The Membrane — The fail-closed control point for AI agents with production access</title>
+  <meta name="description" content="The Membrane is a fail-closed control point for AI agents with production access. Every model call and tool action carries a live, signed authorization, or it never reaches production." />
   <meta name="theme-color" content="#0b1a22" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Attestable — fail-closed control point for AI agents" />
+  <meta property="og:title" content="The Membrane — fail-closed control point for AI agents" />
   <meta property="og:description" content="Every model call and tool action carries a live, signed authorization — or it never reaches production." />
   <meta property="og:image" content="assets/og.svg" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -28,12 +28,12 @@
     <div class="hero-atmosphere" aria-hidden="true"></div>
 
     <nav class="topbar">
-      <span class="wordmark-sm">Attestable</span>
+      <span class="wordmark-sm">The Membrane</span>
       <a class="topbar-link" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">GitHub</a>
     </nav>
 
     <div class="hero-inner">
-      <h1 class="brand">Attestable</h1>
+      <h1 class="brand">The Membrane</h1>
       <p class="headline">The fail-closed control point for AI agents with production access.</p>
       <p class="subhead">Every model call and every tool action carries a live, signed authorization&nbsp;— or it never reaches production.</p>
       <div class="cta-group">
@@ -64,7 +64,7 @@
       <p class="eyebrow">The solution</p>
       <h2 class="section-title">A gateway that fails closed.</h2>
       <p class="lede">
-        Attestable sits directly in front of your agents. It requires a live, signed authorization for
+        The Membrane sits directly in front of your agents. It requires a live, signed authorization for
         every model and tool call, records each action in a tamper-evident, hash-linked receipt chain,
         and blocks or severs the agent the moment the chain breaks. Approved actions are provable;
         unauthorized ones never hit production.
@@ -79,7 +79,7 @@
         <div class="diff-item">
           <span class="diff-num">01</span>
           <h3>It enforces, it doesn't just watch.</h3>
-          <p>Observability tools explain what an agent did after the fact. Attestable is an inline
+          <p>Observability tools explain what an agent did after the fact. The Membrane is an inline
             control point that refuses unauthorized actions before they reach production.</p>
         </div>
         <div class="diff-item">
@@ -124,7 +124,7 @@
           <div class="step-body">
             <h3>Blocked swap</h3>
             <p>The agent reaches for a different model, or for <span class="mono">github.merge</span> —
-              outside the authorization. Attestable blocks it; a red receipt shows exactly why.</p>
+              outside the authorization. The Membrane blocks it; a red receipt shows exactly why.</p>
           </div>
         </li>
         <li class="step step-block">
@@ -151,8 +151,7 @@
           </div>
         </li>
       </ol>
-      <p class="demo-note">This is the narrative the local demo walks through — it is not a live control
-        console. Run the demo below to drive it yourself.</p>
+      <p class="demo-note">Run the demo locally to walk through each of these steps yourself.</p>
     </section>
 
     <!-- ============ RUN LOCALLY ============ -->
@@ -169,13 +168,13 @@
 git clone https://github.com/Z0rlord/the-membrane.git
 cd the-membrane
 
-<span class="c-dim"># launch the Attestable demo dashboard</span>
-cargo run -p membrane-cli -- attestable</code></pre>
+<span class="c-dim"># launch the Membrane landing demo dashboard</span>
+cargo run -p membrane-cli -- landing-demo</code></pre>
           <p class="run-open">Then open <a class="mono" href="http://127.0.0.1:8790/">http://127.0.0.1:8790/</a></p>
         </div>
       </div>
       <div class="cta-group">
-        <a class="btn btn-primary" href="https://github.com/Z0rlord/the-membrane#attestable-demo-dashboard" rel="noopener" target="_blank">Demo instructions</a>
+        <a class="btn btn-primary" href="https://github.com/Z0rlord/the-membrane#landing-demo-dashboard" rel="noopener" target="_blank">Demo instructions</a>
         <a class="btn btn-ghost" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">View on GitHub</a>
       </div>
     </section>
@@ -183,9 +182,9 @@ cargo run -p membrane-cli -- attestable</code></pre>
     <!-- ============ HONEST SCOPE ============ -->
     <section class="section section-scope reveal" id="scope">
       <p class="eyebrow">Honest scope</p>
-      <h2 class="section-title">What Attestable does — and what it doesn't.</h2>
+      <h2 class="section-title">What The Membrane does — and what it doesn't.</h2>
       <p class="lede">
-        Attestable enforces and proves the traffic routed through it. It does not make claims about an
+        The Membrane enforces and proves the traffic routed through it. It does not make claims about an
         agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory
         compliance on its own. Coverage is limited to gateway-routed model and tool traffic.
       </p>
@@ -195,14 +194,14 @@ cargo run -p membrane-cli -- attestable</code></pre>
   <!-- ============ FOOTER CTA ============ -->
   <footer class="footer">
     <div class="footer-inner">
-      <p class="footer-brand">Attestable</p>
+      <p class="footer-brand">The Membrane</p>
       <p class="footer-tag">The fail-closed control point for AI agents with production access.</p>
       <div class="cta-group">
         <a class="btn btn-primary" href="#run">Run it locally</a>
         <a class="btn btn-ghost" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">View on GitHub</a>
       </div>
       <p class="footer-meta">
-        The commercial product surface of the Membrane gate.
+        Open protocol and gate — fail-closed by design.
         Documentation licensed CC BY 4.0 · code AGPL-3.0.
       </p>
     </div>

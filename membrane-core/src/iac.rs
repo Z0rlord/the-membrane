@@ -115,7 +115,7 @@ impl IntentAuthorizationCredential {
         )
     }
 
-    /// Session IAC with an explicit tool allowlist (Attestable agent scopes).
+    /// Session IAC with an explicit tool allowlist (agent tool scopes).
     pub fn new_session_with_tools(
         scope_id: impl Into<String>,
         model_id: impl Into<String>,

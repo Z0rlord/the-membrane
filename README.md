@@ -1,8 +1,8 @@
 # The Membrane
 
-The protocol and research architecture behind **Attestable** — a fail-closed control point for AI agents with production access.
+A fail-closed control point for AI agents with production access — and the broader research architecture for a subject-controlled cognitive boundary.
 
-**Public landing:** [attestable.dojopop.live](https://attestable.dojopop.live) · source in [`site/`](site/)
+**Public landing:** [membrane.dojopop.live](https://membrane.dojopop.live) · source in [`site/`](site/)
 
 For model and tool traffic routed through the gateway, live signed authorizations bind the allowed model, tools, and action scope. Allowed actions extend a tamper-evident, hash-linked receipt chain; missing, expired, out-of-scope, or discontinuous authorization blocks the action and can sever the agent.
 
@@ -12,9 +12,9 @@ The broader Membrane research program remains a **cognitive boundary**: a nervou
 
 | File | Description |
 |------|-------------|
-| [docs/attestable.md](docs/attestable.md) | **Attestable** — enterprise product positioning (agent integrity gateway) |
-| [site/](site/) | **Attestable** public landing page ([attestable.dojopop.live](https://attestable.dojopop.live)) |
-| [docs/attestable-demo.md](docs/attestable-demo.md) | Local Attestable dashboard — one-command demo |
+| [docs/product.md](docs/product.md) | **The Membrane** — enterprise product positioning (agent integrity gateway) |
+| [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
+| [docs/landing-demo.md](docs/landing-demo.md) | Local product dashboard — one-command demo |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
@@ -33,7 +33,7 @@ Rebuild MD/PDF: `./scripts/build-paper.sh`
                            block / sever on failure
 ```
 
-**Attestable product wedge:** Make the gate the required path for in-scope agents. A routed model or tool call proceeds only with a live signed authorization for its model, tools, task, and lifetime; each action links to the prior receipt so continuity failures are visible and enforceable.
+**Product wedge:** Make the gate the required path for in-scope agents. A routed model or tool call proceeds only with a live signed authorization for its model, tools, task, and lifetime; each action links to the prior receipt so continuity failures are visible and enforceable.
 
 **Protocol and research foundation:** SHA-256 Merkle commitments, signed Chain Proof receipts, TEE attestation, and web-of-trust witnesses, with zk-STARK proofs on the roadmap. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollups provide independently verifiable audit time. The same fail-closed boundary model extends to local AI, cloud inference, BCI telemetry, and other exogenous channels without changing the sovereignty thesis.
 
@@ -74,18 +74,20 @@ membrane-cli/         `membrane` binary
 tools/                channel registry YAML, local relay config
 ```
 
-### Attestable landing + local demo
+### Landing + local demo
 
-Public marketing site (static, no operator console): **[attestable.dojopop.live](https://attestable.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+Public marketing site (static, no operator console): **[membrane.dojopop.live](https://membrane.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
 
 Local browser demo of the product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus — no relay, secrets, or paid APIs. **Not** deployed on the marketing origin.
 
 ```bash
-cargo run -p membrane-cli -- attestable
+cargo run -p membrane-cli -- landing-demo
 # open http://127.0.0.1:8790/
 ```
 
-See [docs/attestable-demo.md](docs/attestable-demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
+See [docs/landing-demo.md](docs/landing-demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
+
+> Note: `membrane demo` remains the separate fail-closed IAC smoke test (relay + registry). The product dashboard is `landing-demo`.
 
 ### Quick start
 

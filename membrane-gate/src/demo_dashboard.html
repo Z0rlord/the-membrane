@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Attestable Demo</title>
+  <title>Membrane Landing Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -177,7 +177,7 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="brand">Attestable</div>
+      <div class="brand">The Membrane</div>
       <p class="tagline">Fail-closed control point for AI agents with production access — live signed authorization, chained receipts, block and sever.</p>
       <div class="banner">Simulation mode — tools do not call Jira, Slack, or GitHub. Gateway-routed traffic only.</div>
     </header>
@@ -209,7 +209,7 @@
             <button class="danger" id="btn-sever">4. Sever session</button>
             <button class="secondary" id="btn-after-sever">5. Retry after sever</button>
             <button class="secondary" id="btn-reset">Reset demo</button>
-            <p class="hint">Steps match the Attestable narrative. Allowed tools: jira.comment, slack.post.</p>
+            <p class="hint">Steps match the product narrative. Allowed tools: jira.comment, slack.post.</p>
           </div>
         </section>
         <section>
@@ -227,7 +227,7 @@
     </div>
 
     <footer>
-      Attestable enforces and proves traffic routed through the Membrane gate. It does not claim hidden reasoning, deletion, off-gateway coverage, or guaranteed compliance.
+      The Membrane enforces and proves traffic routed through the gate. It does not claim hidden reasoning, deletion, off-gateway coverage, or guaranteed compliance.
     </footer>
   </div>
   <div class="toast" id="toast"></div>
@@ -343,7 +343,7 @@
       const blob = new Blob([JSON.stringify(body, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `attestable-evidence-${Date.now()}.json`;
+      a.download = `membrane-evidence-${Date.now()}.json`;
       a.click();
       toast("Evidence pack exported");
     };

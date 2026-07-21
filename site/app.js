@@ -1,5 +1,5 @@
 /**
- * Attestable landing — gate visual + scroll reveals.
+ * The Membrane landing — gate visual + scroll reveals.
  * Canvas draws a full-bleed fail-closed control plane: authorization chain nodes
  * that pulse allow / block states. No live demo controls.
  */

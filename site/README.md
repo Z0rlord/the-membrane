@@ -1,10 +1,10 @@
-# Attestable landing site
+# The Membrane landing site
 
-Static public marketing page for **Attestable** — the fail-closed control point for AI agents with production access.
+Static public marketing page for **The Membrane** — the fail-closed control point for AI agents with production access.
 
-Copy source of truth: [`docs/attestable.md`](../docs/attestable.md).
+Copy source of truth: [`docs/product.md`](../docs/product.md).
 
-This site is **marketing only**. It does not host the operator console, live demo controls, or the Rust demo dashboard (those stay local via `cargo run -p membrane-cli -- attestable`).
+This site is **marketing only**. It does not host the operator console, live demo controls, or the Rust demo dashboard (those stay local via `cargo run -p membrane-cli -- landing-demo`).
 
 ## Preview locally
 
@@ -31,9 +31,10 @@ site/
 
 | | |
 |---|---|
-| Custom domain | https://attestable.dojopop.live |
-| Pages default | https://attestable-cti.pages.dev |
-| CF Pages project | `attestable` |
+| Custom domain | https://membrane.dojopop.live |
+| Pages default | https://membrane-landing.pages.dev |
+| CF Pages project | `membrane-landing` |
+| Legacy hostname | `attestable.dojopop.live` should redirect here (or be removed) |
 
 ## Deploy (Cloudflare Pages)
 
@@ -44,11 +45,11 @@ site/
 doppler run --project dojopop --config prd_zorie -- bash -c '
   export CLOUDFLARE_API_TOKEN
   export CLOUDFLARE_ACCOUNT_ID=dfc6e38d5b254f0f8ffac8a0e554112a
-  wrangler pages deploy site --project-name attestable --branch main
+  wrangler pages deploy site --project-name membrane-landing --branch main
 '
 ```
 
-Custom domain `attestable.dojopop.live` is a proxied CNAME → `attestable-cti.pages.dev` on the `dojopop.live` zone.
+Custom domain `membrane.dojopop.live` is a proxied CNAME → `membrane-landing.pages.dev` on the `dojopop.live` zone.
 
 ### Option B — Git-connected Pages
 
@@ -58,12 +59,12 @@ Custom domain `attestable.dojopop.live` is a proxied CNAME → `attestable-cti.p
    - Framework preset: None
    - Build command: *(empty)*
    - Build output directory: `site`
-4. Add custom domain `attestable.dojopop.live`
+4. Add custom domain `membrane.dojopop.live`
 
 ### Option C — Tunnel / existing CF ingress
 
 If Pages is unavailable, serve `site/` from any static host behind the existing
-`dojopop.live` Cloudflare tunnel and point `attestable.dojopop.live` at that origin.
+`dojopop.live` Cloudflare tunnel and point `membrane.dojopop.live` at that origin.
 See `deploy/grasp/update-tunnel-ingress.sh` for the tunnel pattern used elsewhere.
 
 ## What is intentionally not here
@@ -72,4 +73,4 @@ See `deploy/grasp/update-tunnel-ingress.sh` for the tunnel pattern used elsewher
 |----------|-----|
 | Hosted interactive demo | Demo dashboard is local-only (`:8790`); keep operator controls off the marketing origin |
 | Operator console | Production control surface is not a marketing concern |
-| Nostr / BCI / ZK deep research pitch | Out of scope for Attestable product landing |
+| Nostr / BCI / ZK deep research pitch | Out of scope for product landing |

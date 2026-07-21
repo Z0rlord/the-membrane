@@ -12,7 +12,7 @@
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
   <rect width="1200" height="630" fill="url(#wash)"/>
-  <text x="80" y="280" fill="#f2f7f9" font-family="Space Grotesk, Avenir Next, sans-serif" font-size="96" font-weight="700" letter-spacing="-3">Attestable</text>
+  <text x="80" y="280" fill="#f2f7f9" font-family="Space Grotesk, Avenir Next, sans-serif" font-size="84" font-weight="700" letter-spacing="-3">The Membrane</text>
   <text x="80" y="360" fill="#c4d6de" font-family="Space Grotesk, Avenir Next, sans-serif" font-size="32" font-weight="500">The fail-closed control point for AI agents</text>
   <text x="80" y="410" fill="#8aa0ab" font-family="Space Grotesk, Avenir Next, sans-serif" font-size="28" font-weight="400">with production access.</text>
   <circle cx="980" cy="200" r="14" fill="#1a7a4c"/>

@@ -14,7 +14,7 @@ use membrane_core::{
     SignedRollupBundle,
 };
 use membrane_gate::{
-    demo_registry, run_attestable_demo, run_gate_server, ChannelRegistry, DemoRuntime,
+    demo_registry, run_gate_server, run_landing_demo, ChannelRegistry, DemoRuntime,
     DemoServerState, Gate, GateServerState, LlmProxy, RouterSessionRequest,
 };
 
@@ -98,8 +98,8 @@ enum Commands {
         #[arg(long, default_value = "tools/channel-registry.example.yaml")]
         registry: PathBuf,
     },
-    /// Attestable product demo + local dashboard (ephemeral keys, in-memory bus)
-    Attestable {
+    /// Product landing demo + local dashboard (ephemeral keys, in-memory bus)
+    LandingDemo {
         #[arg(long, default_value = "127.0.0.1:8790")]
         listen: String,
     },
@@ -357,7 +357,7 @@ async fn main() -> Result<()> {
             nsec,
             registry,
         } => run_demo(&relay, nsec, &registry).await,
-        Commands::Attestable { listen } => run_attestable(&listen).await,
+        Commands::LandingDemo { listen } => run_landing_demo_cmd(&listen).await,
         Commands::Chat {
             message,
             nsec,
@@ -761,20 +761,20 @@ async fn rollup_daily(
     Ok(())
 }
 
-async fn run_attestable(listen: &str) -> Result<()> {
+async fn run_landing_demo_cmd(listen: &str) -> Result<()> {
     // Ephemeral local keys — never requires NOSTR_NSEC or production secrets.
     let keys = nostr::Keys::generate();
     let publisher = BusPublisher::new(BusPublisherConfig {
-        relay_url: "memory://attestable-demo".into(),
+        relay_url: "memory://landing-demo".into(),
         keys: keys.clone(),
     });
     let registry = demo_registry();
     let gate = Arc::new(Gate::new(registry, publisher));
 
-    println!("Attestable demo (local, simulation-only)");
+    println!("Membrane landing demo (local, simulation-only)");
     println!("  listen:      http://{listen}/");
     println!("  issuer:      {}", keys.public_key().to_hex());
-    println!("  bus:         memory://attestable-demo (no relay required)");
+    println!("  bus:         memory://landing-demo (no relay required)");
     println!("  demo APIs:   /demo/api/* (disabled in production gate start)");
     println!("  scope:       gateway-routed traffic only; tools are simulated");
     println!();
@@ -785,7 +785,7 @@ async fn run_attestable(listen: &str) -> Result<()> {
         session_chain: Arc::new(tokio::sync::Mutex::new(SessionChainState::genesis())),
         runtime: Arc::new(tokio::sync::Mutex::new(DemoRuntime::new())),
     };
-    run_attestable_demo(state, listen).await
+    run_landing_demo(state, listen).await
 }
 
 async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) -> Result<()> {
