@@ -79,7 +79,9 @@ impl MembraneConfig {
 }
 
 pub fn config_path() -> Option<PathBuf> {
-    dirs_home().ok().map(|h| h.join(".config/membrane/config.yaml"))
+    dirs_home()
+        .ok()
+        .map(|h| h.join(".config/membrane/config.yaml"))
 }
 
 fn dirs_home() -> Result<PathBuf> {

@@ -4,7 +4,7 @@ Static public marketing page for **The Membrane** — the fail-closed control po
 
 Copy source of truth: [`docs/product.md`](../docs/product.md).
 
-This site is **marketing only**. It does not host the operator console, live demo controls, or the Rust demo dashboard (those stay local via `cargo run -p membrane-cli -- landing-demo`).
+This site is **marketing only**. It does not host the operator console, live demo controls, or the Rust demo dashboard (those stay local via `cargo run -p membrane-cli -- demo`).
 
 ## Preview locally
 

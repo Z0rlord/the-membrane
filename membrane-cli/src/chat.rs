@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use membrane_core::{
-    EventType, IntentAuthorizationCredential, MembranePayload,
-    fetch_membrane_events, fetch_session_chain_bootstrap,
-    ALERT_REASON_SUBJECT_SEVER, BusPublisher, BusPublisherConfig, SessionChainState,
-    alert_degraded_payload,
+    alert_degraded_payload, fetch_membrane_events, fetch_session_chain_bootstrap, BusPublisher,
+    BusPublisherConfig, EventType, IntentAuthorizationCredential, MembranePayload,
+    SessionChainState, ALERT_REASON_SUBJECT_SEVER,
 };
 use membrane_gate::ChatMessage;
 use nostr::Keys;
@@ -131,12 +130,7 @@ impl ChatClient {
             content: prompt.to_string(),
         });
 
-        let iac = ensure_session_iac(
-            &self.config,
-            &self.keys,
-            &self.session_log.scope_id,
-        )
-        .await?;
+        let iac = ensure_session_iac(&self.config, &self.keys, &self.session_log.scope_id).await?;
 
         let body = serde_json::json!({
             "model": self.config.model,
@@ -156,7 +150,13 @@ impl ChatClient {
             "{}/v1/chat/completions",
             self.config.gate_url.trim_end_matches('/')
         );
-        let resp = self.http.post(&url).headers(headers).json(&body).send().await?;
+        let resp = self
+            .http
+            .post(&url)
+            .headers(headers)
+            .json(&body)
+            .send()
+            .await?;
         let status = resp.status();
         let resp_headers = resp.headers().clone();
         let text = resp.text().await?;
@@ -227,10 +227,7 @@ pub async fn ensure_session_iac(
     if path.exists() {
         let iac: IntentAuthorizationCredential =
             serde_json::from_str(&std::fs::read_to_string(&path)?)?;
-        if iac.scope_id == scope_id
-            && iac.is_valid_at(now)
-            && iac.model_allowed(&config.model)
-        {
+        if iac.scope_id == scope_id && iac.is_valid_at(now) && iac.model_allowed(&config.model) {
             if let Err(err) = iac.verify_signature(&keys.public_key().to_hex()) {
                 eprintln!("warning: active IAC invalid ({err}), re-issuing");
             } else {
@@ -319,7 +316,10 @@ pub async fn session_status(config: &MembraneConfig, keys: &Keys) -> Result<()> 
     println!("  OTS anchors (7d): {anchor_count}");
 
     if let Ok(health) = fetch_gate_health(&config.gate_url).await {
-        println!("  gate health:   {}", health.get("status").and_then(|v| v.as_str()).unwrap_or("?"));
+        println!(
+            "  gate health:   {}",
+            health.get("status").and_then(|v| v.as_str()).unwrap_or("?")
+        );
         if let Some(age) = health.get("last_cp_age_secs") {
             println!("  gate CP age:   {age}");
         }

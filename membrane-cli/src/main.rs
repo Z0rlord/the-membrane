@@ -14,7 +14,7 @@ use membrane_core::{
     SignedRollupBundle,
 };
 use membrane_gate::{
-    demo_registry, run_gate_server, run_landing_demo, ChannelRegistry, DemoRuntime,
+    demo_registry, run_demo_dashboard, run_gate_server, ChannelRegistry, DemoRuntime,
     DemoServerState, Gate, GateServerState, LlmProxy, RouterSessionRequest,
 };
 
@@ -85,8 +85,13 @@ enum Commands {
     },
     /// Write default config to ~/.config/membrane/config.yaml
     Init,
-    /// Fail-closed demo: route without IAC, then with IAC
+    /// Launch the local interactive dashboard (no secrets or relay required)
     Demo {
+        #[arg(long, default_value = "127.0.0.1:8790")]
+        listen: String,
+    },
+    /// Technical IAC/relay smoke test for operators
+    IacSmoke {
         #[arg(
             long,
             env = "MEMBRANE_RELAY_URL",
@@ -98,7 +103,8 @@ enum Commands {
         #[arg(long, default_value = "tools/channel-registry.example.yaml")]
         registry: PathBuf,
     },
-    /// Product landing demo + local dashboard (ephemeral keys, in-memory bus)
+    /// Deprecated alias for `membrane demo`
+    #[command(hide = true)]
     LandingDemo {
         #[arg(long, default_value = "127.0.0.1:8790")]
         listen: String,
@@ -352,12 +358,18 @@ async fn main() -> Result<()> {
             IacCommands::Sign { nsec, input, out } => iac_sign(nsec, &input, &out),
             IacCommands::Verify { input, pubkey } => iac_verify(&input, &pubkey),
         },
-        Commands::Demo {
+        Commands::Demo { listen } => run_local_demo(&listen).await,
+        Commands::IacSmoke {
             relay,
             nsec,
             registry,
-        } => run_demo(&relay, nsec, &registry).await,
-        Commands::LandingDemo { listen } => run_landing_demo_cmd(&listen).await,
+        } => run_iac_smoke(&relay, nsec, &registry).await,
+        Commands::LandingDemo { listen } => {
+            eprintln!(
+                "warning: `membrane landing-demo` is deprecated; use `membrane demo` instead"
+            );
+            run_local_demo(&listen).await
+        }
         Commands::Chat {
             message,
             nsec,
@@ -761,20 +773,20 @@ async fn rollup_daily(
     Ok(())
 }
 
-async fn run_landing_demo_cmd(listen: &str) -> Result<()> {
+async fn run_local_demo(listen: &str) -> Result<()> {
     // Ephemeral local keys — never requires NOSTR_NSEC or production secrets.
     let keys = nostr::Keys::generate();
     let publisher = BusPublisher::new(BusPublisherConfig {
-        relay_url: "memory://landing-demo".into(),
+        relay_url: "memory://demo".into(),
         keys: keys.clone(),
     });
     let registry = demo_registry();
     let gate = Arc::new(Gate::new(registry, publisher));
 
-    println!("Membrane landing demo (local, simulation-only)");
+    println!("Membrane demo (local, simulation-only)");
     println!("  listen:      http://{listen}/");
     println!("  issuer:      {}", keys.public_key().to_hex());
-    println!("  bus:         memory://landing-demo (no relay required)");
+    println!("  bus:         memory://demo (no relay required)");
     println!("  demo APIs:   /demo/api/* (disabled in production gate start)");
     println!("  scope:       gateway-routed traffic only; tools are simulated");
     println!();
@@ -785,10 +797,10 @@ async fn run_landing_demo_cmd(listen: &str) -> Result<()> {
         session_chain: Arc::new(tokio::sync::Mutex::new(SessionChainState::genesis())),
         runtime: Arc::new(tokio::sync::Mutex::new(DemoRuntime::new())),
     };
-    run_landing_demo(state, listen).await
+    run_demo_dashboard(state, listen).await
 }
 
-async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) -> Result<()> {
+async fn run_iac_smoke(relay: &str, nsec: Option<String>, registry_path: &PathBuf) -> Result<()> {
     let keys = load_keys(nsec)?;
     let registry = ChannelRegistry::load(registry_path)?;
     let publisher = BusPublisher::new(BusPublisherConfig {
@@ -877,4 +889,34 @@ fn now_secs() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_secs() as i64
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn demo_is_the_local_dashboard() {
+        let cli = Cli::try_parse_from(["membrane", "demo"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Demo { listen } if listen == "127.0.0.1:8790"
+        ));
+    }
+
+    #[test]
+    fn iac_smoke_keeps_the_operator_test() {
+        let cli = Cli::try_parse_from(["membrane", "iac-smoke"]).unwrap();
+        assert!(matches!(cli.command, Commands::IacSmoke { .. }));
+    }
+
+    #[test]
+    fn landing_demo_remains_a_hidden_alias() {
+        let cli = Cli::try_parse_from(["membrane", "landing-demo"]).unwrap();
+        assert!(matches!(cli.command, Commands::LandingDemo { .. }));
+
+        let help = Cli::command().render_long_help().to_string();
+        assert!(!help.contains("landing-demo"));
+    }
 }

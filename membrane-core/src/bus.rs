@@ -1,5 +1,5 @@
 use crate::event::MembraneEvent;
-use crate::merkle::{Domain, MerkleTree, prefixed_hash};
+use crate::merkle::{prefixed_hash, Domain, MerkleTree};
 
 /// Recompute `bus_root` from canonical MembraneEvent digests (§5.1).
 pub fn bus_root_from_events(events: &[MembraneEvent]) -> anyhow::Result<Option<String>> {

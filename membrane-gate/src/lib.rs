@@ -263,7 +263,7 @@ pub mod server;
 pub mod watchdog;
 
 pub use demo::{
-    demo_registry, run_landing_demo, verify_evidence_pack, DemoRuntime, DemoServerState,
+    demo_registry, run_demo_dashboard, verify_evidence_pack, DemoRuntime, DemoServerState,
     EvidencePack, DEMO_ALLOWED_TOOLS, DEMO_BLOCKED_TOOL, DEMO_MODEL, DEMO_SWAP_MODEL,
     DEMO_TTL_SECS,
 };

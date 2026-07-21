@@ -1,6 +1,6 @@
 [package]
 name = "membrane-cli"
-description = "Membrane Phase 0 CLI — bus publish/subscribe and IAC gate demo"
+description = "Membrane Phase 0 CLI — local dashboard, attestation bus, and IAC gate tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

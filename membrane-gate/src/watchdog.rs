@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use membrane_core::{ALERT_REASON_DELTA_T_EXCEEDED, SessionChainState};
+use membrane_core::{SessionChainState, ALERT_REASON_DELTA_T_EXCEEDED};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
@@ -10,10 +10,7 @@ use crate::{Gate, GateError};
 
 const WATCHDOG_INTERVAL_SECS: u64 = 30;
 
-pub fn spawn_delta_t_watchdog(
-    gate: Arc<Gate>,
-    session_chain: Arc<Mutex<SessionChainState>>,
-) {
+pub fn spawn_delta_t_watchdog(gate: Arc<Gate>, session_chain: Arc<Mutex<SessionChainState>>) {
     tokio::spawn(async move {
         let interval = std::time::Duration::from_secs(WATCHDOG_INTERVAL_SECS);
         loop {
@@ -25,10 +22,7 @@ pub fn spawn_delta_t_watchdog(
     });
 }
 
-async fn tick(
-    gate: &Gate,
-    session_chain: &Arc<Mutex<SessionChainState>>,
-) -> Result<(), GateError> {
+async fn tick(gate: &Gate, session_chain: &Arc<Mutex<SessionChainState>>) -> Result<(), GateError> {
     let now = now_secs();
     let mut chain = session_chain.lock().await;
     let delta_t = gate.registry().delta_t_secs;
@@ -49,16 +43,15 @@ async fn tick(
     let prev_event_id = chain.last_event_id.clone();
     let last_cp_hash = chain.last_cp_hash.clone();
 
-    gate
-        .publish_alert_degraded(
-            &scope_id,
-            ALERT_REASON_DELTA_T_EXCEEDED,
-            now,
-            &last_cp_hash,
-            Some(age),
-            prev_event_id.as_deref(),
-        )
-        .await?;
+    gate.publish_alert_degraded(
+        &scope_id,
+        ALERT_REASON_DELTA_T_EXCEEDED,
+        now,
+        &last_cp_hash,
+        Some(age),
+        prev_event_id.as_deref(),
+    )
+    .await?;
 
     chain.mark_degraded(&scope_id, ALERT_REASON_DELTA_T_EXCEEDED, now);
     info!(

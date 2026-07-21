@@ -6,10 +6,10 @@ pub const GENESIS_CP_HASH: &str =
 use crate::canonical::canonical_json_bytes;
 use crate::event::{EventType, MembraneEvent};
 use crate::iac::RollupBundle;
-use crate::merkle::{Domain, MerkleTree, prefixed_hash};
-use anyhow::{Context, Result, bail};
-use nostr::Keys;
+use crate::merkle::{prefixed_hash, Domain, MerkleTree};
+use anyhow::{bail, Context, Result};
 use nostr::secp256k1::Message;
+use nostr::Keys;
 use sha2::{Digest, Sha256};
 
 /// Chain-proof event types included in `cp_chain_root`.
@@ -80,10 +80,10 @@ pub fn build_rollup_bundle(
         .filter(|e| is_cp_event(e.event_type))
         .collect();
 
-    let cp_chain_root = cp_chain_root_from_events(&period_events)?
-        .unwrap_or_else(|| "0".repeat(64));
-    let last_bus_root = crate::bus::bus_root_from_events(&period_events)?
-        .unwrap_or_else(|| "0".repeat(64));
+    let cp_chain_root =
+        cp_chain_root_from_events(&period_events)?.unwrap_or_else(|| "0".repeat(64));
+    let last_bus_root =
+        crate::bus::bus_root_from_events(&period_events)?.unwrap_or_else(|| "0".repeat(64));
     let last_cp_hash = cp_events
         .last()
         .map(|e| cp_hash_hex(e))
@@ -121,8 +121,7 @@ impl SignedRollupBundle {
     }
 
     pub fn ots_digest(&self) -> Result<[u8; 32]> {
-        let bundle_bytes =
-            canonical_json_bytes(&self.bundle).context("canonical rollup bytes")?;
+        let bundle_bytes = canonical_json_bytes(&self.bundle).context("canonical rollup bytes")?;
         let sig_bytes = hex::decode(&self.signature).context("decode rollup signature")?;
         let mut hasher = Sha256::new();
         hasher.update(&bundle_bytes);
@@ -139,9 +138,11 @@ pub fn day_bounds_utc(day: &str) -> Result<(i64, i64)> {
     use chrono::{NaiveDate, TimeZone, Utc};
     let date = NaiveDate::parse_from_str(day, "%Y-%m-%d")
         .with_context(|| format!("invalid day {day:?}, expected YYYY-MM-DD"))?;
-    let start = Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).expect("midnight"))
+    let start = Utc
+        .from_utc_datetime(&date.and_hms_opt(0, 0, 0).expect("midnight"))
         .timestamp();
-    let end = Utc.from_utc_datetime(&date.and_hms_opt(23, 59, 59).expect("end of day"))
+    let end = Utc
+        .from_utc_datetime(&date.and_hms_opt(23, 59, 59).expect("end of day"))
         .timestamp();
     Ok((start, end))
 }

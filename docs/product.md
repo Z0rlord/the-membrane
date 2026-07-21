@@ -67,7 +67,7 @@ Heads of Security and Platform Engineering at growth-stage and enterprise softwa
 5. **Reconstruct.** Security opens the timeline, clicks any action, and sees the model, context scope, policy, and issuer behind it—no log spelunking.
 6. **Export evidence.** One click produces a signed evidence pack; verify the hash chain offline in seconds.
 
-Local walkthrough: [landing-demo.md](landing-demo.md) (`cargo run -p membrane-cli -- landing-demo`).
+Local walkthrough: [demo.md](demo.md) (`cargo run -p membrane-cli -- demo`).
 
 ---
 

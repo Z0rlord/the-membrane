@@ -79,9 +79,10 @@ impl OtsStamper for HttpOtsStamper {
                 .await
             {
                 Ok(resp) if resp.status().is_success() => {
-                    let bytes = resp.bytes().await.map_err(|e| {
-                        OtsError::StampFailed(format!("read body from {url}: {e}"))
-                    })?;
+                    let bytes = resp
+                        .bytes()
+                        .await
+                        .map_err(|e| OtsError::StampFailed(format!("read body from {url}: {e}")))?;
                     if bytes.is_empty() {
                         last_err = format!("{url}: empty proof");
                         continue;

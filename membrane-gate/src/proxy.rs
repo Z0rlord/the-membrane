@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
@@ -76,10 +76,7 @@ impl LlmProxy {
     }
 
     async fn provider_chat(&self, base: &str, req: &ChatRequest) -> Result<ChatResponse> {
-        let endpoint = format!(
-            "{}/v1/chat/completions",
-            base.trim_end_matches('/')
-        );
+        let endpoint = format!("{}/v1/chat/completions", base.trim_end_matches('/'));
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(120))
             .build()?;

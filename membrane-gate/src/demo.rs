@@ -1,4 +1,4 @@
-//! Membrane landing demo: signed authorizations, simulated tools, evidence packs.
+//! Membrane local demo: signed authorizations, simulated tools, evidence packs.
 //!
 //! All `/demo/*` routes are demo-only. Production gate starts omit `DemoServerState`.
 
@@ -169,10 +169,10 @@ pub fn demo_router(state: DemoServerState) -> Router {
         .with_state(state)
 }
 
-pub async fn run_landing_demo(state: DemoServerState, listen: &str) -> anyhow::Result<()> {
+pub async fn run_demo_dashboard(state: DemoServerState, listen: &str) -> anyhow::Result<()> {
     let app = demo_router(state);
     let listener = tokio::net::TcpListener::bind(listen).await?;
-    info!(listen = %listen, "landing demo listening (demo-only endpoints enabled)");
+    info!(listen = %listen, "local demo listening (demo-only endpoints enabled)");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -188,7 +188,7 @@ async fn demo_health(State(state): State<DemoServerState>) -> impl IntoResponse 
     let delta_t_secs = state.gate.registry().delta_t_secs;
     Json(json!({
         "status": "ok",
-        "gate": "landing-demo",
+        "gate": "demo",
         "demo": true,
         "simulation": true,
         "delta_t_secs": delta_t_secs,
@@ -364,7 +364,7 @@ async fn issue_authorization(state: &DemoServerState, ttl_secs: i64) -> Result<V
     let now = now_secs();
     let chain = state.session_chain.lock().await;
     // Fresh demo scope after sever: clear degraded for new scope issuance.
-    let scope_id = format!("landing-demo-{now}");
+    let scope_id = format!("demo-{now}");
     let parent = chain.last_cp_hash.clone();
     drop(chain);
 
@@ -668,7 +668,7 @@ async fn sever_session(state: &DemoServerState) -> Result<Value, GateError> {
             .as_ref()
             .map(|i| i.scope_id.clone())
             .or_else(|| None)
-            .unwrap_or_else(|| "landing-demo".into())
+            .unwrap_or_else(|| "demo".into())
     };
 
     let (cp_hash, prev, age) = {
@@ -878,7 +878,7 @@ fn demo_err(err: GateError) -> Response {
         Json(json!({
             "ok": false,
             "error": err.to_string(),
-            "type": "landing_demo_error"
+            "type": "demo_error"
         })),
     )
         .into_response()
@@ -900,7 +900,7 @@ mod tests {
     fn test_state() -> DemoServerState {
         let keys = Keys::generate();
         let publisher = BusPublisher::new(BusPublisherConfig {
-            relay_url: "memory://landing-demo".into(),
+            relay_url: "memory://demo".into(),
             keys,
         });
         let gate = Arc::new(Gate::new(demo_registry(), publisher));

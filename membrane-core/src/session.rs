@@ -124,7 +124,11 @@ impl SessionChainState {
         now.saturating_sub(last) > delta_t_secs as i64
     }
 
-    pub fn validate_iac_anchor(&self, iac_parent_cp_hash: &str, new_scope: bool) -> Result<(), String> {
+    pub fn validate_iac_anchor(
+        &self,
+        iac_parent_cp_hash: &str,
+        new_scope: bool,
+    ) -> Result<(), String> {
         if !new_scope {
             return Ok(());
         }
@@ -157,7 +161,10 @@ pub fn alert_degraded_fields(payload: &MembranePayload) -> (Option<String>, Opti
     let MembranePayload::Generic(value) = payload else {
         return (None, None);
     };
-    let reason = value.get("reason").and_then(|v| v.as_str()).map(str::to_string);
+    let reason = value
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
     let scope_id = value
         .get("scope_id")
         .and_then(|v| v.as_str())
@@ -213,10 +220,7 @@ mod tests {
     #[test]
     fn chains_parent_cp_hash_after_first_turn() {
         let mut state = SessionChainState::genesis();
-        assert_eq!(
-            state.next_parent_cp_hash(GENESIS_CP_HASH),
-            GENESIS_CP_HASH
-        );
+        assert_eq!(state.next_parent_cp_hash(GENESIS_CP_HASH), GENESIS_CP_HASH);
 
         state.record_cp("aa".repeat(32), Some("event1".into()), 100);
         assert_eq!(state.next_parent_cp_hash(GENESIS_CP_HASH), "aa".repeat(32));
@@ -235,7 +239,10 @@ mod tests {
     #[test]
     fn bootstrap_from_bus_events() {
         let subject = "aa".repeat(32);
-        let events = vec![router_event(100, 1, &subject), router_event(101, 2, &subject)];
+        let events = vec![
+            router_event(100, 1, &subject),
+            router_event(101, 2, &subject),
+        ];
         let state = SessionChainState::from_bus_events(&events, &subject);
         assert_ne!(state.last_cp_hash, GENESIS_CP_HASH);
         assert_eq!(state.session_nonce, 2);

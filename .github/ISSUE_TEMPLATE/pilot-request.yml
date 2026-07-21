@@ -1,0 +1,52 @@
+name: Self-hosted pilot request
+description: Start a public, non-sensitive conversation about a self-hosted Membrane pilot.
+title: "Self-hosted pilot request"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in a self-hosted pilot of The Membrane.
+
+        This issue is public. Do not include secrets, credentials, customer data, proprietary prompts, internal hostnames, or other sensitive information. High-level answers are enough.
+  - type: input
+    id: team
+    attributes:
+      label: Company or team
+      description: Optional. Use a general team description if you prefer not to identify your organization publicly.
+      placeholder: "Example: platform security team at a mid-size software company"
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Agent workflow
+      description: At a high level, what agent workflow and production actions should the pilot govern?
+      placeholder: "Example: coding agents that open pull requests and request infrastructure changes"
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: Models and tools
+      description: Which model APIs, agent frameworks, and production tools are involved? Do not include credentials or private endpoints.
+      placeholder: "Example: model API, GitHub, ticketing, CI, cloud infrastructure"
+    validations:
+      required: true
+  - type: input
+    id: timeline
+    attributes:
+      label: Desired timeline
+      placeholder: "Example: evaluation this quarter"
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Self-hosting constraints
+      description: Share non-sensitive deployment, network, compliance, or evidence requirements.
+      placeholder: "Example: private network, container deployment, offline evidence export"
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public issue confirmation
+      options:
+        - label: I have not included secrets, customer data, proprietary prompts, or private infrastructure details.
+          required: true

@@ -14,7 +14,7 @@ The broader Membrane research program remains a **cognitive boundary**: a nervou
 |------|-------------|
 | [docs/product.md](docs/product.md) | **The Membrane** — enterprise product positioning (agent integrity gateway) |
 | [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
-| [docs/landing-demo.md](docs/landing-demo.md) | Local product dashboard — one-command demo |
+| [docs/demo.md](docs/demo.md) | Local product dashboard — one-command demo |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
@@ -74,7 +74,7 @@ membrane-cli/         `membrane` binary
 tools/                channel registry YAML, local relay config
 ```
 
-### Landing demo dashboard
+### Local demo dashboard
 
 **Primary path for anyone cloning the repo** — no secrets, no relay, no paid APIs.
 
@@ -83,13 +83,13 @@ Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojop
 Local browser demo of the product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus. **Not** deployed on the marketing origin.
 
 ```bash
-cargo run -p membrane-cli -- landing-demo
+cargo run -p membrane-cli -- demo
 # open http://127.0.0.1:8790/
 ```
 
-See [docs/landing-demo.md](docs/landing-demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
+See [docs/demo.md](docs/demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
 
-> Note: `membrane demo` is a separate fail-closed IAC smoke test (needs a relay + your signing key). The product dashboard strangers should run is `landing-demo`.
+`membrane demo` is the single public demo command. The old `membrane landing-demo` spelling remains a hidden, deprecated alias. The relay-backed operator test moved to `membrane iac-smoke`.
 
 ### Full stack (operators)
 
@@ -127,7 +127,7 @@ export MEMBRANE_RELAY_URL='ws://127.0.0.1:7777'
 ```bash
 cargo run -- bus publish-test          # kind 31990 test event
 cargo run -- bus subscribe             # fetch events + recompute bus_root
-cargo run -- demo                      # fail-closed without IAC → OK with IAC (issues IAC from your key)
+cargo run -- iac-smoke                 # technical fail-closed IAC/relay smoke test
 cargo run -- gate start --iac <your-signed-iac.json>   # HTTP gate on :8787 → model API
 
 # Session-scoped IAC (binds to current cp_chain head, short TTL)
