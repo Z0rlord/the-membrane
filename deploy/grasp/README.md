@@ -4,7 +4,7 @@ Self-hosted [GRASP](https://ngit.dev/grasp/) instance for **the-membrane** git b
 
 | | |
 |---|---|
-| Tailnet | `ws://dojopop-relay-2:7334` · `http://dojopop-relay-2:7334` (or `100.125.184.46:7334`) |
+| Tailnet | `ws://relay-2:7334` · `http://relay-2:7334` |
 | Public | `wss://membrane-grasp.dojopop.live` (after tunnel + DNS) |
 | Remote path | `/opt/membrane/grasp` |
 | Deploy | `./deploy/grasp/deploy.sh` |
@@ -110,7 +110,7 @@ ssh relay-2 'eval "$(grep ^NGIT_RELAY_OWNER_NSEC= /opt/membrane/grasp/.env)"; ..
 |--------|-----|
 | Nostr | `nostr://npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/membrane-grasp.dojopop.live/the-membrane` |
 | HTTPS (public) | `https://membrane-grasp.dojopop.live/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/the-membrane.git` |
-| HTTP (tailnet) | `http://dojopop-relay-2:7334/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/the-membrane.git` |
+| HTTP (tailnet) | `http://relay-2:7334/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/the-membrane.git` |
 | gitworkshop | [gitworkshop.dev/.../the-membrane](https://gitworkshop.dev/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/membrane-grasp.dojopop.live/the-membrane) |
 
 ```bash
@@ -152,10 +152,10 @@ done
 https://gitworkshop.dev/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/membrane-grasp.dojopop.live/the-membrane
 
 ```bash
-# relay-2 is SSH-only (~/.ssh/config); use Tailscale hostname or IP for HTTP:
-curl -s -H 'Accept: application/nostr+json' http://dojopop-relay-2:7334/ | python3 -m json.tool
-# or: curl -s -H 'Accept: application/nostr+json' http://100.125.184.46:7334/ | python3 -m json.tool
-git clone http://dojopop-relay-2:7334/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/the-membrane.git /tmp/membrane-test
+# Prefer public HTTPS; tailnet HTTP uses the relay-2 host alias when reachable:
+curl -s -H 'Accept: application/nostr+json' https://membrane-grasp.dojopop.live/ | python3 -m json.tool
+# or: curl -s -H 'Accept: application/nostr+json' http://relay-2:7334/ | python3 -m json.tool
+git clone http://relay-2:7334/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0sn7af3g895sg80fqa9hza9/the-membrane.git /tmp/membrane-test
 ```
 
 ## Troubleshooting
@@ -163,5 +163,5 @@ git clone http://dojopop-relay-2:7334/npub1ddyhkk6w993rcctxc0c3fnacx3xqrffk53d0s
 - **State / push mismatch** (`refs/heads/main would be at fe2a32f7 but state declares ce297ee6`): delete `refs/remotes/origin/*` then `ngit repo edit --clean` and push again.
 - **Authentication required**: run `ngit -n "$NGIT_NSEC" account login --defaults` before `git push`.
 - **Stale co-maintainer announcement**: an early init under the membrane `NOSTR_NSEC` operator (`npub1k0v9gn...`) may still pool into grasp/relay lists. Only use `NGIT_NSEC` (`npub1ddyhkk...`) for `ngit` commands.
-- **`relay-2:7334` times out from Mac**: `relay-2` is an SSH alias (`~/.ssh/config`), not DNS. Use `dojopop-relay-2` (Tailscale MagicDNS), `100.125.184.46:7334`, or public `https://membrane-grasp.dojopop.live`. For `git push`, set relay to tailnet WS: `ngit repo edit --relay ws://100.125.184.46:7334 --clean`.
-- **Mac DNS**: if `membrane-grasp.dojopop.live` does not resolve, add Cloudflare A record to `/etc/hosts` or push via tailnet IP above.
+- **`relay-2:7334` times out from Mac**: `relay-2` is an SSH alias (`~/.ssh/config`), not public DNS. Prefer public `https://membrane-grasp.dojopop.live`, or ensure the deployed host is reachable on the private network before using `http://relay-2:7334` / `ws://relay-2:7334`.
+- **Mac DNS**: if `membrane-grasp.dojopop.live` does not resolve, fix local DNS / hosts for the public hostname, or push over the private network to `relay-2`.
