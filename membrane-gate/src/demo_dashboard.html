@@ -3,10 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Membrane Landing Demo</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <title>The Membrane — Public Sandbox</title>
   <style>
     :root {
       --bg: #e8eef2;
@@ -29,7 +26,7 @@
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
       background:
         radial-gradient(1200px 600px at 10% -10%, #c5d8e4 0%, transparent 55%),
@@ -95,7 +92,7 @@
     }
     .stat .k { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
     .stat .v { margin-top: 0.2rem; font-weight: 600; font-size: 0.95rem; word-break: break-all; }
-    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.78rem; font-weight: 500; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; font-weight: 500; }
     .pill {
       display: inline-block;
       padding: 0.15rem 0.5rem;
@@ -142,7 +139,7 @@
     .kind.blocked { color: var(--block); }
     .kind.severed, .kind.issued, .kind.reset { color: var(--navy); }
     .detail {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 0.75rem;
       white-space: pre-wrap;
       word-break: break-word;
@@ -178,8 +175,8 @@
   <div class="wrap">
     <header>
       <div class="brand">The Membrane</div>
-      <p class="tagline">Fail-closed control point for AI agents with production access — live signed authorization, chained receipts, block and sever.</p>
-      <div class="banner">Simulation mode — tools do not call Jira, Slack, or GitHub. Gateway-routed traffic only.</div>
+      <p class="tagline">A session-isolated walkthrough of live signed authorization, chained receipts, block, and sever.</p>
+      <div class="banner">Public sandbox — all tools are simulated. Do not enter secrets, customer data, or other sensitive information.</div>
     </header>
 
     <div class="layout">
@@ -209,7 +206,7 @@
             <button class="danger" id="btn-sever">4. Sever session</button>
             <button class="secondary" id="btn-after-sever">5. Retry after sever</button>
             <button class="secondary" id="btn-reset">Reset demo</button>
-            <p class="hint">Steps match the product narrative. Allowed tools: jira.comment, slack.post.</p>
+            <p class="hint">Steps match the product narrative. State is isolated to this browser session and expires automatically.</p>
           </div>
         </section>
         <section>
@@ -227,7 +224,7 @@
     </div>
 
     <footer>
-      The Membrane enforces and proves traffic routed through the gate. It does not claim hidden reasoning, deletion, off-gateway coverage, or guaranteed compliance.
+      Simulation only. No external Jira, Slack, GitHub, model, relay, or production service is called. The Membrane covers gateway-routed traffic only.
     </footer>
   </div>
   <div class="toast" id="toast"></div>
@@ -253,6 +250,15 @@
       return new Date(ts * 1000).toLocaleTimeString();
     }
 
+    function esc(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
     async function api(path, opts) {
       const res = await fetch(path, {
         headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
@@ -264,7 +270,7 @@
 
     function statusPill(status) {
       const cls = status === "armed" ? "armed" : status === "severed" ? "severed" : "idle";
-      return `<span class="pill ${cls}">${status}</span>`;
+      return `<span class="pill ${cls}">${esc(status)}</span>`;
     }
 
     async function refresh() {
@@ -276,10 +282,10 @@
       const a = ov.agent || {};
       $("overview").innerHTML = [
         ["Gateway", statusPill(g.status || "idle")],
-        ["Agent", a.id || "—"],
-        ["Model", a.model || "—"],
+        ["Agent", esc(a.id || "—")],
+        ["Model", esc(a.model || "—")],
         ["Auth TTL", a.authorization_ttl_secs != null ? `${a.authorization_ttl_secs}s` : "—"],
-        ["Allowed tools", (a.tools || []).join(", ") || "—"],
+        ["Allowed tools", esc((a.tools || []).join(", ") || "—")],
         ["Chain head", `<span class="mono">${shortHash(g.last_cp_hash)}</span>`],
         ["Chain fresh", g.chain_fresh ? "yes" : "stale"],
         ["Issuer", `<span class="mono">${shortHash(g.issuer_pubkey)}</span>`],
@@ -291,11 +297,11 @@
       } else {
         $("timeline").innerHTML = events.map((e) => {
           const sel = e.id === selectedId ? "selected" : "";
-          const reason = e.reason ? ` — ${e.reason}` : "";
+          const reason = e.reason ? ` — ${esc(e.reason)}` : "";
           return `<div class="event ${sel}" data-id="${e.id}">
-            <div class="row"><span class="kind ${e.kind}">${e.kind}</span><span class="hint">${fmtTime(e.timestamp)}</span></div>
-            <div class="mono">${e.id}${e.tool ? " · " + e.tool : ""}${e.model ? " · " + e.model : ""}${reason}</div>
-            ${e.cp_hash ? `<div class="mono">cp ${shortHash(e.cp_hash)}</div>` : ""}
+            <div class="row"><span class="kind ${esc(e.kind)}">${esc(e.kind)}</span><span class="hint">${esc(fmtTime(e.timestamp))}</span></div>
+            <div class="mono">${esc(e.id)}${e.tool ? " · " + esc(e.tool) : ""}${e.model ? " · " + esc(e.model) : ""}${reason}</div>
+            ${e.cp_hash ? `<div class="mono">cp ${esc(shortHash(e.cp_hash))}</div>` : ""}
           </div>`;
         }).join("");
         $("timeline").querySelectorAll(".event").forEach((el) => {

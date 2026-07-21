@@ -1,0 +1,73 @@
+name: membrane-demo
+
+services:
+  demo:
+    build:
+      context: ../..
+      dockerfile: deploy/demo/Dockerfile
+    image: membrane-demo:local
+    restart: unless-stopped
+    environment:
+      MEMBRANE_DEMO_PUBLIC: "1"
+      RUST_LOG: "warn"
+    command: ["demo", "--listen", "0.0.0.0:8790"]
+    expose:
+      - "8790"
+    networks:
+      - sandbox
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 384m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8790/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ingress:
+    image: nginxinc/nginx-unprivileged:alpine
+    restart: unless-stopped
+    depends_on:
+      demo:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8790:8080"
+    networks:
+      - ingress
+      - sandbox
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=8m
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=8m,uid=101,gid=101,mode=0750
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  sandbox:
+    internal: true
+  ingress:

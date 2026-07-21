@@ -80,7 +80,10 @@ tools/                channel registry YAML, local relay config
 
 Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
 
-Local browser demo of the product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus. **Not** deployed on the marketing origin.
+Open the isolated, simulation-only public sandbox at
+**[membrane-demo.dojopop.live](https://membrane-demo.dojopop.live)**, or run
+the same browser demo locally. Both paths use ephemeral keys and an in-memory
+bus; no production gate, relay, credentials, or tool integrations are used.
 
 ```bash
 cargo run -p membrane-cli -- demo

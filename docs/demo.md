@@ -1,10 +1,23 @@
-# Membrane local demo
+# Membrane demo dashboard
 
 Browser dashboard for The Membrane fail-closed narrative, backed by real Membrane gate IAC checks and CP receipt chaining.
 
-This is the **primary public run path** — no secrets, no relay setup. For the operator full stack (relay + gate + your signed IAC), see [README § Full stack (operators)](../README.md#full-stack-operators). Repo overview: [README § Local demo dashboard](../README.md#local-demo-dashboard).
+This is the **primary public demo path** — no secrets, relay setup, or external
+tool access. For the operator full stack (relay + gate + your signed IAC), see
+[README § Full stack (operators)](../README.md#full-stack-operators). Repo
+overview: [README § Local demo dashboard](../README.md#local-demo-dashboard).
 
-## One command
+## Public sandbox
+
+Open **https://membrane-demo.dojopop.live**.
+
+The hosted dashboard runs the real gate authorization and receipt-chain logic,
+but all Jira, Slack, and GitHub actions are local simulations. It has no
+production credentials or production network access. State is isolated by an
+opaque browser session, expires after 30 minutes, and is also cleared on
+restart. Do not enter secrets, customer data, or other sensitive information.
+
+## Run locally with one command
 
 ```bash
 cargo run -p membrane-cli -- demo

@@ -2,11 +2,16 @@
 //!
 //! All `/demo/*` routes are demo-only. Production gate starts omit `DemoServerState`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{DefaultBodyLimit, Extension, Path, Request, State},
+    http::{
+        header::{self, HeaderName},
+        HeaderMap, HeaderValue, Method, StatusCode,
+    },
+    middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -30,12 +35,41 @@ pub const DEMO_BLOCKED_TOOL: &str = "github.merge";
 pub const DEMO_SWAP_MODEL: &str = "unrestricted-agent-v9";
 
 const DASHBOARD_HTML: &str = include_str!("demo_dashboard.html");
+const SESSION_COOKIE: &str = "membrane_demo_session";
+const SESSION_TTL_SECS: i64 = 30 * 60;
+const MAX_SESSIONS: usize = 512;
+const MAX_TIMELINE_ENTRIES: usize = 128;
+const MAX_RECEIPTS: usize = 64;
+const MAX_BODY_BYTES: usize = 64 * 1024;
+const READS_PER_MINUTE: u32 = 120;
+const WRITES_PER_MINUTE: u32 = 30;
 
 #[derive(Clone)]
 pub struct DemoServerState {
     pub gate: Arc<Gate>,
     pub session_chain: Arc<Mutex<SessionChainState>>,
     pub runtime: Arc<Mutex<DemoRuntime>>,
+}
+
+#[derive(Clone)]
+struct DemoAppState {
+    gate: Arc<Gate>,
+    sessions: Arc<Mutex<HashMap<String, SessionEntry>>>,
+    rate_limits: Arc<Mutex<HashMap<String, RateWindow>>>,
+    public: bool,
+}
+
+#[derive(Clone)]
+struct SessionEntry {
+    state: DemoServerState,
+    last_seen: i64,
+}
+
+#[derive(Debug, Clone)]
+struct RateWindow {
+    started_at: i64,
+    reads: u32,
+    writes: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,6 +165,10 @@ impl DemoRuntime {
 
     fn push(&mut self, entry: TimelineEntry) {
         self.timeline.push(entry);
+        if self.timeline.len() > MAX_TIMELINE_ENTRIES {
+            let overflow = self.timeline.len() - MAX_TIMELINE_ENTRIES;
+            self.timeline.drain(0..overflow);
+        }
     }
 }
 
@@ -152,6 +190,16 @@ pub fn demo_registry() -> crate::ChannelRegistry {
 }
 
 pub fn demo_router(state: DemoServerState) -> Router {
+    let public = std::env::var("MEMBRANE_DEMO_PUBLIC")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let app_state = DemoAppState {
+        gate: state.gate,
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+        rate_limits: Arc::new(Mutex::new(HashMap::new())),
+        public,
+    };
+
     Router::new()
         .route("/", get(dashboard))
         .route("/demo", get(dashboard))
@@ -166,7 +214,12 @@ pub fn demo_router(state: DemoServerState) -> Router {
         .route("/demo/api/reset", post(api_reset))
         .route("/demo/api/evidence", get(api_evidence_export))
         .route("/demo/api/evidence/verify", post(api_evidence_verify))
-        .with_state(state)
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            session_middleware,
+        ))
+        .with_state(app_state)
 }
 
 pub async fn run_demo_dashboard(state: DemoServerState, listen: &str) -> anyhow::Result<()> {
@@ -181,27 +234,221 @@ async fn dashboard() -> Html<&'static str> {
     Html(DASHBOARD_HTML)
 }
 
-async fn demo_health(State(state): State<DemoServerState>) -> impl IntoResponse {
+async fn session_middleware(
+    State(app): State<DemoAppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if request.uri().path() == "/health" {
+        return secured_response(next.run(request).await, app.public);
+    }
+
+    if !origin_is_same_host(request.headers(), request.method()) {
+        return secured_response(
+            (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "cross-origin request denied" })),
+            )
+                .into_response(),
+            app.public,
+        );
+    }
+
     let now = now_secs();
-    let chain = state.session_chain.lock().await;
-    let runtime = state.runtime.lock().await;
-    let delta_t_secs = state.gate.registry().delta_t_secs;
+    let requested_id = cookie_value(request.headers(), SESSION_COOKIE);
+    let (session_id, session_state, created) = {
+        let mut sessions = app.sessions.lock().await;
+        sessions.retain(|_, entry| now - entry.last_seen <= SESSION_TTL_SECS);
+
+        if let Some(id) = requested_id.filter(|id| valid_session_id(id)) {
+            if let Some(entry) = sessions.get_mut(&id) {
+                entry.last_seen = now;
+                (id, entry.state.clone(), false)
+            } else {
+                create_session(&app, &mut sessions, now)
+            }
+        } else {
+            create_session(&app, &mut sessions, now)
+        }
+    };
+
+    let rate_key = if app.public {
+        request
+            .headers()
+            .get("cf-connecting-ip")
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| value.len() <= 64)
+            .map(str::to_owned)
+            .unwrap_or_else(|| session_id.clone())
+    } else {
+        session_id.clone()
+    };
+    if let Some(retry_after) = rate_limited(&app, &rate_key, request.method(), now).await {
+        let mut response = (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({ "error": "rate limit exceeded", "retry_after_secs": retry_after })),
+        )
+            .into_response();
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            HeaderValue::from_str(&retry_after.to_string())
+                .unwrap_or_else(|_| HeaderValue::from_static("60")),
+        );
+        return secured_response(response, app.public);
+    }
+
+    request.extensions_mut().insert(session_state);
+    let mut response = next.run(request).await;
+    if created {
+        let secure = if app.public { "; Secure" } else { "" };
+        let cookie = format!(
+            "{SESSION_COOKIE}={session_id}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL_SECS}{secure}"
+        );
+        if let Ok(value) = HeaderValue::from_str(&cookie) {
+            response.headers_mut().append(header::SET_COOKIE, value);
+        }
+    }
+    secured_response(response, app.public)
+}
+
+fn create_session(
+    app: &DemoAppState,
+    sessions: &mut HashMap<String, SessionEntry>,
+    now: i64,
+) -> (String, DemoServerState, bool) {
+    if sessions.len() >= MAX_SESSIONS {
+        if let Some(oldest) = sessions
+            .iter()
+            .min_by_key(|(_, entry)| entry.last_seen)
+            .map(|(id, _)| id.clone())
+        {
+            sessions.remove(&oldest);
+        }
+    }
+
+    // A generated public key is a random 256-bit, non-secret session identifier.
+    let session_id = nostr::Keys::generate().public_key().to_hex();
+    let state = DemoServerState {
+        gate: app.gate.clone(),
+        session_chain: Arc::new(Mutex::new(SessionChainState::genesis())),
+        runtime: Arc::new(Mutex::new(DemoRuntime::new())),
+    };
+    sessions.insert(
+        session_id.clone(),
+        SessionEntry {
+            state: state.clone(),
+            last_seen: now,
+        },
+    );
+    (session_id, state, true)
+}
+
+async fn rate_limited(app: &DemoAppState, key: &str, method: &Method, now: i64) -> Option<i64> {
+    let mut limits = app.rate_limits.lock().await;
+    limits.retain(|_, window| now - window.started_at <= 120);
+    let window = limits.entry(key.to_owned()).or_insert(RateWindow {
+        started_at: now,
+        reads: 0,
+        writes: 0,
+    });
+    if now - window.started_at >= 60 {
+        *window = RateWindow {
+            started_at: now,
+            reads: 0,
+            writes: 0,
+        };
+    }
+
+    let is_read = matches!(*method, Method::GET | Method::HEAD);
+    let (count, limit) = if is_read {
+        (&mut window.reads, READS_PER_MINUTE)
+    } else {
+        (&mut window.writes, WRITES_PER_MINUTE)
+    };
+    *count += 1;
+    (*count > limit).then(|| (60 - (now - window.started_at)).max(1))
+}
+
+fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .filter_map(|part| part.trim().split_once('='))
+        .find_map(|(key, value)| (key == name).then(|| value.to_owned()))
+}
+
+fn valid_session_id(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn origin_is_same_host(headers: &HeaderMap, method: &Method) -> bool {
+    if matches!(*method, Method::GET | Method::HEAD) {
+        return true;
+    }
+    let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else {
+        return true;
+    };
+    let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else {
+        return false;
+    };
+    origin
+        .strip_prefix("https://")
+        .or_else(|| origin.strip_prefix("http://"))
+        .map(|origin_host| origin_host == host)
+        .unwrap_or(false)
+}
+
+fn secured_response(mut response: Response, public: bool) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+        ),
+    );
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    headers.insert(
+        HeaderName::from_static("permissions-policy"),
+        HeaderValue::from_static("camera=(), microphone=(), geolocation=(), payment=()"),
+    );
+    headers.insert(
+        HeaderName::from_static("cross-origin-opener-policy"),
+        HeaderValue::from_static("same-origin"),
+    );
+    headers.insert(
+        HeaderName::from_static("cross-origin-resource-policy"),
+        HeaderValue::from_static("same-origin"),
+    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    if public {
+        headers.insert(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        );
+    }
+    response
+}
+
+async fn demo_health() -> impl IntoResponse {
     Json(json!({
         "status": "ok",
         "gate": "demo",
         "demo": true,
         "simulation": true,
-        "delta_t_secs": delta_t_secs,
-        "last_cp_age_secs": chain.last_router_cp_age_secs(now),
-        "active_scope_id": chain.active_scope_id,
-        "degraded_scope_id": chain.degraded_scope_id,
-        "degraded_reason": chain.degraded_reason,
-        "has_authorization": runtime.active_iac.is_some(),
-        "timeline_len": runtime.timeline.len(),
+        "state": "ephemeral_per_session",
     }))
 }
 
-async fn api_overview(State(state): State<DemoServerState>) -> impl IntoResponse {
+async fn api_overview(Extension(state): Extension<DemoServerState>) -> impl IntoResponse {
     let now = now_secs();
     let chain = state.session_chain.lock().await;
     let runtime = state.runtime.lock().await;
@@ -248,13 +495,13 @@ async fn api_overview(State(state): State<DemoServerState>) -> impl IntoResponse
     }))
 }
 
-async fn api_timeline(State(state): State<DemoServerState>) -> impl IntoResponse {
+async fn api_timeline(Extension(state): Extension<DemoServerState>) -> impl IntoResponse {
     let runtime = state.runtime.lock().await;
     Json(json!({ "events": runtime.timeline }))
 }
 
 async fn api_action_detail(
-    State(state): State<DemoServerState>,
+    Extension(state): Extension<DemoServerState>,
     Path(id): Path<String>,
 ) -> Response {
     let runtime = state.runtime.lock().await;
@@ -279,10 +526,10 @@ fn default_ttl() -> i64 {
 }
 
 async fn api_issue(
-    State(state): State<DemoServerState>,
+    Extension(state): Extension<DemoServerState>,
     Json(req): Json<IssueRequest>,
 ) -> Response {
-    match issue_authorization(&state, req.ttl_secs.max(60)).await {
+    match issue_authorization(&state, req.ttl_secs.clamp(60, DEMO_TTL_SECS)).await {
         Ok(body) => (StatusCode::OK, Json(body)).into_response(),
         Err(err) => demo_err(err),
     }
@@ -302,23 +549,43 @@ struct ActionRequest {
 }
 
 async fn api_action(
-    State(state): State<DemoServerState>,
+    Extension(state): Extension<DemoServerState>,
     Json(req): Json<ActionRequest>,
 ) -> Response {
+    if let Err(message) = validate_action_request(&req) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": message, "type": "invalid_demo_input" })),
+        )
+            .into_response();
+    }
     match run_tool_action(&state, req).await {
         Ok((status, body)) => (status, Json(body)).into_response(),
         Err(err) => demo_err(err),
     }
 }
 
-async fn api_sever(State(state): State<DemoServerState>) -> Response {
+fn validate_action_request(req: &ActionRequest) -> Result<(), &'static str> {
+    if req.tool.len() > 64 || req.model.as_ref().is_some_and(|value| value.len() > 128) {
+        return Err("tool or model identifier is too long");
+    }
+    if req.ticket.as_ref().is_some_and(|value| value.len() > 128)
+        || req.channel.as_ref().is_some_and(|value| value.len() > 128)
+        || req.body.as_ref().is_some_and(|value| value.len() > 2_000)
+    {
+        return Err("demo text exceeds the allowed length");
+    }
+    Ok(())
+}
+
+async fn api_sever(Extension(state): Extension<DemoServerState>) -> Response {
     match sever_session(&state).await {
         Ok(body) => (StatusCode::OK, Json(body)).into_response(),
         Err(err) => demo_err(err),
     }
 }
 
-async fn api_reset(State(state): State<DemoServerState>) -> Response {
+async fn api_reset(Extension(state): Extension<DemoServerState>) -> Response {
     {
         let mut chain = state.session_chain.lock().await;
         *chain = SessionChainState::genesis();
@@ -348,13 +615,13 @@ async fn api_reset(State(state): State<DemoServerState>) -> Response {
     (StatusCode::OK, Json(json!({ "ok": true, "reset": true }))).into_response()
 }
 
-async fn api_evidence_export(State(state): State<DemoServerState>) -> impl IntoResponse {
+async fn api_evidence_export(Extension(state): Extension<DemoServerState>) -> impl IntoResponse {
     let pack = build_evidence_pack(&state).await;
     Json(pack)
 }
 
 async fn api_evidence_verify(
-    State(_state): State<DemoServerState>,
+    Extension(_state): Extension<DemoServerState>,
     Json(pack): Json<EvidencePack>,
 ) -> impl IntoResponse {
     Json(verify_evidence_pack(&pack))
@@ -592,6 +859,10 @@ async fn run_tool_action(
         bus_event_id: outcome.bus_event_id.clone(),
         event: outcome.event,
     });
+    if runtime.receipts.len() > MAX_RECEIPTS {
+        let overflow = runtime.receipts.len() - MAX_RECEIPTS;
+        runtime.receipts.drain(0..overflow);
+    }
     runtime.push(entry);
 
     Ok((

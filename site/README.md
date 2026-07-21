@@ -4,7 +4,9 @@ Static public marketing page for **The Membrane** — the fail-closed control po
 
 Copy source of truth: [`docs/product.md`](../docs/product.md).
 
-This site is **marketing only**. It does not host the operator console, live demo controls, or the Rust demo dashboard (those stay local via `cargo run -p membrane-cli -- demo`).
+This site is **marketing only**. It does not embed the operator console or
+production controls. It links to the isolated Rust simulation dashboard at
+`https://membrane-demo.dojopop.live` and to the local `membrane demo` path.
 
 ## Preview locally
 
@@ -75,6 +77,5 @@ See `deploy/grasp/update-tunnel-ingress.sh` for the tunnel pattern used elsewher
 
 | Deferred | Why |
 |----------|-----|
-| Hosted interactive demo | Demo dashboard is local-only (`:8790`); keep operator controls off the marketing origin |
-| Operator console | Production control surface is not a marketing concern |
+| Production operator console | The public dashboard is a separate simulation-only sandbox |
 | Nostr / BCI / ZK deep research pitch | Out of scope for product landing |
