@@ -53,7 +53,9 @@ curl -fsS 'http://127.0.0.1:8790/demo/api/siem?format=jsonl'
 ```
 
 Both remain simulation-only and omit action bodies and credentials. See
-[siem-export.md](siem-export.md) for operator ingestion patterns.
+[siem-export.md](siem-export.md) for operator ingestion patterns and the
+optional fail-open live webhook (`MEMBRANE_SIEM_WEBHOOK_URL`; leave unset on
+the public sandbox).
 
 ## Technical IAC smoke test
 

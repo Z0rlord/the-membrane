@@ -39,6 +39,57 @@ The bus export covers published authorization, allowed-action CP,
 blocked-action, sever, and stale/degraded events. Coverage remains limited to
 traffic routed through the Membrane gate.
 
+## Live webhook shipper
+
+When `MEMBRANE_SIEM_WEBHOOK_URL` is set, the gate (and `membrane iac issue`)
+POST mapped SIEM events as they are published:
+
+| Event | Trigger |
+| --- | --- |
+| `authorization_issued` | `membrane iac issue` (and optional local demo issue) |
+| `allowed_action` | Successful gate router turn |
+| `blocked_action` | Gate fail-closed deny |
+| `sever` / `degraded` | Subject sever or Δt stale alert |
+
+Delivery is **fail-open by default**: webhook outages never block authorization
+or chat/completions. Set `MEMBRANE_SIEM_WEBHOOK_FAIL_OPEN=false` only when a
+synchronous caller (for example `iac issue`) should surface delivery failure.
+
+### Environment
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `MEMBRANE_SIEM_WEBHOOK_URL` | One URL, or comma-separated URLs | unset (disabled) |
+| `MEMBRANE_SIEM_WEBHOOK_FORMAT` | `jsonl` or `ocsf` | `jsonl` |
+| `MEMBRANE_SIEM_WEBHOOK_SECRET` | Optional shared-secret header value | unset |
+| `MEMBRANE_SIEM_WEBHOOK_SECRET_HEADER` | Header name for the secret | `X-Membrane-Webhook-Secret` |
+| `MEMBRANE_SIEM_WEBHOOK_FAIL_OPEN` | Swallow delivery errors after retries | `true` |
+| `MEMBRANE_SIEM_WEBHOOK_DEAD_LETTER` | Append-only JSONL dead-letter path | unset |
+| `MEMBRANE_SIEM_WEBHOOK_MAX_ATTEMPTS` | Attempts per URL (including first) | `4` |
+| `MEMBRANE_SIEM_WEBHOOK_BACKOFF_MS` | Initial exponential backoff | `100` |
+
+Keep the webhook URL and shared secret in the operator secret manager (Doppler,
+Vault, etc.). Never commit them.
+
+### Example
+
+```bash
+export MEMBRANE_SIEM_WEBHOOK_URL='https://siem.example.invalid/ingest'
+export MEMBRANE_SIEM_WEBHOOK_FORMAT=jsonl
+export MEMBRANE_SIEM_WEBHOOK_SECRET='…'   # from secret manager
+export MEMBRANE_SIEM_WEBHOOK_DEAD_LETTER=/var/log/membrane/siem-dead-letter.jsonl
+
+membrane gate start --listen 127.0.0.1:8787
+```
+
+Each POST body is a single JSON Lines record (`Content-Type: application/x-ndjson`)
+or a single OCSF-inspired object (`Content-Type: application/json`). Retries use
+exponential backoff. Exhausted deliveries append a dead-letter line with the
+error, attempt count, URL, and the original digest-only event.
+
+The local demo may honor the same env vars for operator testing. Leave them
+unset on the public sandbox so simulation traffic is never shipped to a SOC.
+
 ## Demo API
 
 The simulation-only dashboard exposes the same normalized records:
@@ -58,8 +109,8 @@ For file-based ingestion, run the CLI on a schedule, write to a temporary file,
 then atomically rename it into the directory watched by the SIEM forwarder. A
 collector can also tail JSON Lines and forward each line over syslog or HTTPS.
 
-For HTTP ingestion today, POST the generated file with the authentication and
-retry mechanism supplied by the operator's collector:
+For HTTP ingestion without the live shipper, POST a generated file with the
+authentication and retry mechanism supplied by the operator's collector:
 
 ```bash
 curl --fail-with-body \
@@ -68,13 +119,10 @@ curl --fail-with-body \
   "$SIEM_INGEST_URL"
 ```
 
-Keep collector tokens in the operator's secret manager. The Membrane CLI does
-not yet ship a live webhook worker, delivery queue, or vendor-specific
-authentication adapter.
-
 ## Deferred
 
 - Certified OCSF class, category, activity, and severity identifiers
-- A durable live webhook shipper with retries, backoff, and dead-letter storage
 - CEF formatting and RFC 5424 framing
 - Vendor-specific field packs and authentication adapters
+- Production HTTP tool-proxy route with first-class blocked-action tool fields
+  (chat/completions already publishes blocked-action receipts)

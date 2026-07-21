@@ -3,9 +3,12 @@ use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::merkle::{Domain, MerkleTree};
 use membrane_core::nostr_bus::BusPublisher;
 use membrane_core::rollup::cp_hash_hex;
-use membrane_core::{alert_degraded_payload, SessionChainState};
+use membrane_core::{
+    alert_degraded_payload, map_and_spawn_siem_ship, SessionChainState, SiemWebhookShipper,
+};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -60,6 +63,7 @@ pub struct Gate {
     registry: ChannelRegistry,
     publisher: BusPublisher,
     iac_signer_pubkey: String,
+    siem_shipper: Option<Arc<SiemWebhookShipper>>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,11 +89,25 @@ impl Gate {
             registry,
             publisher,
             iac_signer_pubkey,
+            siem_shipper: None,
         }
+    }
+
+    pub fn with_siem_shipper(mut self, shipper: Arc<SiemWebhookShipper>) -> Self {
+        self.siem_shipper = Some(shipper);
+        self
+    }
+
+    pub fn siem_shipper(&self) -> Option<&Arc<SiemWebhookShipper>> {
+        self.siem_shipper.as_ref()
     }
 
     pub fn registry(&self) -> &ChannelRegistry {
         &self.registry
+    }
+
+    fn enqueue_siem(&self, event: &MembraneEvent, bus_event_id: Option<&str>) {
+        map_and_spawn_siem_ship(&self.siem_shipper, event, bus_event_id);
     }
 
     pub fn validate_iac(
@@ -161,6 +179,7 @@ impl Gate {
             .await
             .map_err(GateError::Bus)?
             .to_hex();
+        self.enqueue_siem(&event, Some(&id));
         Ok(id)
     }
 
@@ -189,6 +208,7 @@ impl Gate {
             .await
             .map_err(GateError::Bus)?
             .to_hex();
+        self.enqueue_siem(&event, Some(&id));
         Ok(id)
     }
 
@@ -245,6 +265,7 @@ impl Gate {
             .await
             .map_err(GateError::Bus)?
             .to_hex();
+        self.enqueue_siem(&event, Some(&bus_event_id));
 
         let cp_hash = cp_hash_hex(&event).map_err(|e| GateError::Bus(e.into()))?;
 

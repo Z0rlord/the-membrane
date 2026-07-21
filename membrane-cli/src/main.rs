@@ -11,7 +11,8 @@ use membrane_core::{
     membrane_kind_for, npub_from_keys, render_jsonl, subscribe_and_compute_bus_root,
     validate_rollup_bundle, BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper,
     IntentAuthorizationCredential, MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper,
-    RollupBundle, SessionChainState, SiemEvent, SignedRollupBundle,
+    RollupBundle, SessionChainState, SiemEvent, SiemWebhookShipper, SignedRollupBundle,
+    ENV_WEBHOOK_URL,
 };
 use membrane_gate::{
     demo_registry, run_demo_dashboard, run_gate_server, ChannelRegistry, DemoRuntime,
@@ -590,7 +591,21 @@ async fn gate_start(
         relay_url: relay.to_string(),
         keys: keys.clone(),
     });
-    let gate = Arc::new(Gate::new(registry.clone(), publisher));
+    let mut gate = Gate::new(registry.clone(), publisher);
+    if let Some(shipper) = SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))? {
+        println!(
+            "gate: SIEM webhook enabled (format={}, fail_open={}, urls={})",
+            shipper.config().format.as_str(),
+            shipper.config().fail_open,
+            shipper.config().urls.len()
+        );
+        gate = gate.with_siem_shipper(Arc::new(shipper));
+    } else {
+        println!(
+            "gate: SIEM webhook disabled (set {ENV_WEBHOOK_URL} to enable live shipping)"
+        );
+    }
+    let gate = Arc::new(gate);
 
     gate.validate_iac(Some(&default_iac), now_secs())
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -823,6 +838,19 @@ async fn iac_issue(
     );
     let issued_event_id = publisher.publish(&mut issued_event, None).await?;
 
+    if let Some(shipper) = SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))? {
+        let mapped =
+            SiemEvent::from_membrane_event(&issued_event, Some(&issued_event_id.to_hex()));
+        shipper
+            .deliver_respecting_fail_open(&mapped)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        println!(
+            "  siem webhook: shipped authorization_issued ({})",
+            shipper.config().format.as_str()
+        );
+    }
+
     let json = serde_json::to_string_pretty(&iac)?;
     std::fs::write(out, json)?;
     println!("session IAC written to {}", out.display());
@@ -891,7 +919,21 @@ async fn run_local_demo(listen: &str) -> Result<()> {
         keys: keys.clone(),
     });
     let registry = demo_registry();
-    let gate = Arc::new(Gate::new(registry, publisher));
+    let mut gate = Gate::new(registry, publisher);
+    // Optional: only when the operator exports a webhook URL into the demo env.
+    // Public sandbox must leave this unset. Simulation events stay marked simulation=true.
+    match SiemWebhookShipper::from_env() {
+        Ok(Some(shipper)) => {
+            println!(
+                "  siem webhook: optional local shipper enabled (format={})",
+                shipper.config().format.as_str()
+            );
+            gate = gate.with_siem_shipper(Arc::new(shipper));
+        }
+        Ok(None) => {}
+        Err(err) => bail!("invalid SIEM webhook env: {err}"),
+    }
+    let gate = Arc::new(gate);
 
     println!("Membrane demo (local, simulation-only)");
     println!("  listen:      http://{listen}/");

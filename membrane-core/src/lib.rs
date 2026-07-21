@@ -8,6 +8,7 @@ pub mod ots;
 pub mod rollup;
 pub mod session;
 pub mod siem;
+pub mod siem_webhook;
 
 pub use bus::bus_root_from_events;
 pub use bus::{BusSubscriber, BusSubscriberConfig};
@@ -32,4 +33,9 @@ pub use session::{
 pub use siem::{
     build_ocsf_inspired_pack, render_jsonl, OcsfInspiredPack, SiemEvent, OCSF_INSPIRED_SCHEMA,
     SIEM_SCHEMA_VERSION,
+};
+pub use siem_webhook::{
+    map_and_spawn_siem_ship, spawn_siem_ship, ReqwestWebhookPoster, SiemWebhookConfig,
+    SiemWebhookError, SiemWebhookFormat, SiemWebhookShipper, WebhookPoster, DEFAULT_SECRET_HEADER,
+    ENV_WEBHOOK_URL,
 };

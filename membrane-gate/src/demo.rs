@@ -20,7 +20,7 @@ use membrane_core::event::MembraneEvent;
 use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::rollup::{cp_hash_hex, GENESIS_CP_HASH};
 use membrane_core::{
-    build_ocsf_inspired_pack, render_jsonl, SessionChainState, SiemEvent,
+    build_ocsf_inspired_pack, render_jsonl, spawn_siem_ship, SessionChainState, SiemEvent,
     ALERT_REASON_SUBJECT_SEVER, SIEM_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
@@ -711,7 +711,7 @@ async fn issue_authorization(state: &DemoServerState, ttl_secs: i64) -> Result<V
     let id = runtime.alloc_id();
     let agent_id = runtime.agent_id.clone();
     runtime.active_iac = Some(iac.clone());
-    runtime.push(TimelineEntry {
+    let entry = TimelineEntry {
         id: id.clone(),
         kind: TimelineKind::Issued,
         timestamp: now,
@@ -732,7 +732,12 @@ async fn issue_authorization(state: &DemoServerState, ttl_secs: i64) -> Result<V
             "issuer_pubkey": state.gate.publisher_pubkey_hex(),
             "note": "Short-lived signed authorization issued for the support agent."
         }),
-    });
+    };
+    spawn_siem_ship(
+        &state.gate.siem_shipper().cloned(),
+        timeline_to_siem(&entry),
+    );
+    runtime.push(entry);
 
     Ok(json!({
         "ok": true,

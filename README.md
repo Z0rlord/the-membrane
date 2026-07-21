@@ -185,7 +185,9 @@ Each turn returns `X-Membrane-CP-Hash`, `X-Membrane-Session-Nonce`, and related 
 Lines or an explicitly OCSF-inspired JSON pack. This lets existing SOC, SIEM,
 and SOAR tooling consume authorization-issued, allowed, blocked, sever, and
 stale/degraded telemetry without making the Membrane a monitoring product or
-claiming a vendor partnership. See [docs/siem-export.md](docs/siem-export.md).
+claiming a vendor partnership. Set `MEMBRANE_SIEM_WEBHOOK_URL` to enable the
+fail-open live webhook shipper (retries, optional dead-letter). See
+[docs/siem-export.md](docs/siem-export.md).
 
 **Severance:** `membrane sever` publishes `membrane.alert.degraded` with `reason: subject_sever`, removes the local active IAC, and blocks further chat on that scope until you issue a fresh IAC (`membrane iac issue`). The gate also runs a Δt watchdog (default 300s): if no `membrane.cp.router` arrives within Δt, it publishes `membrane.alert.degraded` and rejects chat fail-closed. Check staleness via `membrane session status` or `GET /health` (`delta_t_secs`, `last_cp_age_secs`).
 
