@@ -9,6 +9,7 @@ The Membrane does not read minds. It attests **which channels may cross the boun
 
 | File | Description |
 |------|-------------|
+| [docs/attestable.md](docs/attestable.md) | **Attestable** — enterprise product positioning (agent integrity gateway) |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
