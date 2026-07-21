@@ -74,11 +74,13 @@ membrane-cli/         `membrane` binary
 tools/                channel registry YAML, local relay config
 ```
 
-### Landing + local demo
+### Landing demo dashboard
 
-Public marketing site (static, no operator console): **[membrane.dojopop.live](https://membrane.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+**Primary path for anyone cloning the repo** — no secrets, no relay, no paid APIs.
 
-Local browser demo of the product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus — no relay, secrets, or paid APIs. **Not** deployed on the marketing origin.
+Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+
+Local browser demo of the product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus. **Not** deployed on the marketing origin.
 
 ```bash
 cargo run -p membrane-cli -- landing-demo
@@ -87,9 +89,17 @@ cargo run -p membrane-cli -- landing-demo
 
 See [docs/landing-demo.md](docs/landing-demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
 
-> Note: `membrane demo` remains the separate fail-closed IAC smoke test (relay + registry). The product dashboard is `landing-demo`.
+> Note: `membrane demo` is a separate fail-closed IAC smoke test (needs a relay + your signing key). The product dashboard strangers should run is `landing-demo`.
 
-### Quick start
+### Full stack (operators)
+
+For the live gate, attestation bus, and session IAC path you need:
+
+1. A local or operator-controlled relay
+2. Your own `NOSTR_NSEC` (never commit)
+3. An IAC **issued and signed by that same key** (`membrane iac issue` / `iac sign`)
+
+The gate verifies the IAC against the signer pubkey. Bundled files such as `tools/demo-iac.json` only work when your `NOSTR_NSEC` matches the key that signed them — an arbitrary nsec will fail closed. Prefer issuing a fresh session IAC for your key.
 
 1. **Local relay** (self-hosted bus per Appendix B — do not use public relays for writes):
 
@@ -117,8 +127,8 @@ export MEMBRANE_RELAY_URL='ws://127.0.0.1:7777'
 ```bash
 cargo run -- bus publish-test          # kind 31990 test event
 cargo run -- bus subscribe             # fetch events + recompute bus_root
-cargo run -- demo                      # fail-closed without IAC → OK with IAC
-cargo run -- gate start                # HTTP gate on :8787 → model API (example: local backend on :8080)
+cargo run -- demo                      # fail-closed without IAC → OK with IAC (issues IAC from your key)
+cargo run -- gate start --iac <your-signed-iac.json>   # HTTP gate on :8787 → model API
 
 # Session-scoped IAC (binds to current cp_chain head, short TTL)
 cargo run -- iac issue --model qwen2.5-0.5b-instruct --ttl-secs 3600 --out session-iac.json
@@ -135,7 +145,7 @@ cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 
 **Model API:** point `model_api_url` in your channel registry at any allowed backend that speaks the chat/completions wire format (default example: `http://127.0.0.1:8080/v1/chat/completions`). The gate falls back to mock responses if the backend is unreachable.
 
-**Gate HTTP:** `POST /v1/chat/completions` with a standard chat/completions JSON body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` default is for dev only when the chain is at genesis.
+**Gate HTTP:** `POST /v1/chat/completions` with a standard chat/completions JSON body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` file is only valid when signed by the same key the gate is running as.
 
 ### Sovereign session (local LLM with receipts)
 

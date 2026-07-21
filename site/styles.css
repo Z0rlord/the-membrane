@@ -181,6 +181,14 @@ a { color: inherit; }
   animation: rise-in 0.9s var(--ease) 0.32s both;
 }
 
+.hero-demo-note {
+  margin: 1rem 0 0;
+  max-width: 32rem;
+  font-size: 0.9rem;
+  color: rgba(196, 214, 222, 0.72);
+  animation: rise-in 0.9s var(--ease) 0.4s both;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

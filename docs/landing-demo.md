@@ -2,6 +2,8 @@
 
 Browser dashboard for The Membrane fail-closed narrative, backed by real Membrane gate IAC checks and CP receipt chaining.
 
+This is the **primary public run path** — no secrets, no relay setup. For the operator full stack (relay + gate + your signed IAC), see [README § Full stack (operators)](../README.md#full-stack-operators). Repo overview of this demo: [README § Landing demo dashboard](../README.md#landing-demo-dashboard).
+
 ## One command
 
 ```bash
