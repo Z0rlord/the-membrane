@@ -3,7 +3,7 @@ use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::merkle::{Domain, MerkleTree};
 use membrane_core::nostr_bus::BusPublisher;
 use membrane_core::rollup::cp_hash_hex;
-use membrane_core::{SessionChainState, alert_degraded_payload};
+use membrane_core::{alert_degraded_payload, SessionChainState};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
@@ -18,6 +18,8 @@ pub enum GateError {
     ChannelDenied(String),
     #[error("model not in allowlist: {0}")]
     ModelDenied(String),
+    #[error("tool not in allowlist: {0}")]
+    ToolDenied(String),
     #[error("export forbidden: {0}")]
     ExportForbidden(String),
     #[error("context merkle root exceeds IAC bound")]
@@ -151,13 +153,8 @@ impl Gate {
             last_cp_age_secs,
             self.registry.delta_t_secs,
         );
-        let mut event = MembraneEvent::new(
-            EventType::AlertDegraded,
-            "",
-            last_cp_hash,
-            now,
-            payload,
-        );
+        let mut event =
+            MembraneEvent::new(EventType::AlertDegraded, "", last_cp_hash, now, payload);
         let id = self
             .publisher
             .publish(&mut event, prev_event_id)
@@ -230,6 +227,28 @@ impl Gate {
             bus_event_id: Some(bus_event_id),
         })
     }
+
+    /// Fail-closed tool check against the live IAC (Attestable).
+    pub fn authorize_tool(
+        &self,
+        iac: &IntentAuthorizationCredential,
+        tool_id: &str,
+        now: i64,
+    ) -> Result<(), GateError> {
+        self.validate_iac(Some(iac), now)?;
+        if !iac.tool_allowed(tool_id) {
+            return Err(GateError::ToolDenied(tool_id.to_string()));
+        }
+        Ok(())
+    }
+
+    pub fn publisher_pubkey_hex(&self) -> String {
+        self.iac_signer_pubkey.clone()
+    }
+
+    pub fn publisher(&self) -> &BusPublisher {
+        &self.publisher
+    }
 }
 
 pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
@@ -238,18 +257,24 @@ pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
         .ok_or_else(|| GateError::Registry("empty context".into()))
 }
 
+pub mod demo;
 pub mod proxy;
 pub mod server;
 pub mod watchdog;
 
+pub use demo::{
+    demo_registry, run_attestable_demo, verify_evidence_pack, DemoRuntime, DemoServerState,
+    EvidencePack, DEMO_ALLOWED_TOOLS, DEMO_BLOCKED_TOOL, DEMO_MODEL, DEMO_SWAP_MODEL,
+    DEMO_TTL_SECS,
+};
 pub use proxy::{ChatMessage, ChatRequest, ChatResponse, LlmProxy};
-pub use server::{GateServerState, SessionReceipt, run_gate_server};
+pub use server::{run_gate_server, GateServerState, SessionReceipt};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use membrane_core::{
-        ALERT_REASON_SUBJECT_SEVER, BusPublisher, BusPublisherConfig, alert_degraded_payload,
+        alert_degraded_payload, BusPublisher, BusPublisherConfig, ALERT_REASON_SUBJECT_SEVER,
     };
     use nostr::Keys;
 
@@ -296,7 +321,8 @@ mod tests {
         let gate = test_gate(300);
         let mut chain = SessionChainState::genesis();
         chain.last_router_cp_at = Some(1_000);
-        gate.check_session_liveness(&chain, "scope-a", 1_200).unwrap();
+        gate.check_session_liveness(&chain, "scope-a", 1_200)
+            .unwrap();
     }
 
     #[test]
@@ -307,5 +333,37 @@ mod tests {
         };
         assert_eq!(v["reason"], "subject_sever");
         assert_eq!(v["delta_t_secs"], 300);
+    }
+
+    #[test]
+    fn rejects_unknown_tool() {
+        let keys = Keys::generate();
+        let registry = ChannelRegistry {
+            permitted_channels: vec!["local-llm".into()],
+            forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
+            model_allowlist: vec!["demo".into()],
+            delta_t_secs: 300,
+            llama_cpp_url: None,
+        };
+        let publisher = BusPublisher::new(BusPublisherConfig {
+            relay_url: "memory://test".into(),
+            keys: keys.clone(),
+        });
+        let gate = Gate::new(registry, publisher);
+        let mut iac = IntentAuthorizationCredential::new_session_with_tools(
+            "scope",
+            "demo",
+            "0".repeat(64),
+            4_102_444_800,
+            vec!["local-llm".into()],
+            vec!["cloud-telemetry".into(), "training-retention".into()],
+            vec!["jira.comment".into()],
+        );
+        iac.sign(&keys).unwrap();
+        let err = gate
+            .authorize_tool(&iac, "github.merge", 1_000)
+            .unwrap_err();
+        assert!(matches!(err, GateError::ToolDenied(_)));
+        gate.authorize_tool(&iac, "jira.comment", 1_000).unwrap();
     }
 }

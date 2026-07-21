@@ -22,6 +22,9 @@ pub struct IntentAuthorizationCredential {
     pub scope_id: String,
     pub permitted_channels: Vec<String>,
     pub model_allowlist: Vec<String>,
+    /// Tools this credential authorizes (e.g. `jira.comment`). Empty = no tools.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_allowlist: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decoder_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -40,6 +43,8 @@ pub struct SignableIac {
     pub scope_id: String,
     pub permitted_channels: Vec<String>,
     pub model_allowlist: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_allowlist: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decoder_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -59,6 +64,7 @@ impl IntentAuthorizationCredential {
             scope_id: self.scope_id.clone(),
             permitted_channels: self.permitted_channels.clone(),
             model_allowlist: self.model_allowlist.clone(),
+            tool_allowlist: self.tool_allowlist.clone(),
             decoder_version: self.decoder_version.clone(),
             stimulation_policy: self.stimulation_policy.clone(),
             context_merkle_bound: self.context_merkle_bound.clone(),
@@ -85,6 +91,10 @@ impl IntentAuthorizationCredential {
         self.model_allowlist.iter().any(|m| m == model_id)
     }
 
+    pub fn tool_allowed(&self, tool_id: &str) -> bool {
+        self.tool_allowlist.iter().any(|t| t == tool_id)
+    }
+
     /// Build an unsigned session-scoped IAC (caller signs with `sign()`).
     pub fn new_session(
         scope_id: impl Into<String>,
@@ -94,11 +104,33 @@ impl IntentAuthorizationCredential {
         permitted_channels: Vec<String>,
         forbidden_exports: Vec<String>,
     ) -> Self {
+        Self::new_session_with_tools(
+            scope_id,
+            model_id,
+            parent_cp_hash,
+            valid_until,
+            permitted_channels,
+            forbidden_exports,
+            Vec::new(),
+        )
+    }
+
+    /// Session IAC with an explicit tool allowlist (Attestable agent scopes).
+    pub fn new_session_with_tools(
+        scope_id: impl Into<String>,
+        model_id: impl Into<String>,
+        parent_cp_hash: impl Into<String>,
+        valid_until: i64,
+        permitted_channels: Vec<String>,
+        forbidden_exports: Vec<String>,
+        tool_allowlist: Vec<String>,
+    ) -> Self {
         Self {
             version: Self::SCHEMA_VERSION.to_string(),
             scope_id: scope_id.into(),
             permitted_channels,
             model_allowlist: vec![model_id.into()],
+            tool_allowlist,
             decoder_version: None,
             stimulation_policy: None,
             context_merkle_bound: "f".repeat(64),
@@ -125,7 +157,8 @@ impl IntentAuthorizationCredential {
             .signature
             .as_ref()
             .ok_or(IacVerifyError::MissingSignature)?;
-        let sig_bytes = hex::decode(sig_hex).map_err(|e| IacVerifyError::InvalidSignatureHex(e.to_string()))?;
+        let sig_bytes =
+            hex::decode(sig_hex).map_err(|e| IacVerifyError::InvalidSignatureHex(e.to_string()))?;
         if sig_bytes.len() != 64 {
             return Err(IacVerifyError::InvalidSignatureHex(format!(
                 "expected 64 bytes, got {}",
@@ -174,6 +207,7 @@ mod tests {
             scope_id: "test-scope".into(),
             permitted_channels: vec!["local-llm".into()],
             model_allowlist: vec!["demo".into()],
+            tool_allowlist: vec!["jira.comment".into()],
             decoder_version: None,
             stimulation_policy: None,
             context_merkle_bound: "f".repeat(64),
@@ -185,12 +219,20 @@ mod tests {
     }
 
     #[test]
+    fn tool_allowlist_bound_in_signature() {
+        let keys = Keys::generate();
+        let mut iac = sample_iac();
+        iac.sign(&keys).unwrap();
+        iac.tool_allowlist.push("github.merge".into());
+        assert!(iac.verify_signature(&keys.public_key().to_hex()).is_err());
+    }
+
+    #[test]
     fn iac_sign_and_verify_roundtrip() {
         let keys = Keys::generate();
         let mut iac = sample_iac();
         iac.sign(&keys).unwrap();
-        iac.verify_signature(&keys.public_key().to_hex())
-            .unwrap();
+        iac.verify_signature(&keys.public_key().to_hex()).unwrap();
     }
 
     #[test]
@@ -199,9 +241,7 @@ mod tests {
         let mut iac = sample_iac();
         iac.sign(&keys).unwrap();
         iac.scope_id = "tampered".into();
-        assert!(iac
-            .verify_signature(&keys.public_key().to_hex())
-            .is_err());
+        assert!(iac.verify_signature(&keys.public_key().to_hex()).is_err());
     }
 
     #[test]

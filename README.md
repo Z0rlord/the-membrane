@@ -11,6 +11,7 @@ The broader Membrane research program remains a **cognitive boundary**: a nervou
 | File | Description |
 |------|-------------|
 | [docs/attestable.md](docs/attestable.md) | **Attestable** — enterprise product positioning (agent integrity gateway) |
+| [docs/attestable-demo.md](docs/attestable-demo.md) | Local Attestable dashboard — one-command demo |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | **Single-file edition** (whitepaper + Appendix B) |
@@ -69,6 +70,17 @@ membrane-gate/        IAC fail-closed gate + llama.cpp HTTP proxy
 membrane-cli/         `membrane` binary
 tools/                channel registry YAML, local relay config
 ```
+
+### Attestable demo dashboard
+
+Local browser demo of the Attestable product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus — no relay, secrets, or paid APIs.
+
+```bash
+cargo run -p membrane-cli -- attestable
+# open http://127.0.0.1:8790/
+```
+
+See [docs/attestable-demo.md](docs/attestable-demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
 
 ### Quick start
 

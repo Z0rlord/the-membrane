@@ -9,7 +9,7 @@ use axum::{
 };
 use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::rollup::cp_hash_hex;
-use membrane_core::{ALERT_REASON_DELTA_T_EXCEEDED, SessionChainState};
+use membrane_core::{SessionChainState, ALERT_REASON_DELTA_T_EXCEEDED};
 use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
@@ -37,10 +37,7 @@ pub struct GateServerState {
     pub session_chain: Arc<Mutex<SessionChainState>>,
 }
 
-pub async fn run_gate_server(
-    state: GateServerState,
-    listen: &str,
-) -> anyhow::Result<()> {
+pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Result<()> {
     spawn_delta_t_watchdog(state.gate.clone(), state.session_chain.clone());
 
     let app = axum::Router::new()
@@ -103,7 +100,10 @@ async fn handle_chat(
         chain.clear_degraded_for_scope(&iac.scope_id);
     }
 
-    if let Err(err) = state.gate.check_session_liveness(&chain, &iac.scope_id, now) {
+    if let Err(err) = state
+        .gate
+        .check_session_liveness(&chain, &iac.scope_id, now)
+    {
         if matches!(err, GateError::SessionStale(_, _)) {
             let age = chain.last_router_cp_age_secs(now);
             let prev = chain.last_event_id.clone();
@@ -237,17 +237,21 @@ fn parse_iac_header(raw: &str) -> Result<IntentAuthorizationCredential, GateErro
         String::from_utf8(bytes)
             .map_err(|e| GateError::NoValidIac(format!("invalid utf8 IAC: {e}")))?
     };
-    serde_json::from_str(&json)
-        .map_err(|e| GateError::NoValidIac(format!("invalid IAC JSON: {e}")))
+    serde_json::from_str(&json).map_err(|e| GateError::NoValidIac(format!("invalid IAC JSON: {e}")))
 }
 
 fn gate_error_response(err: GateError) -> Response {
     warn!(error = %err, "gate fail-closed");
     let status = match &err {
-        GateError::NoValidIac(_) | GateError::InvalidIacSignature(_)
-        | GateError::ChannelDenied(_) | GateError::ModelDenied(_)
-        | GateError::ExportForbidden(_) | GateError::ContextBoundExceeded
-        | GateError::SessionDegraded(_, _) | GateError::SessionStale(_, _) => StatusCode::FORBIDDEN,
+        GateError::NoValidIac(_)
+        | GateError::InvalidIacSignature(_)
+        | GateError::ChannelDenied(_)
+        | GateError::ModelDenied(_)
+        | GateError::ToolDenied(_)
+        | GateError::ExportForbidden(_)
+        | GateError::ContextBoundExceeded
+        | GateError::SessionDegraded(_, _)
+        | GateError::SessionStale(_, _) => StatusCode::FORBIDDEN,
         _ => StatusCode::BAD_REQUEST,
     };
     (

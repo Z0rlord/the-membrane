@@ -2,28 +2,33 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use chrono::Duration;
 use clap::{Parser, Subcommand};
 use membrane_core::{
-    BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper, IntentAuthorizationCredential,
-    MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SessionChainState,
-    SignedRollupBundle, build_rollup_bundle, day_bounds_utc, fetch_membrane_bus_events,
-    fetch_membrane_events, fetch_session_chain_bootstrap, keys_from_nsec, last_bus_event_id,
-    membrane_kind_for, npub_from_keys, subscribe_and_compute_bus_root, validate_rollup_bundle,
+    build_rollup_bundle, day_bounds_utc, fetch_membrane_bus_events, fetch_membrane_events,
+    fetch_session_chain_bootstrap, keys_from_nsec, last_bus_event_id, membrane_kind_for,
+    npub_from_keys, subscribe_and_compute_bus_root, validate_rollup_bundle, BusPublisher,
+    BusPublisherConfig, EventType, HttpOtsStamper, IntentAuthorizationCredential, MembraneEvent,
+    MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SessionChainState,
+    SignedRollupBundle,
 };
 use membrane_gate::{
-    ChannelRegistry, Gate, GateServerState, LlmProxy, RouterSessionRequest, run_gate_server,
+    demo_registry, run_attestable_demo, run_gate_server, ChannelRegistry, DemoRuntime,
+    DemoServerState, Gate, GateServerState, LlmProxy, RouterSessionRequest,
 };
 
 mod chat;
 mod config;
 
 use chat::ChatClient;
-use config::{MembraneConfig, config_path, write_example_config};
+use config::{config_path, write_example_config, MembraneConfig};
 
 #[derive(Parser)]
-#[command(name = "membrane", about = "The Membrane Phase 0 prototype — Nostr attestation bus")]
+#[command(
+    name = "membrane",
+    about = "The Membrane Phase 0 prototype — Nostr attestation bus"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -82,12 +87,21 @@ enum Commands {
     Init,
     /// Fail-closed demo: route without IAC, then with IAC
     Demo {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
         #[arg(long, default_value = "tools/channel-registry.example.yaml")]
         registry: PathBuf,
+    },
+    /// Attestable product demo + local dashboard (ephemeral keys, in-memory bus)
+    Attestable {
+        #[arg(long, default_value = "127.0.0.1:8790")]
+        listen: String,
     },
 }
 
@@ -95,14 +109,22 @@ enum Commands {
 enum BusCommands {
     /// Publish a test MembraneEvent (kind 31990)
     PublishTest {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
     },
     /// Subscribe to bus events and recompute bus_root
     Subscribe {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long)]
         since: Option<i64>,
@@ -113,7 +135,11 @@ enum BusCommands {
 enum GateCommands {
     /// Start gate HTTP server (validates IAC before proxying to llama.cpp)
     Start {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
@@ -130,7 +156,11 @@ enum GateCommands {
 enum RollupCommands {
     /// Export RollupBundle for a UTC day from the attestation bus
     Export {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
@@ -150,7 +180,11 @@ enum RollupCommands {
     },
     /// Stamp ots_digest with OpenTimestamps and publish membrane.anchor.ots
     Stamp {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
@@ -163,7 +197,11 @@ enum RollupCommands {
     },
     /// Export, sign, and stamp rollup for a UTC day (default: yesterday)
     Daily {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
@@ -202,7 +240,11 @@ enum SessionCommands {
 enum IacCommands {
     /// Issue a short-lived session IAC bound to the current CP chain head
     Issue {
-        #[arg(long, env = "MEMBRANE_RELAY_URL", default_value = "ws://127.0.0.1:7777")]
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
         relay: String,
         #[arg(long, env = "NOSTR_NSEC")]
         nsec: Option<String>,
@@ -315,6 +357,7 @@ async fn main() -> Result<()> {
             nsec,
             registry,
         } => run_demo(&relay, nsec, &registry).await,
+        Commands::Attestable { listen } => run_attestable(&listen).await,
         Commands::Chat {
             message,
             nsec,
@@ -514,10 +557,7 @@ async fn gate_start(
     }
     println!("gate: Δt={}s", registry.delta_t_secs);
 
-    let llama = registry
-        .llama_cpp_url
-        .as_deref()
-        .unwrap_or("<mock>");
+    let llama = registry.llama_cpp_url.as_deref().unwrap_or("<mock>");
     println!("gate: IAC ok, llama.cpp={llama}, listen={listen}");
 
     let proxy = Arc::new(LlmProxy::new(registry.llama_cpp_url.clone()));
@@ -531,12 +571,7 @@ async fn gate_start(
     run_gate_server(state, listen).await
 }
 
-async fn rollup_export(
-    relay: &str,
-    nsec: Option<String>,
-    day: &str,
-    out: &PathBuf,
-) -> Result<()> {
+async fn rollup_export(relay: &str, nsec: Option<String>, day: &str, out: &PathBuf) -> Result<()> {
     let keys = load_keys(nsec)?;
     let (period_start, period_end) = day_bounds_utc(day)?;
     let events = fetch_membrane_events(relay, Some(period_start), 5_000).await?;
@@ -693,7 +728,8 @@ fn iac_sign(nsec: Option<String>, input: &PathBuf, out: &PathBuf) -> Result<()> 
 fn iac_verify(input: &PathBuf, pubkey: &str) -> Result<()> {
     let iac: IntentAuthorizationCredential =
         serde_json::from_str(&std::fs::read_to_string(input)?).context("parse IAC")?;
-    iac.verify_signature(pubkey).map_err(|e| anyhow::anyhow!("{e}"))?;
+    iac.verify_signature(pubkey)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     println!("IAC signature valid for pubkey {pubkey}");
     Ok(())
 }
@@ -725,6 +761,33 @@ async fn rollup_daily(
     Ok(())
 }
 
+async fn run_attestable(listen: &str) -> Result<()> {
+    // Ephemeral local keys — never requires NOSTR_NSEC or production secrets.
+    let keys = nostr::Keys::generate();
+    let publisher = BusPublisher::new(BusPublisherConfig {
+        relay_url: "memory://attestable-demo".into(),
+        keys: keys.clone(),
+    });
+    let registry = demo_registry();
+    let gate = Arc::new(Gate::new(registry, publisher));
+
+    println!("Attestable demo (local, simulation-only)");
+    println!("  listen:      http://{listen}/");
+    println!("  issuer:      {}", keys.public_key().to_hex());
+    println!("  bus:         memory://attestable-demo (no relay required)");
+    println!("  demo APIs:   /demo/api/* (disabled in production gate start)");
+    println!("  scope:       gateway-routed traffic only; tools are simulated");
+    println!();
+    println!("Open the dashboard, then: issue → allowed → block → sever → evidence");
+
+    let state = DemoServerState {
+        gate,
+        session_chain: Arc::new(tokio::sync::Mutex::new(SessionChainState::genesis())),
+        runtime: Arc::new(tokio::sync::Mutex::new(DemoRuntime::new())),
+    };
+    run_attestable_demo(state, listen).await
+}
+
 async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) -> Result<()> {
     let keys = load_keys(nsec)?;
     let registry = ChannelRegistry::load(registry_path)?;
@@ -750,9 +813,14 @@ async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) ->
 
     let iac = demo_iac(&keys, now);
     println!("\n=== Step 2: open router with valid IAC (expect bus event) ===");
-    let outcome = gate.open_router_session(Some(&iac), req.clone(), now, None).await?;
+    let outcome = gate
+        .open_router_session(Some(&iac), req.clone(), now, None)
+        .await?;
     println!("OK: membrane.cp.router published");
-    println!("  bus_event_id: {}", outcome.bus_event_id.as_deref().unwrap_or_default());
+    println!(
+        "  bus_event_id: {}",
+        outcome.bus_event_id.as_deref().unwrap_or_default()
+    );
     println!("  context_merkle_root: {}", outcome.context_merkle_root);
     println!("  cp_hash: {}", outcome.cp_hash);
 
@@ -791,6 +859,7 @@ fn demo_iac(keys: &nostr::Keys, now: i64) -> IntentAuthorizationCredential {
         scope_id: "demo-session-001".into(),
         permitted_channels: vec!["local-llm".into()],
         model_allowlist: vec!["sha256:demo-model".into()],
+        tool_allowlist: Vec::new(),
         decoder_version: None,
         stimulation_policy: None,
         context_merkle_bound: "f".repeat(64),

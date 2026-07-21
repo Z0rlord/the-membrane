@@ -2,7 +2,7 @@ use crate::bus::bus_root_from_events;
 use crate::canonical::canonical_json_bytes;
 use crate::event::{EventType, MembraneEvent};
 use crate::rollup::{is_cp_event, last_cp_hash_from_events};
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use nostr::event::builder::EventBuilder;
 use nostr::secp256k1::Message;
 use nostr::{Event, EventId, Filter, Keys, Kind, Tag, Timestamp, ToBech32};
@@ -48,6 +48,19 @@ impl BusPublisher {
         self.sign_membrane_event(event)?;
         let nostr_event = self.to_nostr_event(event, prev_event_id)?;
         let event_id = nostr_event.id;
+
+        // Local-only demo / tests: sign and assign id without a live relay.
+        if self.config.relay_url.starts_with("memory://")
+            || self.config.relay_url.starts_with("local://")
+        {
+            info!(
+                event_id = %event_id.to_hex(),
+                kind = membrane_kind_for(event.event_type),
+                "signed MembraneEvent (in-memory bus)"
+            );
+            return Ok(event_id);
+        }
+
         let client = self.connect().await?;
         client.send_event(nostr_event).await?;
         info!(
@@ -175,7 +188,9 @@ pub async fn fetch_membrane_bus_events(
                 id: event.id,
                 event: me,
             }),
-            Err(err) => warn!(event_id = %event.id.to_hex(), error = %err, "skip non-membrane event"),
+            Err(err) => {
+                warn!(event_id = %event.id.to_hex(), error = %err, "skip non-membrane event")
+            }
         }
     }
 
@@ -183,10 +198,7 @@ pub async fn fetch_membrane_bus_events(
     Ok(parsed)
 }
 
-pub fn last_bus_event_id(
-    bus_events: &[MembraneBusEvent],
-    subject_pubkey: &str,
-) -> Option<String> {
+pub fn last_bus_event_id(bus_events: &[MembraneBusEvent], subject_pubkey: &str) -> Option<String> {
     bus_events
         .iter()
         .filter(|e| e.event.subject_pubkey == subject_pubkey)
@@ -208,18 +220,14 @@ pub async fn fetch_session_chain_bootstrap(
     let membrane_events: Vec<_> = bus_events.iter().map(|e| e.event.clone()).collect();
     let last_cp_hash = last_cp_hash_from_events(&membrane_events, subject_pubkey);
     let last_event_id = last_bus_event_id(&bus_events, subject_pubkey);
-    let session_nonce = crate::session::SessionChainState::from_bus_events(
-        &membrane_events,
-        subject_pubkey,
-    )
-    .session_nonce;
+    let session_nonce =
+        crate::session::SessionChainState::from_bus_events(&membrane_events, subject_pubkey)
+            .session_nonce;
     Ok((last_cp_hash, last_event_id, session_nonce))
 }
 
 pub fn npub_from_keys(keys: &Keys) -> Result<String> {
-    keys.public_key()
-        .to_bech32()
-        .context("encode npub")
+    keys.public_key().to_bech32().context("encode npub")
 }
 
 #[cfg(test)]
