@@ -21,6 +21,8 @@ Or any static file server pointed at `site/`.
 ```text
 site/
   index.html      landing page
+  terms/          Terms of Service
+  privacy/        Privacy Policy
   styles.css      layout + motion
   app.js          gate canvas + scroll reveals
   assets/         favicon + OG image
