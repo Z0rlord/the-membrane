@@ -1,9 +1,10 @@
 # The Membrane
 
-Research architecture for a **cognitive boundary** — a nervous-system firewall against AI routing, invasive BCI read/write paths, and non-invasive thought inference.
+The protocol and research architecture behind **Attestable** — a fail-closed control point for AI agents with production access.
 
+For model and tool traffic routed through the gateway, live signed authorizations bind the allowed model, tools, and action scope. Allowed actions extend a tamper-evident, hash-linked receipt chain; missing, expired, out-of-scope, or discontinuous authorization blocks the action and can sever the agent.
 
-The Membrane does not read minds. It attests **which channels may cross the boundary** (local LLM, BCI telemetry, cloud inference), whether they match prior commitments, and **fails closed** when attestation breaks.
+The broader Membrane research program remains a **cognitive boundary**: a nervous-system firewall for governing which external channels may cross a subject-controlled boundary, whether they match prior commitments, and when they must fail closed.
 
 ## Documents
 
@@ -20,15 +21,19 @@ Rebuild MD/PDF: `./scripts/build-paper.sh`
 ## Core idea
 
 ```text
- Endogenous cognition          THE MEMBRANE          Exogenous channels
- (nervous system)              (fail-closed gate)    (AI routers, BCI, sensors)
-        │                              │                      │
-        └────────── only attested ──────┴────── traffic ───────┘
+ Agent / model traffic       THE MEMBRANE GATE       Production systems
+ + proposed tool actions     (fail-closed control)   (code, infra, data)
+          │                           │                        │
+          └── signed policy + scope ──┴── chained receipts ───┘
+                                      │
+                           block / sever on failure
 ```
 
-**Threats:** AI routing (copilots/agents ingesting context), invasive neural channels (implants/BCIs), non-invasive inference (EEG, gaze, behavioral phenotyping).
+**Attestable product wedge:** Make the gate the required path for in-scope agents. A routed model or tool call proceeds only with a live signed authorization for its model, tools, task, and lifetime; each action links to the prior receipt so continuity failures are visible and enforceable.
 
-**Mechanism:** zk-STARK Chain Proofs + SHA-256 Merkle commitments + TEE attestation + personal web-of-trust witnesses. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollup for Bitcoin-backed audit time. No valid CP → sever the channel.
+**Protocol and research foundation:** SHA-256 Merkle commitments, signed Chain Proof receipts, TEE attestation, and web-of-trust witnesses, with zk-STARK proofs on the roadmap. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollups provide independently verifiable audit time. The same fail-closed boundary model extends to local AI, cloud inference, BCI telemetry, and other exogenous channels without changing the sovereignty thesis.
+
+**Scope:** Membrane enforces and provides evidence for traffic routed through its gate. It does not prove hidden reasoning, prove deletion, observe off-gateway activity, read minds, or guarantee regulatory compliance.
 
 ## Phase 0 (no invasive implant required)
 
