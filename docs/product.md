@@ -14,6 +14,11 @@ The Membrane is the enforcement and evidence layer that sits directly in front o
 
 Your security team gets a clear timeline of what each agent did, why it was allowed, and where it was stopped. When an incident happens, you reconstruct any action in minutes and export a signed evidence pack for auditors and counsel.
 
+Membrane receipts can also be exported as vendor-neutral JSON Lines or
+OCSF-inspired JSON for an existing SIEM, SOC, or SOAR. The Membrane produces
+high-integrity authorization telemetry; those systems ingest, correlate, and
+respond to it.
+
 The Membrane enforces and proves the traffic that runs through it. It is deployed inside your environment as the required path for in-scope agents, so approved actions are provable and unauthorized ones never reach production.
 
 ---

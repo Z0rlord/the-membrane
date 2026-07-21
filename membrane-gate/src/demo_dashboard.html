@@ -213,7 +213,10 @@
           <h2>Evidence pack</h2>
           <div class="controls">
             <button class="secondary" id="btn-export">Export evidence JSON</button>
+            <button class="secondary" id="btn-export-ocsf">Export SIEM OCSF-inspired JSON</button>
+            <button class="secondary" id="btn-export-jsonl">Export SIEM JSON Lines</button>
             <button class="secondary" id="btn-verify">Verify receipt chain</button>
+            <p class="hint">SIEM exports contain identifiers, allowlisted model/tool names, outcomes, reasons, and digests—not action bodies or credentials.</p>
           </div>
           <div class="evidence-bar">
             <span id="verify-badge" class="verify" hidden></span>
@@ -353,6 +356,28 @@
       a.click();
       toast("Evidence pack exported");
     };
+
+    async function exportSiem(format, mime, extension) {
+      const res = await fetch(`/demo/api/siem?format=${format}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const text = await res.text();
+      $("evidence-out").textContent = text;
+      const blob = new Blob([text], { type: mime });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `membrane-siem-${Date.now()}.${extension}`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast(`SIEM ${format.toUpperCase()} export downloaded`);
+    }
+
+    $("btn-export-ocsf").onclick = () =>
+      exportSiem("ocsf", "application/json", "ocsf.json").catch((e) => toast(`SIEM export failed: ${e.message || e}`));
+    $("btn-export-jsonl").onclick = () =>
+      exportSiem("jsonl", "application/x-ndjson", "jsonl").catch((e) => toast(`SIEM export failed: ${e.message || e}`));
 
     $("btn-verify").onclick = async () => {
       if (!lastPack) {

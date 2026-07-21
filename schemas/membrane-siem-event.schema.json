@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-membrane.xyz/schemas/membrane-siem-event.schema.json",
+  "title": "Membrane SIEM Event",
+  "description": "Vendor-neutral, secret-free Membrane authorization telemetry record used by JSON Lines exports.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "timestamp",
+    "event_id",
+    "event_type",
+    "outcome",
+    "severity",
+    "agent_id",
+    "simulation",
+    "source_event_type"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "timestamp": { "type": "integer", "minimum": 0 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "event_type": {
+      "enum": [
+        "authorization_issued",
+        "allowed_action",
+        "blocked_action",
+        "sever",
+        "degraded",
+        "demo_reset",
+        "membrane_telemetry"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "issued",
+        "allowed",
+        "blocked",
+        "severed",
+        "degraded",
+        "observed"
+      ]
+    },
+    "severity": {
+      "enum": ["informational", "low", "medium", "high", "critical"]
+    },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "scope_id": { "type": "string", "minLength": 1 },
+    "models": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "policy_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "receipt_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "parent_receipt_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "reason": { "type": "string" },
+    "simulation": { "type": "boolean" },
+    "source_event_type": { "type": "string", "minLength": 1 }
+  }
+}

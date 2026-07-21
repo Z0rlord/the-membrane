@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{
-    extract::{DefaultBodyLimit, Extension, Path, Request, State},
+    extract::{DefaultBodyLimit, Extension, Path, Query, Request, State},
     http::{
         header::{self, HeaderName},
         HeaderMap, HeaderValue, Method, StatusCode,
@@ -19,7 +19,10 @@ use axum::{
 use membrane_core::event::MembraneEvent;
 use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::rollup::{cp_hash_hex, GENESIS_CP_HASH};
-use membrane_core::{SessionChainState, ALERT_REASON_SUBJECT_SEVER};
+use membrane_core::{
+    build_ocsf_inspired_pack, render_jsonl, SessionChainState, SiemEvent,
+    ALERT_REASON_SUBJECT_SEVER, SIEM_SCHEMA_VERSION,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
@@ -72,7 +75,7 @@ struct RateWindow {
     writes: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimelineKind {
     Issued,
@@ -214,6 +217,7 @@ pub fn demo_router(state: DemoServerState) -> Router {
         .route("/demo/api/reset", post(api_reset))
         .route("/demo/api/evidence", get(api_evidence_export))
         .route("/demo/api/evidence/verify", post(api_evidence_verify))
+        .route("/demo/api/siem", get(api_siem_export))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
@@ -627,6 +631,52 @@ async fn api_evidence_verify(
     Json(verify_evidence_pack(&pack))
 }
 
+#[derive(Debug, Deserialize)]
+struct SiemExportQuery {
+    #[serde(default = "default_siem_format")]
+    format: String,
+}
+
+fn default_siem_format() -> String {
+    "ocsf".into()
+}
+
+async fn api_siem_export(
+    Extension(state): Extension<DemoServerState>,
+    Query(query): Query<SiemExportQuery>,
+) -> Response {
+    let runtime = state.runtime.lock().await;
+    let events: Vec<_> = runtime.timeline.iter().map(timeline_to_siem).collect();
+    drop(runtime);
+
+    match query.format.as_str() {
+        "ocsf" => Json(build_ocsf_inspired_pack(&events, now_secs())).into_response(),
+        "jsonl" => match render_jsonl(&events) {
+            Ok(body) => (
+                [
+                    (header::CONTENT_TYPE, "application/x-ndjson"),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        "attachment; filename=\"membrane-siem.jsonl\"",
+                    ),
+                ],
+                body,
+            )
+                .into_response(),
+            Err(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("SIEM export failed: {err}") })),
+            )
+                .into_response(),
+        },
+        _ => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "format must be ocsf or jsonl" })),
+        )
+            .into_response(),
+    }
+}
+
 async fn issue_authorization(state: &DemoServerState, ttl_secs: i64) -> Result<Value, GateError> {
     let now = now_secs();
     let chain = state.session_chain.lock().await;
@@ -1005,6 +1055,35 @@ async fn sever_session(state: &DemoServerState) -> Result<Value, GateError> {
     }))
 }
 
+fn timeline_to_siem(entry: &TimelineEntry) -> SiemEvent {
+    let (event_type, outcome, severity) = match entry.kind {
+        TimelineKind::Issued => ("authorization_issued", "issued", "informational"),
+        TimelineKind::Allowed => ("allowed_action", "allowed", "informational"),
+        TimelineKind::Blocked => ("blocked_action", "blocked", "high"),
+        TimelineKind::Severed => ("sever", "severed", "high"),
+        TimelineKind::Reset => ("demo_reset", "observed", "informational"),
+    };
+    SiemEvent {
+        schema_version: SIEM_SCHEMA_VERSION.into(),
+        timestamp: entry.timestamp,
+        event_id: entry.id.clone(),
+        event_type: event_type.into(),
+        outcome: outcome.into(),
+        severity: severity.into(),
+        agent_id: entry.agent_id.clone(),
+        session_id: entry.scope_id.clone(),
+        scope_id: entry.scope_id.clone(),
+        models: entry.model.iter().cloned().collect(),
+        tools: entry.tool.iter().cloned().collect(),
+        policy_hash: entry.iac_hash.clone(),
+        receipt_hash: entry.cp_hash.clone(),
+        parent_receipt_hash: entry.parent_cp_hash.clone(),
+        reason: entry.reason.clone(),
+        simulation: entry.simulation,
+        source_event_type: format!("demo.timeline.{:?}", entry.kind).to_lowercase(),
+    }
+}
+
 async fn build_evidence_pack(state: &DemoServerState) -> EvidencePack {
     let chain = state.session_chain.lock().await;
     let runtime = state.runtime.lock().await;
@@ -1252,6 +1331,28 @@ mod tests {
         let verify = verify_evidence_pack(&pack);
         assert!(verify.ok, "errors: {:?}", verify.errors);
         assert_eq!(verify.receipts_checked, 1);
+
+        let runtime = state.runtime.lock().await;
+        let siem_events: Vec<_> = runtime.timeline.iter().map(timeline_to_siem).collect();
+        drop(runtime);
+        for required in [
+            "authorization_issued",
+            "allowed_action",
+            "blocked_action",
+            "sever",
+        ] {
+            assert!(
+                siem_events.iter().any(|event| event.event_type == required),
+                "missing SIEM event type {required}"
+            );
+        }
+        let jsonl = render_jsonl(&siem_events).unwrap();
+        assert!(!jsonl.contains("looking"));
+        assert!(jsonl.lines().all(|line| {
+            serde_json::from_str::<SiemEvent>(line)
+                .map(|event| event.simulation)
+                .unwrap_or(false)
+        }));
     }
 
     #[tokio::test]

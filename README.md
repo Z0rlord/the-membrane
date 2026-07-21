@@ -13,6 +13,7 @@ The broader Membrane research program remains a **cognitive boundary**: a nervou
 | File | Description |
 |------|-------------|
 | [docs/product.md](docs/product.md) | **The Membrane** — enterprise product positioning (agent integrity gateway) |
+| [docs/siem-export.md](docs/siem-export.md) | Vendor-neutral SIEM/SOC export (JSON Lines and OCSF-inspired JSON) |
 | [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
 | [docs/demo.md](docs/demo.md) | Local product dashboard — one-command demo |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) |
@@ -169,12 +170,22 @@ membrane chat --message "summarize my threat model"
 membrane session status
 membrane session receipts --since-secs 86400
 
+# Export standard SIEM telemetry (no signing key required)
+membrane evidence export --format jsonl --since-secs 86400 --out membrane-siem.jsonl
+membrane evidence export --format ocsf --since-secs 86400 --out membrane-siem.ocsf.json
+
 # Sever active session (fail-closed; requires fresh IAC to resume)
 membrane sever
 membrane sever --scope-id sovereign-1234567890
 ```
 
 Each turn returns `X-Membrane-CP-Hash`, `X-Membrane-Session-Nonce`, and related headers from the gate. Session logs are saved under `~/.local/share/membrane/sessions/`.
+
+**SIEM/SOC export:** signed bus events can be projected as vendor-neutral JSON
+Lines or an explicitly OCSF-inspired JSON pack. This lets existing SOC, SIEM,
+and SOAR tooling consume authorization-issued, allowed, blocked, sever, and
+stale/degraded telemetry without making the Membrane a monitoring product or
+claiming a vendor partnership. See [docs/siem-export.md](docs/siem-export.md).
 
 **Severance:** `membrane sever` publishes `membrane.alert.degraded` with `reason: subject_sever`, removes the local active IAC, and blocks further chat on that scope until you issue a fresh IAC (`membrane iac issue`). The gate also runs a Δt watchdog (default 300s): if no `membrane.cp.router` arrives within Δt, it publishes `membrane.alert.degraded` and rejects chat fail-closed. Check staleness via `membrane session status` or `GET /health` (`delta_t_secs`, `last_cp_age_secs`).
 
@@ -191,7 +202,7 @@ membrane chat --gate-url http://relay-2:8787 \
 | MembraneEvent.type | Nostr kind | tag `k` |
 |--------------------|------------|---------|
 | `membrane.cp.*`, `membrane.iac`, `membrane.anchor.ots` | 31990 | `the-membrane-*` |
-| `membrane.alert.degraded` | 31991 | `the-membrane-alert-degraded` |
+| `membrane.alert.degraded`, `membrane.action.blocked` | 31991 | `the-membrane-alert-degraded`, `the-membrane-action-blocked` |
 
 Common tags: `p` (subject pubkey), `e` (prior event id). Content is canonical `MembraneEvent` JSON (metadata only).
 

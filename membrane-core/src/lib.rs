@@ -7,6 +7,7 @@ pub mod nostr_bus;
 pub mod ots;
 pub mod rollup;
 pub mod session;
+pub mod siem;
 
 pub use bus::bus_root_from_events;
 pub use bus::{BusSubscriber, BusSubscriberConfig};
@@ -27,4 +28,8 @@ pub use rollup::{
 pub use session::{
     alert_degraded_fields, alert_degraded_payload, SessionChainState,
     ALERT_REASON_DELTA_T_EXCEEDED, ALERT_REASON_SUBJECT_SEVER,
+};
+pub use siem::{
+    build_ocsf_inspired_pack, render_jsonl, OcsfInspiredPack, SiemEvent, OCSF_INSPIRED_SCHEMA,
+    SIEM_SCHEMA_VERSION,
 };

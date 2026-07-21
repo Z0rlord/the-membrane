@@ -4,14 +4,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use chrono::Duration;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use membrane_core::{
-    build_rollup_bundle, day_bounds_utc, fetch_membrane_bus_events, fetch_membrane_events,
-    fetch_session_chain_bootstrap, keys_from_nsec, last_bus_event_id, membrane_kind_for,
-    npub_from_keys, subscribe_and_compute_bus_root, validate_rollup_bundle, BusPublisher,
-    BusPublisherConfig, EventType, HttpOtsStamper, IntentAuthorizationCredential, MembraneEvent,
-    MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SessionChainState,
-    SignedRollupBundle,
+    build_ocsf_inspired_pack, build_rollup_bundle, day_bounds_utc, fetch_membrane_bus_events,
+    fetch_membrane_events, fetch_session_chain_bootstrap, keys_from_nsec, last_bus_event_id,
+    membrane_kind_for, npub_from_keys, render_jsonl, subscribe_and_compute_bus_root,
+    validate_rollup_bundle, BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper,
+    IntentAuthorizationCredential, MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper,
+    RollupBundle, SessionChainState, SiemEvent, SignedRollupBundle,
 };
 use membrane_gate::{
     demo_registry, run_demo_dashboard, run_gate_server, ChannelRegistry, DemoRuntime,
@@ -50,6 +50,11 @@ enum Commands {
     Rollup {
         #[command(subcommand)]
         command: RollupCommands,
+    },
+    /// Evidence and SIEM/SOC export operations
+    Evidence {
+        #[command(subcommand)]
+        command: EvidenceCommands,
     },
     /// Intent Authorization Credential tools
     Iac {
@@ -220,6 +225,36 @@ enum RollupCommands {
     },
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum SiemFormat {
+    /// OCSF-inspired JSON pack (no certified class identifiers claimed)
+    Ocsf,
+    /// Newline-delimited vendor-neutral Membrane records
+    Jsonl,
+}
+
+#[derive(Subcommand)]
+enum EvidenceCommands {
+    /// Export attestation-bus receipts and alerts for SIEM file or HTTP ingestion
+    Export {
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
+        relay: String,
+        #[arg(long, value_enum, default_value = "jsonl")]
+        format: SiemFormat,
+        #[arg(long, default_value = "86400")]
+        since_secs: i64,
+        /// Restrict export to one public agent/subject identifier
+        #[arg(long)]
+        subject_pubkey: Option<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+}
+
 #[derive(Subcommand)]
 enum SessionCommands {
     /// Show chain head, active IAC, and recent activity
@@ -331,6 +366,15 @@ async fn main() -> Result<()> {
                 work_dir,
                 mock,
             } => rollup_daily(&relay, nsec, day.as_deref(), &work_dir, mock).await,
+        },
+        Commands::Evidence { command } => match command {
+            EvidenceCommands::Export {
+                relay,
+                format,
+                since_secs,
+                subject_pubkey,
+                out,
+            } => evidence_export(&relay, format, since_secs, subject_pubkey.as_deref(), &out).await,
         },
         Commands::Iac { command } => match command {
             IacCommands::Issue {
@@ -583,6 +627,50 @@ async fn gate_start(
     run_gate_server(state, listen).await
 }
 
+async fn evidence_export(
+    relay: &str,
+    format: SiemFormat,
+    since_secs: i64,
+    subject_pubkey: Option<&str>,
+    out: &PathBuf,
+) -> Result<()> {
+    if since_secs < 0 {
+        bail!("--since-secs must be zero or greater");
+    }
+    let since = now_secs().saturating_sub(since_secs);
+    let bus_events = fetch_membrane_bus_events(relay, Some(since), 10_000).await?;
+    let events: Vec<_> = bus_events
+        .iter()
+        .filter(|bus_event| {
+            subject_pubkey
+                .map(|subject| bus_event.event.subject_pubkey == subject)
+                .unwrap_or(true)
+        })
+        .map(|bus_event| {
+            let id = bus_event.id.to_hex();
+            SiemEvent::from_membrane_event(&bus_event.event, Some(&id))
+        })
+        .collect();
+
+    let body = match format {
+        SiemFormat::Ocsf => {
+            serde_json::to_string_pretty(&build_ocsf_inspired_pack(&events, now_secs()))?
+        }
+        SiemFormat::Jsonl => render_jsonl(&events)?,
+    };
+    std::fs::write(out, body)?;
+    println!(
+        "SIEM export: {} event(s), format={}, out={}",
+        events.len(),
+        match format {
+            SiemFormat::Ocsf => "ocsf-inspired",
+            SiemFormat::Jsonl => "jsonl",
+        },
+        out.display()
+    );
+    Ok(())
+}
+
 async fn rollup_export(relay: &str, nsec: Option<String>, day: &str, out: &PathBuf) -> Result<()> {
     let keys = load_keys(nsec)?;
     let (period_start, period_end) = day_bounds_utc(day)?;
@@ -713,6 +801,27 @@ async fn iac_issue(
         vec!["cloud-telemetry".into(), "training-retention".into()],
     );
     iac.sign(&keys).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let iac_hash = iac.hash_hex()?;
+
+    let publisher = BusPublisher::new(BusPublisherConfig {
+        relay_url: relay.to_string(),
+        keys: keys.clone(),
+    });
+    let mut issued_event = MembraneEvent::new(
+        EventType::Iac,
+        keys.public_key().to_hex(),
+        parent.clone(),
+        now,
+        MembranePayload::Generic(serde_json::json!({
+            "scope_id": scope_id,
+            "model_allowlist": iac.model_allowlist,
+            "tool_allowlist": iac.tool_allowlist,
+            "iac_hash": iac_hash,
+            "parent_cp_hash": parent,
+            "valid_until": iac.valid_until,
+        })),
+    );
+    let issued_event_id = publisher.publish(&mut issued_event, None).await?;
 
     let json = serde_json::to_string_pretty(&iac)?;
     std::fs::write(out, json)?;
@@ -722,6 +831,7 @@ async fn iac_issue(
     println!("  valid_until: {} (+{ttl_secs}s)", iac.valid_until);
     println!("  parent_cp_hash: {parent}");
     println!("  signer: {}", keys.public_key().to_hex());
+    println!("  authorization_event: {}", issued_event_id.to_hex());
     Ok(())
 }
 
@@ -909,6 +1019,22 @@ mod cli_tests {
     fn iac_smoke_keeps_the_operator_test() {
         let cli = Cli::try_parse_from(["membrane", "iac-smoke"]).unwrap();
         assert!(matches!(cli.command, Commands::IacSmoke { .. }));
+    }
+
+    #[test]
+    fn evidence_export_supports_standard_formats() {
+        for format in ["ocsf", "jsonl"] {
+            let cli = Cli::try_parse_from([
+                "membrane", "evidence", "export", "--format", format, "--out", "siem.out",
+            ])
+            .unwrap();
+            assert!(matches!(
+                cli.command,
+                Commands::Evidence {
+                    command: EvidenceCommands::Export { .. }
+                }
+            ));
+        }
     }
 
     #[test]

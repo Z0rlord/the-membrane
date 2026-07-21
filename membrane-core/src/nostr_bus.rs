@@ -16,7 +16,7 @@ pub const KIND_ALERT: u16 = 31991;
 
 pub fn membrane_kind_for(event_type: EventType) -> u16 {
     match event_type {
-        EventType::AlertDegraded => KIND_ALERT,
+        EventType::AlertDegraded | EventType::ActionBlocked => KIND_ALERT,
         _ => KIND_MEMBRANE,
     }
 }

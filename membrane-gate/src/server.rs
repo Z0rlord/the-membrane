@@ -79,7 +79,47 @@ async fn chat_completions(
 ) -> Response {
     match handle_chat(&state, &headers, &mut req).await {
         Ok((resp, receipt)) => chat_success_response(resp, &receipt),
-        Err(err) => gate_error_response(err),
+        Err(err) => {
+            publish_blocked_receipt(&state, &headers, &req, &err).await;
+            gate_error_response(err)
+        }
+    }
+}
+
+async fn publish_blocked_receipt(
+    state: &GateServerState,
+    headers: &HeaderMap,
+    req: &ChatRequest,
+    err: &GateError,
+) {
+    let iac = load_iac(headers, state.default_iac.as_ref()).ok();
+    let scope_id = iac.as_ref().map(|iac| iac.scope_id.as_str());
+    let iac_hash = iac.as_ref().and_then(|iac| iac.hash_hex().ok());
+    let model_id = state
+        .gate
+        .registry()
+        .model_allowlist
+        .contains(&req.model)
+        .then_some(req.model.as_str());
+    let (last_cp_hash, prev_event_id) = {
+        let chain = state.session_chain.lock().await;
+        (chain.last_cp_hash.clone(), chain.last_event_id.clone())
+    };
+
+    if let Err(publish_err) = state
+        .gate
+        .publish_action_blocked(
+            scope_id,
+            model_id,
+            iac_hash.as_deref(),
+            &err.to_string(),
+            now_secs(),
+            &last_cp_hash,
+            prev_event_id.as_deref(),
+        )
+        .await
+    {
+        warn!(error = %publish_err, "failed to publish blocked-action receipt");
     }
 }
 

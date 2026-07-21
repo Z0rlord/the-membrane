@@ -19,6 +19,8 @@ pub enum EventType {
     AnchorOts,
     #[serde(rename = "membrane.alert.degraded")]
     AlertDegraded,
+    #[serde(rename = "membrane.action.blocked")]
+    ActionBlocked,
 }
 
 impl EventType {
@@ -30,6 +32,7 @@ impl EventType {
             Self::Iac => "membrane.iac",
             Self::AnchorOts => "membrane.anchor.ots",
             Self::AlertDegraded => "membrane.alert.degraded",
+            Self::ActionBlocked => "membrane.action.blocked",
         }
     }
 
@@ -41,6 +44,7 @@ impl EventType {
             Self::Iac => "the-membrane-iac",
             Self::AnchorOts => "the-membrane-anchor-ots",
             Self::AlertDegraded => "the-membrane-alert-degraded",
+            Self::ActionBlocked => "the-membrane-action-blocked",
         }
     }
 }

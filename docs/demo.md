@@ -43,7 +43,17 @@ If the `membrane` binary is installed, the equivalent command is `membrane demo`
 3. **Blocked tool** — attempt `github.merge`; hard block with reason
 4. **Blocked model swap** — same tool with `unrestricted-agent-v9`; hard block
 5. **Sever** — sever session, then retry `slack.post`; fails closed
-6. **Evidence** — export JSON pack and verify the receipt chain (pass/fail)
+6. **Evidence** — export JSON evidence or SIEM-ready OCSF-inspired/JSON Lines records, then verify the receipt chain (pass/fail)
+
+Demo SIEM API:
+
+```bash
+curl -fsS 'http://127.0.0.1:8790/demo/api/siem?format=ocsf'
+curl -fsS 'http://127.0.0.1:8790/demo/api/siem?format=jsonl'
+```
+
+Both remain simulation-only and omit action bodies and credentials. See
+[siem-export.md](siem-export.md) for operator ingestion patterns.
 
 ## Technical IAC smoke test
 

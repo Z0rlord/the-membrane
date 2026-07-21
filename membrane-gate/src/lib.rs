@@ -164,6 +164,34 @@ impl Gate {
         Ok(id)
     }
 
+    pub async fn publish_action_blocked(
+        &self,
+        scope_id: Option<&str>,
+        model_id: Option<&str>,
+        iac_hash: Option<&str>,
+        reason: &str,
+        now: i64,
+        last_cp_hash: &str,
+        prev_event_id: Option<&str>,
+    ) -> Result<String, GateError> {
+        let payload = MembranePayload::Generic(serde_json::json!({
+            "scope_id": scope_id,
+            "model_allowlist": model_id.into_iter().collect::<Vec<_>>(),
+            "tool_allowlist": Vec::<String>::new(),
+            "iac_hash": iac_hash,
+            "reason": reason,
+        }));
+        let mut event =
+            MembraneEvent::new(EventType::ActionBlocked, "", last_cp_hash, now, payload);
+        let id = self
+            .publisher
+            .publish(&mut event, prev_event_id)
+            .await
+            .map_err(GateError::Bus)?
+            .to_hex();
+        Ok(id)
+    }
+
     pub async fn open_router_session(
         &self,
         iac: Option<&IntentAuthorizationCredential>,

@@ -26,7 +26,8 @@
         "membrane.cp.bci",
         "membrane.iac",
         "membrane.anchor.ots",
-        "membrane.alert.degraded"
+        "membrane.alert.degraded",
+        "membrane.action.blocked"
       ]
     },
     "subject_pubkey": {
