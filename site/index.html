@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Attestable — The fail-closed control point for AI agents with production access</title>
+  <meta name="description" content="Attestable is a fail-closed control point for AI agents with production access. Every model call and tool action carries a live, signed authorization, or it never reaches production." />
+  <meta name="theme-color" content="#0b1a22" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Attestable — fail-closed control point for AI agents" />
+  <meta property="og:description" content="Every model call and tool action carries a live, signed authorization — or it never reaches production." />
+  <meta property="og:image" content="assets/og.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#problem">Skip to content</a>
+
+  <!-- ============ HERO ============ -->
+  <header class="hero" id="top">
+    <canvas class="gate-canvas" aria-hidden="true"></canvas>
+    <div class="hero-atmosphere" aria-hidden="true"></div>
+
+    <nav class="topbar">
+      <span class="wordmark-sm">Attestable</span>
+      <a class="topbar-link" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">GitHub</a>
+    </nav>
+
+    <div class="hero-inner">
+      <h1 class="brand">Attestable</h1>
+      <p class="headline">The fail-closed control point for AI agents with production access.</p>
+      <p class="subhead">Every model call and every tool action carries a live, signed authorization&nbsp;— or it never reaches production.</p>
+      <div class="cta-group">
+        <a class="btn btn-primary" href="#run">Run it locally</a>
+        <a class="btn btn-ghost" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">View on GitHub</a>
+      </div>
+    </div>
+
+    <div class="scroll-cue" aria-hidden="true"><span>Scroll</span></div>
+  </header>
+
+  <main>
+    <!-- ============ PROBLEM ============ -->
+    <section class="section section-problem reveal" id="problem">
+      <p class="eyebrow">The problem</p>
+      <h2 class="section-title">Agents have the keys. Logs can't prove who authorized what.</h2>
+      <p class="lede">
+        Enterprises are handing AI agents real write access: agents that merge code, change
+        infrastructure, edit tickets, and touch customer data. When an agent does the wrong thing,
+        teams are left with scattered logs and vendor chat histories — editable, incomplete, and
+        unable to prove that an action was authorized by an unexpired policy. Incident reconstruction
+        is slow and unreliable.
+      </p>
+    </section>
+
+    <!-- ============ SOLUTION ============ -->
+    <section class="section section-solution reveal" id="solution">
+      <p class="eyebrow">The solution</p>
+      <h2 class="section-title">A gateway that fails closed.</h2>
+      <p class="lede">
+        Attestable sits directly in front of your agents. It requires a live, signed authorization for
+        every model and tool call, records each action in a tamper-evident, hash-linked receipt chain,
+        and blocks or severs the agent the moment the chain breaks. Approved actions are provable;
+        unauthorized ones never hit production.
+      </p>
+    </section>
+
+    <!-- ============ DIFFERENTIATORS ============ -->
+    <section class="section section-diff reveal" id="how">
+      <p class="eyebrow">Why it's different</p>
+      <h2 class="section-title">Enforcement and evidence, bound to the action.</h2>
+      <div class="diff-grid">
+        <div class="diff-item">
+          <span class="diff-num">01</span>
+          <h3>It enforces, it doesn't just watch.</h3>
+          <p>Observability tools explain what an agent did after the fact. Attestable is an inline
+            control point that refuses unauthorized actions before they reach production.</p>
+        </div>
+        <div class="diff-item">
+          <span class="diff-num">02</span>
+          <h3>Authorization is bound to the action, not the prompt.</h3>
+          <p>Every action carries a signed policy naming the exact model, tools, and scope, linked into
+            a tamper-evident receipt chain. A silent model or tool swap breaks the chain and is blocked.</p>
+        </div>
+        <div class="diff-item">
+          <span class="diff-num">03</span>
+          <h3>Incident reconstruction in minutes.</h3>
+          <p>Because approvals and actions are hash-linked, security can trace any action to its
+            authorizing policy and issuer — and hand auditors a signed evidence pack. No dependence on a
+            vendor's mutable logs.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DEMO STORY ============ -->
+    <section class="section section-demo reveal" id="demo">
+      <p class="eyebrow">The demo, in six steps</p>
+      <h2 class="section-title">Grant scope. Allow. Block. Sever. Reconstruct. Prove.</h2>
+      <ol class="demo-chain" aria-label="Six-step demo narrative">
+        <li class="step step-allow">
+          <span class="step-state" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Grant scope</h3>
+            <p>An operator issues a 15-minute authorization for a support agent: one model, tools limited
+              to <span class="mono">jira.comment</span> and <span class="mono">slack.post</span>, bound to one task.</p>
+          </div>
+        </li>
+        <li class="step step-allow">
+          <span class="step-state" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Approved action</h3>
+            <p>The agent posts a ticket comment. A green, linked receipt shows policy → model → tool, all
+              matching and chained to the prior receipt.</p>
+          </div>
+        </li>
+        <li class="step step-block">
+          <span class="step-state" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Blocked swap</h3>
+            <p>The agent reaches for a different model, or for <span class="mono">github.merge</span> —
+              outside the authorization. Attestable blocks it; a red receipt shows exactly why.</p>
+          </div>
+        </li>
+        <li class="step step-block">
+          <span class="step-state" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Expiry / sever</h3>
+            <p>The authorization expires, or security hits <em>sever</em>. The next tool call fails closed;
+              an alert lands in the incident channel.</p>
+          </div>
+        </li>
+        <li class="step step-neutral">
+          <span class="step-state" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Reconstruct</h3>
+            <p>Security opens the timeline, clicks any action, and sees the model, context scope, policy,
+              and issuer behind it — no log spelunking.</p>
+          </div>
+        </li>
+        <li class="step step-neutral">
+          <span class="step-state" aria-hidden="true"></span>
+          <div class="step-body">
+            <h3>Export evidence</h3>
+            <p>One click produces a signed evidence pack. Verify the hash chain offline in seconds.</p>
+          </div>
+        </li>
+      </ol>
+      <p class="demo-note">This is the narrative the local demo walks through — it is not a live control
+        console. Run the demo below to drive it yourself.</p>
+    </section>
+
+    <!-- ============ RUN LOCALLY ============ -->
+    <section class="section section-run reveal" id="run">
+      <p class="eyebrow">Run it locally</p>
+      <h2 class="section-title">One command. No relay, no secrets, no paid APIs.</h2>
+      <p class="lede">
+        The local dashboard walks the full fail-closed narrative — issue, allow, block, sever, evidence —
+        backed by real Membrane gate checks and CP receipt chaining, using ephemeral keys and an in-memory bus.
+      </p>
+      <div class="run-panel">
+        <div class="run-steps">
+          <pre class="code"><code><span class="c-dim"># clone the repo</span>
+git clone https://github.com/Z0rlord/the-membrane.git
+cd the-membrane
+
+<span class="c-dim"># launch the Attestable demo dashboard</span>
+cargo run -p membrane-cli -- attestable</code></pre>
+          <p class="run-open">Then open <a class="mono" href="http://127.0.0.1:8790/">http://127.0.0.1:8790/</a></p>
+        </div>
+      </div>
+      <div class="cta-group">
+        <a class="btn btn-primary" href="https://github.com/Z0rlord/the-membrane#attestable-demo-dashboard" rel="noopener" target="_blank">Demo instructions</a>
+        <a class="btn btn-ghost" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">View on GitHub</a>
+      </div>
+    </section>
+
+    <!-- ============ HONEST SCOPE ============ -->
+    <section class="section section-scope reveal" id="scope">
+      <p class="eyebrow">Honest scope</p>
+      <h2 class="section-title">What Attestable does — and what it doesn't.</h2>
+      <p class="lede">
+        Attestable enforces and proves the traffic routed through it. It does not make claims about an
+        agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory
+        compliance on its own. Coverage is limited to gateway-routed model and tool traffic.
+      </p>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER CTA ============ -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <p class="footer-brand">Attestable</p>
+      <p class="footer-tag">The fail-closed control point for AI agents with production access.</p>
+      <div class="cta-group">
+        <a class="btn btn-primary" href="#run">Run it locally</a>
+        <a class="btn btn-ghost" href="https://github.com/Z0rlord/the-membrane" rel="noopener" target="_blank">View on GitHub</a>
+      </div>
+      <p class="footer-meta">
+        The commercial product surface of the Membrane gate.
+        Documentation licensed CC BY 4.0 · code AGPL-3.0.
+      </p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

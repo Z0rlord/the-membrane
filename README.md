@@ -2,6 +2,8 @@
 
 The protocol and research architecture behind **Attestable** — a fail-closed control point for AI agents with production access.
 
+**Public landing:** [attestable.dojopop.live](https://attestable.dojopop.live) · source in [`site/`](site/)
+
 For model and tool traffic routed through the gateway, live signed authorizations bind the allowed model, tools, and action scope. Allowed actions extend a tamper-evident, hash-linked receipt chain; missing, expired, out-of-scope, or discontinuous authorization blocks the action and can sever the agent.
 
 The broader Membrane research program remains a **cognitive boundary**: a nervous-system firewall for governing which external channels may cross a subject-controlled boundary, whether they match prior commitments, and when they must fail closed.
@@ -11,6 +13,7 @@ The broader Membrane research program remains a **cognitive boundary**: a nervou
 | File | Description |
 |------|-------------|
 | [docs/attestable.md](docs/attestable.md) | **Attestable** — enterprise product positioning (agent integrity gateway) |
+| [site/](site/) | **Attestable** public landing page ([attestable.dojopop.live](https://attestable.dojopop.live)) |
 | [docs/attestable-demo.md](docs/attestable-demo.md) | Local Attestable dashboard — one-command demo |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, and Phase 0 prototype path |
@@ -71,9 +74,11 @@ membrane-cli/         `membrane` binary
 tools/                channel registry YAML, local relay config
 ```
 
-### Attestable demo dashboard
+### Attestable landing + local demo
 
-Local browser demo of the Attestable product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus — no relay, secrets, or paid APIs.
+Public marketing site (static, no operator console): **[attestable.dojopop.live](https://attestable.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+
+Local browser demo of the product narrative (issue → allow → block → sever → evidence). Uses ephemeral keys and an in-memory bus — no relay, secrets, or paid APIs. **Not** deployed on the marketing origin.
 
 ```bash
 cargo run -p membrane-cli -- attestable
