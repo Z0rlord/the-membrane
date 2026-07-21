@@ -11,5 +11,5 @@ model_allowlist:
 
 delta_t_secs: 300
 
-# llama.cpp server base (OpenAI-compatible /v1/chat/completions; mock if unreachable)
-llama_cpp_url: http://127.0.0.1:8080
+# Model API base URL (chat/completions wire format at /v1/chat/completions; mock if unreachable)
+model_api_url: http://127.0.0.1:8080

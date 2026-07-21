@@ -1,4 +1,4 @@
-# Production gate on relay-2 — llama.cpp in docker network
+# Production gate on relay-2 — local model backend in docker network
 permitted_channels:
   - local-llm
 
@@ -11,4 +11,4 @@ model_allowlist:
 
 delta_t_secs: 300
 
-llama_cpp_url: http://llama:8080
+model_api_url: http://llama:8080

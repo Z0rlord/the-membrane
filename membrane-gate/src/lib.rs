@@ -41,8 +41,8 @@ pub struct ChannelRegistry {
     pub model_allowlist: Vec<String>,
     #[serde(default = "default_delta_t_secs")]
     pub delta_t_secs: u64,
-    #[serde(default, alias = "ollama_url")]
-    pub llama_cpp_url: Option<String>,
+    #[serde(default, alias = "llama_cpp_url", alias = "ollama_url")]
+    pub model_api_url: Option<String>,
 }
 
 fn default_delta_t_secs() -> u64 {
@@ -285,7 +285,7 @@ mod tests {
             forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
             model_allowlist: vec!["demo".into()],
             delta_t_secs: delta_t,
-            llama_cpp_url: None,
+            model_api_url: None,
         };
         let publisher = BusPublisher::new(BusPublisherConfig {
             relay_url: "ws://localhost:7777".into(),
@@ -343,7 +343,7 @@ mod tests {
             forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
             model_allowlist: vec!["demo".into()],
             delta_t_secs: 300,
-            llama_cpp_url: None,
+            model_api_url: None,
         };
         let publisher = BusPublisher::new(BusPublisherConfig {
             relay_url: "memory://test".into(),

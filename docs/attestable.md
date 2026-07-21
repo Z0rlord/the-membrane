@@ -1,5 +1,5 @@
-# Attestable (renamed)
+# Attestable (retired name — redirect)
 
-**This product name is retired.** See **[product.md](product.md)** — commercial positioning for **The Membrane**.
+**The product is now [The Membrane](product.md).** This stub remains so old links resolve.
 
 The prior name conflicted with an unrelated AI company ([attestable.help](https://attestable.help)); we claim no affiliation.

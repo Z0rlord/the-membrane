@@ -147,7 +147,7 @@ pub fn demo_registry() -> crate::ChannelRegistry {
         model_allowlist: vec![DEMO_MODEL.into()],
         // Generous Δt so a live demo is not interrupted mid-narrative.
         delta_t_secs: 86_400,
-        llama_cpp_url: None,
+        model_api_url: None,
     }
 }
 

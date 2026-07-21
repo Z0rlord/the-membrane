@@ -1,10 +1,10 @@
-# Membrane gate + llama.cpp (relay-2)
+# Membrane gate + model backend (relay-2)
 
-IAC-gated local LLM proxy on `relay-2` (self-hosted gate).
+IAC-gated model API proxy on `relay-2` (self-hosted gate). The reference deploy runs a local llama.cpp server as one example backend; any allowed chat/completions-compatible endpoint works.
 
 | Service | Port | Access |
 |---------|------|--------|
-| llama.cpp | `8080` | `127.0.0.1` on host (gate only) |
+| model backend (example: llama.cpp) | `8080` | `127.0.0.1` on host (gate only) |
 | membrane gate | `8787` | `http://relay-2:8787` (Tailscale) |
 
 ## Deploy
@@ -41,7 +41,7 @@ Use compact JSON (single line) or base64 in `X-Membrane-IAC` — pretty-printed 
 
 On relay-2 host, set `MEMBRANE_RELAY_URL=ws://127.0.0.1:7778` for `membrane iac issue` / rollup (the gate container uses `ws://host.docker.internal:7778`).
 
-Each chat request validates session IAC, publishes `membrane.cp.router` (chained via `parent_cp_hash` + Nostr `e` tags), then proxies to llama.cpp.
+Each chat request validates session IAC, publishes `membrane.cp.router` (chained via `parent_cp_hash` + Nostr `e` tags), then proxies to the configured model API backend.
 
 For production traffic after the chain has left genesis, issue a fresh session IAC:
 

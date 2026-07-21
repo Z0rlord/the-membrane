@@ -32,26 +32,26 @@ pub struct ChatResponse {
 }
 
 pub struct LlmProxy {
-    llama_cpp_url: Option<String>,
+    model_api_url: Option<String>,
 }
 
 impl LlmProxy {
-    pub fn new(llama_cpp_url: Option<String>) -> Self {
-        Self { llama_cpp_url }
+    pub fn new(model_api_url: Option<String>) -> Self {
+        Self { model_api_url }
     }
 
-    pub fn llama_cpp_url(&self) -> Option<&str> {
-        self.llama_cpp_url.as_deref()
+    pub fn model_api_url(&self) -> Option<&str> {
+        self.model_api_url.as_deref()
     }
 
     pub async fn chat(&self, req: &ChatRequest) -> Result<ChatResponse> {
         if req.stream {
             bail!("streaming not supported in Phase 0 gate");
         }
-        if let Some(url) = &self.llama_cpp_url {
-            match self.llama_cpp_chat(url, req).await {
+        if let Some(url) = &self.model_api_url {
+            match self.provider_chat(url, req).await {
                 Ok(resp) => return Ok(resp),
-                Err(err) => warn!(error = %err, "llama.cpp unavailable, using mock response"),
+                Err(err) => warn!(error = %err, "model API unavailable, using mock response"),
             }
         }
         Ok(mock_response(req))
@@ -75,7 +75,7 @@ impl LlmProxy {
             .unwrap_or_default())
     }
 
-    async fn llama_cpp_chat(&self, base: &str, req: &ChatRequest) -> Result<ChatResponse> {
+    async fn provider_chat(&self, base: &str, req: &ChatRequest) -> Result<ChatResponse> {
         let endpoint = format!(
             "{}/v1/chat/completions",
             base.trim_end_matches('/')
@@ -88,14 +88,14 @@ impl LlmProxy {
             .json(req)
             .send()
             .await
-            .context("llama.cpp request")?;
+            .context("model API request")?;
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            bail!("llama.cpp status {status}: {body}");
+            bail!("model API status {status}: {body}");
         }
-        let parsed: ChatResponse = resp.json().await.context("llama.cpp response")?;
-        info!(model = %parsed.model, "llama.cpp completion");
+        let parsed: ChatResponse = resp.json().await.context("model API response")?;
+        info!(model = %parsed.model, "model API completion");
         Ok(parsed)
     }
 }

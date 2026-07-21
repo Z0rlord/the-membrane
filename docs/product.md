@@ -8,7 +8,7 @@ The Membrane is the commercial product surface of the Membrane gate: an enforcem
 
 ## Product overview
 
-Enterprises are handing AI agents real keys: agents that merge code, edit tickets, change infrastructure, and touch customer data. When an agent does something wrong, teams are left with scattered logs and vendor chat histories—and no way to prove which model, which context, which policy, and which person or parent agent actually authorized the action.
+Enterprises are handing AI agents real keys: agents that merge code, edit tickets, change infrastructure, and touch customer data. When an agent does something wrong, teams are left with scattered logs and third-party chat histories—and no way to prove which model, which context, which policy, and which person or parent agent actually authorized the action.
 
 The Membrane is the enforcement and evidence layer that sits directly in front of your agents. Every model call and every tool action must carry a live, signed authorization that names the allowed model, the allowed tools, and the scope of the task. Each action is written to a tamper-evident, hash-linked receipt chain. If the authorization is missing, expired, or out of scope—or if the model or tool is swapped mid-task—the Membrane blocks the action and can sever the agent instantly.
 
@@ -42,7 +42,7 @@ Heads of Security and Platform Engineering at growth-stage and enterprise softwa
 
 2. **Authorization is bound to the action, not the prompt.** Every action carries a signed policy naming the exact model, tools, and scope, linked into a tamper-evident receipt chain. A silent model or tool swap breaks the chain and is blocked.
 
-3. **Incident reconstruction in minutes, with exportable evidence.** Because approvals and actions are hash-linked, security can trace any action to its authorizing policy and issuer, and hand auditors a signed evidence pack—no dependence on a vendor's mutable logs.
+3. **Incident reconstruction in minutes, with exportable evidence.** Because approvals and actions are hash-linked, security can trace any action to its authorizing policy and issuer, and hand auditors a signed evidence pack—no dependence on a provider's mutable logs.
 
 ---
 

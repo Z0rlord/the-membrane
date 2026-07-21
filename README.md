@@ -69,7 +69,7 @@ export MEMBRANE_RELAY_URL='ws://relay-2:7778'
 ```text
 schemas/              JSON Schema (MembraneEvent, IAC, RollupBundle, membrane.cp.router)
 membrane-core/        Events, Merkle (§5.1), Nostr bus publisher/subscriber
-membrane-gate/        IAC fail-closed gate + llama.cpp HTTP proxy
+membrane-gate/        IAC fail-closed gate + pluggable model API proxy
 membrane-cli/         `membrane` binary
 tools/                channel registry YAML, local relay config
 ```
@@ -118,7 +118,7 @@ export MEMBRANE_RELAY_URL='ws://127.0.0.1:7777'
 cargo run -- bus publish-test          # kind 31990 test event
 cargo run -- bus subscribe             # fetch events + recompute bus_root
 cargo run -- demo                      # fail-closed without IAC → OK with IAC
-cargo run -- gate start                # HTTP gate on :8787 → llama.cpp :8080
+cargo run -- gate start                # HTTP gate on :8787 → model API (example: local backend on :8080)
 
 # Session-scoped IAC (binds to current cp_chain head, short TTL)
 cargo run -- iac issue --model qwen2.5-0.5b-instruct --ttl-secs 3600 --out session-iac.json
@@ -133,9 +133,9 @@ cargo run -- rollup sign --input rollup.json --out rollup.signed.json
 cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 ```
 
-**llama.cpp:** run `llama-server` with OpenAI-compatible API (default `http://127.0.0.1:8080/v1/chat/completions`). The gate falls back to mock responses if llama.cpp is unreachable.
+**Model API:** point `model_api_url` in your channel registry at any allowed backend that speaks the chat/completions wire format (default example: `http://127.0.0.1:8080/v1/chat/completions`). The gate falls back to mock responses if the backend is unreachable.
 
-**Gate HTTP:** `POST /v1/chat/completions` with OpenAI chat body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` default is for dev only when the chain is at genesis.
+**Gate HTTP:** `POST /v1/chat/completions` with a standard chat/completions JSON body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` default is for dev only when the chain is at genesis.
 
 ### Sovereign session (local LLM with receipts)
 
@@ -203,7 +203,7 @@ GitHub remains `origin` for day-to-day work; `grasp` (nostr) is the decentralize
 
 ## Status
 
-Phase 0 foundation: schemas, Merkle helper, Nostr bus, session-scoped IAC + router CP chain on the gate (HTTP + llama.cpp), sovereign `membrane chat` client, daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
+Phase 0 foundation: schemas, Merkle helper, Nostr bus, session-scoped IAC + router CP chain on the gate (HTTP + pluggable model API), sovereign `membrane chat` client, daily OTS rollup CLI. No Winterfell STARK or BCI integration yet.
 
 ## License
 

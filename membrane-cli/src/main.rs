@@ -41,7 +41,7 @@ enum Commands {
         #[command(subcommand)]
         command: BusCommands,
     },
-    /// IAC gate and local LLM proxy (llama.cpp)
+    /// IAC gate and pluggable model API proxy
     Gate {
         #[command(subcommand)]
         command: GateCommands,
@@ -133,7 +133,7 @@ enum BusCommands {
 
 #[derive(Subcommand)]
 enum GateCommands {
-    /// Start gate HTTP server (validates IAC before proxying to llama.cpp)
+    /// Start gate HTTP server (validates IAC before proxying to the model API)
     Start {
         #[arg(
             long,
@@ -557,10 +557,10 @@ async fn gate_start(
     }
     println!("gate: Δt={}s", registry.delta_t_secs);
 
-    let llama = registry.llama_cpp_url.as_deref().unwrap_or("<mock>");
-    println!("gate: IAC ok, llama.cpp={llama}, listen={listen}");
+    let model_api = registry.model_api_url.as_deref().unwrap_or("<mock>");
+    println!("gate: IAC ok, model_api={model_api}, listen={listen}");
 
-    let proxy = Arc::new(LlmProxy::new(registry.llama_cpp_url.clone()));
+    let proxy = Arc::new(LlmProxy::new(registry.model_api_url.clone()));
     let state = GateServerState {
         gate,
         proxy,
@@ -845,9 +845,9 @@ async fn run_demo(relay: &str, nsec: Option<String>, registry_path: &PathBuf) ->
     println!("  events fetched: {}", events.len());
     println!("  bus_root: {}", root.unwrap_or_else(|| "<empty>".into()));
 
-    let proxy = LlmProxy::new(registry.llama_cpp_url.clone());
+    let proxy = LlmProxy::new(registry.model_api_url.clone());
     let llm = proxy.complete("sha256:demo-model", "membrane demo").await?;
-    println!("\n=== Step 4: local LLM proxy (llama.cpp or mock) ===");
+    println!("\n=== Step 4: model API proxy (configured backend or mock) ===");
     println!("  {llm}");
 
     Ok(())
