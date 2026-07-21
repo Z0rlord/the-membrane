@@ -1,6 +1,6 @@
 # Membrane gate + llama.cpp (relay-2)
 
-IAC-gated local LLM proxy on Hetzner Nuremberg (`relay-2`).
+IAC-gated local LLM proxy on `relay-2` (self-hosted gate).
 
 | Service | Port | Access |
 |---------|------|--------|

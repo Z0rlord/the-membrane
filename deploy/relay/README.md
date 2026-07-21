@@ -6,7 +6,7 @@ attestation bus — **kinds 31990 and 31991 only**. Separate from
 
 | | |
 |---|---|
-| **Host** | `relay-2` (Hetzner Nuremberg vol1) |
+| **Host** | `relay-2` |
 | **Port** | `7778` (DojoPop relay uses `7777`) |
 | **Tailnet** | `ws://relay-2:7778` |
 | **Public** | `wss://membrane-relay.dojopop.live` |

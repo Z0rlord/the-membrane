@@ -47,7 +47,7 @@ See [appendix-open-research.md](docs/appendix-open-research.md) for libraries an
 
 ## Phase 0 prototype — Nostr attestation bus
 
-**Production relay (Hetzner Nuremberg):**
+**Production relay:**
 
 | | |
 |---|---|

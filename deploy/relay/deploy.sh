@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy Membrane attestation relay to relay-2 (Hetzner Nuremberg). Idempotent.
+# Deploy Membrane attestation relay to relay-2. Idempotent.
 #
 # Usage: ./deploy.sh [ssh-host]   (default: relay-2)
 set -euo pipefail

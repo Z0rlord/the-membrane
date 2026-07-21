@@ -1,5 +1,5 @@
 # Membrane attestation bus — nostr-rs-relay configuration
-# Deployed on relay-2 (Hetzner Nuremberg), host port 7778.
+# Deployed on relay-2, host port 7778.
 # Public: wss://membrane-relay.dojopop.live (Cloudflare Tunnel dojopop-relay)
 # Tailnet: ws://relay-2:7778
 
