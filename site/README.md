@@ -51,6 +51,8 @@ doppler run --project dojopop --config prd_zorie -- bash -c '
 
 Custom domain `membrane.dojopop.live` is a proxied CNAME → `membrane-landing.pages.dev` on the `dojopop.live` zone.
 
+Legacy `attestable.dojopop.live` still points at the old Pages project `attestable` (currently redeployed with The Membrane branding). Prefer a Cloudflare redirect rule to `https://membrane.dojopop.live` when a token with Rules Write is available; otherwise remove the legacy custom domain + DNS CNAME.
+
 ### Option B — Git-connected Pages
 
 1. Cloudflare Dashboard → Workers & Pages → Create → Pages → Connect to Git
