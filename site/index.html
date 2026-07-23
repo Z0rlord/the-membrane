@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Membrane — Fail-closed authorization for AI agents with production write access</title>
-  <meta name="description" content="The Membrane is a fail-closed authorization gateway for AI agents with production write access. Live signed scopes, tamper-evident receipts, block or sever on broken continuity — for enterprise security teams and self-hosting operators." />
+  <meta name="description" content="The Membrane is a fail-closed authorization gateway for AI agents with production or operational write access. Live signed scopes, tamper-evident receipts, block or sever on broken continuity — for sovereign and high-assurance operators who self-host and hold their own keys." />
   <meta name="theme-color" content="#0b1a22" />
 
   <meta property="og:type" content="website" />
@@ -76,25 +76,18 @@
     <!-- ============ WHO ============ -->
     <section class="section section-audience reveal" id="who">
       <p class="eyebrow">Who it’s for</p>
-      <h2 class="section-title">One product. Two postures.</h2>
+      <h2 class="section-title">Sovereign and high-assurance operators.</h2>
       <p class="lede">
-        Enterprise security teams and sovereign operators run the same gate. What changes is who holds
-        the keys and where it runs — not a second company or SKU.
+        Built for operators—including mil/gov and other high-assurance environments—who must self-host
+        the gate, hold their own keys, and prove agent actions without depending on a vendor opaque
+        control plane for authorization continuity. Attested actions, reconstructable evidence, fail-closed
+        when scope dies. Fits air-gapped, restricted, and defense-adjacent postures; does not claim
+        FedRAMP, IL*, CMMC, ATO, NERC, NATO approval, classified/SCIF readiness, or “approved for DoD use.”
       </p>
-      <div class="audience-grid">
-        <div class="audience-item">
-          <h3>Enterprise</h3>
-          <p>Security and platform teams who already gave agents keys (GitHub, tickets, infra).
-            Need prove-and-stop, not more logs. SIEM export is authorization telemetry <em>out</em>
-            to systems you already run.</p>
-        </div>
-        <div class="audience-item">
-          <h3>Sovereigns</h3>
-          <p>Operators who refuse opaque vendor control planes. Self-host the gate, hold your own keys,
-            attest locally, optional independent timestamping. Sovereignty is deployment and trust
-            posture — not a separate product.</p>
-        </div>
-      </div>
+      <p class="lede audience-secondary">
+        The same gate can later serve commercial teams that self-host for assurance. That is not a
+        separate product line.
+      </p>
     </section>
 
     <!-- ============ DIFFERENTIATORS ============ -->
@@ -217,7 +210,8 @@ cargo run -p membrane-cli -- demo</code></pre>
         The Membrane enforces and proves the traffic routed through it. It does not make claims about an
         agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory
         compliance on its own. Coverage is limited to gateway-routed model and tool traffic.
-        Self-hosted pilots, then license and support — no hosted production SaaS.
+        Designed for operators who must self-host, control keys, and prove agent actions under
+        high-assurance constraints. Self-hosted pilots, then license and support — no hosted production SaaS.
       </p>
     </section>
   </main>

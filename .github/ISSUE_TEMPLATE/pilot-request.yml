@@ -13,7 +13,7 @@ body:
     attributes:
       label: Company or team
       description: Optional. Use a general team description if you prefer not to identify your organization publicly.
-      placeholder: "Example: platform security team at a mid-size software company"
+      placeholder: "Example: high-assurance ops team evaluating self-hosted agent controls"
   - type: textarea
     id: workflow
     attributes:

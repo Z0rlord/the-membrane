@@ -6,10 +6,11 @@ The Membrane is a fail-closed authorization gateway for AI agents with productio
 
 ## Who it’s for
 
-One product, two deployment postures:
+**Primary: sovereign operators** — including mil/gov and other high-assurance environments that must self-host, hold their own keys, and prove agent actions under constrained postures (air-gapped, restricted, defense-adjacent). No dependency on a vendor opaque control plane for authorization continuity. Attested actions, reconstructable evidence, fail-closed when scope dies.
 
-- **Enterprise** — Security and platform teams who already gave agents keys (GitHub, tickets, infra). They need prove-and-stop, not more logs. SIEM export is telemetry *out* to tools they already run.
-- **Sovereigns** — Operators who refuse opaque vendor control planes. Self-host the gate, hold your own keys, attest locally, optional independent timestamping. Sovereignty is *deployment and trust posture*, not a second product.
+Designed for operators who need that posture. It does **not** claim FedRAMP, IL*, CMMC, ATO, NERC, NATO approval, classified/SCIF readiness, or “approved for DoD use.”
+
+The same gate can later serve commercial teams that self-host for assurance; that is not a separate product line or equal co-headline.
 
 ## What’s real vs demo
 
@@ -27,7 +28,7 @@ Self-hosted pilots in your environment, then license and support. No hosted prod
 
 | File | Description |
 |------|-------------|
-| [docs/product.md](docs/product.md) | Product positioning (enterprise + sovereign) |
+| [docs/product.md](docs/product.md) | Product positioning (sovereign / high-assurance first) |
 | [docs/siem-export.md](docs/siem-export.md) | Vendor-neutral SIEM/SOC export (JSON Lines and OCSF-inspired JSON) |
 | [docs/github-connector.md](docs/github-connector.md) | Real GitHub tool path on the production gate |
 | [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
@@ -206,7 +207,7 @@ GitHub is day-to-day; Grasp is the decentralized backup remote.
 
 ## Architecture & research
 
-Protocol foundations, attestation bus details, BCI channel research, and zk roadmap live here so cold readers meet the **product** first. None of this changes the commercial wedge above.
+Protocol foundations, attestation bus details, BCI channel research, and zk roadmap live here so cold readers meet the **product** first. None of this changes the sovereign / high-assurance wedge above.
 
 **Foundations:** SHA-256 Merkle commitments, signed Chain Proof receipts, TEE attestation, and web-of-trust witnesses, with zk-STARK proofs on the roadmap. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollups provide independently verifiable audit time. The same fail-closed boundary model can extend to local AI, cloud inference, BCI telemetry, and other exogenous channels without splitting the product.
 
