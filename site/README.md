@@ -1,6 +1,6 @@
 # The Membrane landing site
 
-Static public marketing page for **The Membrane** — the fail-closed control point for AI agents with production access.
+Static public marketing page for **The Membrane** — a fail-closed authorization gateway for AI agents with production write access.
 
 Copy source of truth: [`docs/product.md`](../docs/product.md).
 

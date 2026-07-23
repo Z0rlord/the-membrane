@@ -1,8 +1,9 @@
 # SIEM / SOC export
 
-The Membrane emits authorization telemetry for security systems to consume. It
-does not replace a SIEM, SOC, or SOAR, and these exports do not imply an
-integration or partnership with any particular vendor.
+The Membrane emits authorization telemetry for security systems to consume
+(**telemetry out** — prove-and-stop stays at the gate). It does not replace a
+SIEM, SOC, or SOAR, and these exports do not imply an integration or partnership
+with any particular vendor.
 
 ## Formats
 
@@ -124,5 +125,7 @@ curl --fail-with-body \
 - Certified OCSF class, category, activity, and severity identifiers
 - CEF formatting and RFC 5424 framing
 - Vendor-specific field packs and authentication adapters
-- Production HTTP tool-proxy route with first-class blocked-action tool fields
-  (chat/completions already publishes blocked-action receipts)
+
+Production tool invoke (`POST /v1/tools/invoke`) now publishes blocked-action
+receipts with `tool_id` / `tool_allowlist` fields for the GitHub connector.
+See [github-connector.md](github-connector.md).

@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>The Membrane — The fail-closed control point for AI agents with production access</title>
-  <meta name="description" content="The Membrane is a fail-closed control point for AI agents with production access. Every model call and tool action carries a live, signed authorization, or it never reaches production." />
+  <title>The Membrane — Fail-closed authorization for AI agents with production write access</title>
+  <meta name="description" content="The Membrane is a fail-closed authorization gateway for AI agents with production write access. Live signed scopes, tamper-evident receipts, block or sever on broken continuity — for enterprise security teams and self-hosting operators." />
   <meta name="theme-color" content="#0b1a22" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="The Membrane — fail-closed control point for AI agents" />
-  <meta property="og:description" content="Every model call and tool action carries a live, signed authorization — or it never reaches production." />
+  <meta property="og:title" content="The Membrane — fail-closed authorization gateway for AI agents" />
+  <meta property="og:description" content="Every model and tool call needs a live, signed, time-bounded scope. Each action writes a tamper-evident receipt. Broken continuity blocks or severs the agent." />
   <meta property="og:image" content="assets/og.svg" />
   <meta name="twitter:card" content="summary_large_image" />
 
@@ -34,14 +34,14 @@
 
     <div class="hero-inner">
       <h1 class="brand">The Membrane</h1>
-      <p class="headline">The fail-closed control point for AI agents with production access.</p>
-      <p class="subhead">Every model call and every tool action carries a live, signed authorization&nbsp;— or it never reaches production.</p>
+      <p class="headline">Fail-closed authorization for AI agents with production write access.</p>
+      <p class="subhead">Every model and tool call needs a live, signed, time-bounded scope; each action writes a tamper-evident receipt; broken continuity blocks or severs the agent.</p>
       <div class="cta-group">
         <a class="btn btn-primary" href="https://github.com/Z0rlord/the-membrane/issues/new?template=pilot-request.yml" rel="noopener" target="_blank">Request a self-hosted pilot</a>
         <a class="btn btn-ghost" href="https://membrane-demo.dojopop.live/" rel="noopener" target="_blank">Open demo dashboard</a>
         <a class="btn btn-ghost" href="#run">Run the local demo</a>
       </div>
-      <p class="hero-trust-note">The public dashboard is an isolated simulation. Pilots are self-hosted in your environment; no production SaaS is offered.</p>
+      <p class="hero-trust-note">Local and hosted demos use real gate checks and receipt chaining; tool side effects stay simulated. Pilots are self-hosted — no production SaaS.</p>
     </div>
 
     <div class="scroll-cue" aria-hidden="true"><span>Scroll</span></div>
@@ -53,9 +53,9 @@
       <p class="eyebrow">The problem</p>
       <h2 class="section-title">Agents have the keys. Logs can't prove who authorized what.</h2>
       <p class="lede">
-        Enterprises are handing AI agents real write access: agents that merge code, change
+        Teams are handing AI agents real write access: agents that merge code, change
         infrastructure, edit tickets, and touch customer data. When an agent does the wrong thing,
-        teams are left with scattered logs and third-party chat histories — editable, incomplete, and
+        what’s left is scattered logs and third-party chat histories — editable, incomplete, and
         unable to prove that an action was authorized by an unexpired policy. Incident reconstruction
         is slow and unreliable.
       </p>
@@ -73,16 +73,41 @@
       </p>
     </section>
 
+    <!-- ============ WHO ============ -->
+    <section class="section section-audience reveal" id="who">
+      <p class="eyebrow">Who it’s for</p>
+      <h2 class="section-title">One product. Two postures.</h2>
+      <p class="lede">
+        Enterprise security teams and sovereign operators run the same gate. What changes is who holds
+        the keys and where it runs — not a second company or SKU.
+      </p>
+      <div class="audience-grid">
+        <div class="audience-item">
+          <h3>Enterprise</h3>
+          <p>Security and platform teams who already gave agents keys (GitHub, tickets, infra).
+            Need prove-and-stop, not more logs. SIEM export is authorization telemetry <em>out</em>
+            to systems you already run.</p>
+        </div>
+        <div class="audience-item">
+          <h3>Sovereigns</h3>
+          <p>Operators who refuse opaque vendor control planes. Self-host the gate, hold your own keys,
+            attest locally, optional independent timestamping. Sovereignty is deployment and trust
+            posture — not a separate product.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ DIFFERENTIATORS ============ -->
     <section class="section section-diff reveal" id="how">
       <p class="eyebrow">Why it's different</p>
-      <h2 class="section-title">Enforcement and evidence, bound to the action.</h2>
+      <h2 class="section-title">Enforce — don’t just observe or filter.</h2>
       <div class="diff-grid">
         <div class="diff-item">
           <span class="diff-num">01</span>
           <h3>It enforces, it doesn't just watch.</h3>
-          <p>Observability tools explain what an agent did after the fact. The Membrane is an inline
-            control point that refuses unauthorized actions before they reach production.</p>
+          <p>Observability tools explain what an agent did after the fact. Prompt filters rewrite text.
+            The Membrane is an inline control point that refuses unauthorized actions before they reach
+            production.</p>
         </div>
         <div class="diff-item">
           <span class="diff-num">02</span>
@@ -93,9 +118,9 @@
         <div class="diff-item">
           <span class="diff-num">03</span>
           <h3>Incident reconstruction in minutes.</h3>
-          <p>Because approvals and actions are hash-linked, security can trace any action to its
-            authorizing policy and issuer — and hand auditors a signed evidence pack. No dependence on a
-            provider's mutable logs.</p>
+          <p>Because approvals and actions are hash-linked, you can trace any action to its authorizing
+            policy and issuer — and hand auditors a signed evidence pack. No dependence on a provider's
+            mutable logs.</p>
         </div>
       </div>
     </section>
@@ -141,7 +166,7 @@
           <span class="step-state" aria-hidden="true"></span>
           <div class="step-body">
             <h3>Reconstruct</h3>
-            <p>Security opens the timeline, clicks any action, and sees the model, context scope, policy,
+            <p>Open the timeline, click any action, and see the model, context scope, policy,
               and issuer behind it — no log spelunking.</p>
           </div>
         </li>
@@ -149,11 +174,12 @@
           <span class="step-state" aria-hidden="true"></span>
           <div class="step-body">
             <h3>Export evidence</h3>
-            <p>One click produces a signed evidence pack. Verify the hash chain offline in seconds.</p>
+            <p>One click produces a signed evidence pack. Verify the hash chain offline in seconds.
+              SIEM-ready JSON Lines or OCSF-inspired export for existing SOC tooling.</p>
           </div>
         </li>
       </ol>
-      <p class="demo-note">Try the isolated public sandbox, or run the same interactive walkthrough locally with one command.</p>
+      <p class="demo-note">Try the isolated public sandbox, or run the same interactive walkthrough locally with one command. Tool side effects in both demos are simulated.</p>
     </section>
 
     <!-- ============ RUN LOCALLY ============ -->
@@ -191,6 +217,7 @@ cargo run -p membrane-cli -- demo</code></pre>
         The Membrane enforces and proves the traffic routed through it. It does not make claims about an
         agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory
         compliance on its own. Coverage is limited to gateway-routed model and tool traffic.
+        Self-hosted pilots, then license and support — no hosted production SaaS.
       </p>
     </section>
   </main>
@@ -199,10 +226,10 @@ cargo run -p membrane-cli -- demo</code></pre>
   <footer class="footer">
     <div class="footer-inner">
       <p class="footer-brand">The Membrane</p>
-      <p class="footer-tag">The fail-closed control point for AI agents with production access.</p>
+      <p class="footer-tag">Fail-closed authorization for AI agents with production write access.</p>
       <div class="cta-group">
         <a class="btn btn-primary" href="https://github.com/Z0rlord/the-membrane/issues/new?template=pilot-request.yml" rel="noopener" target="_blank">Request a self-hosted pilot</a>
-        <a class="btn btn-ghost" href="https://membrane-demo.dojopop.live/" rel="noopener" target="_blank">Open demo dashboard</a>
+        <a class="btn btn-ghost" href="https://membrane-demo.dojop.live/" rel="noopener" target="_blank">Open demo dashboard</a>
         <a class="btn btn-ghost" href="#run">Run the local demo</a>
       </div>
       <p class="footer-meta">

@@ -16,6 +16,8 @@ but all Jira, Slack, and GitHub actions are local simulations. It has no
 production credentials or production network access. State is isolated by an
 opaque browser session, expires after 30 minutes, and is also cleared on
 restart. Do not enter secrets, customer data, or other sensitive information.
+Real GitHub mutations belong on the production gate with a configured connector
+([github-connector.md](github-connector.md)) — never on this sandbox.
 
 ## Run locally with one command
 
@@ -34,7 +36,7 @@ If the `membrane` binary is installed, the equivalent command is `membrane demo`
 - Ephemeral local signing keys (no `NOSTR_NSEC`, no Doppler required)
 - In-memory attestation bus (`memory://`) — no relay or paid APIs
 - Demo-only HTTP routes under `/demo/api/*` (not mounted by `membrane gate start`)
-- Tool calls (`jira.comment`, `slack.post`, `github.merge`) are **simulated** and labeled as such
+- Tool calls (`jira.comment`, `slack.post`, `github.merge`) are **simulated** and labeled as such (production connectors are separate; see [github-connector.md](github-connector.md))
 
 ## Six-step demo flow
 
@@ -70,5 +72,9 @@ The Membrane enforces and proves traffic routed through the gateway. This demo d
 ```bash
 cargo test -p membrane-cli cli_tests
 cargo test -p membrane-gate demo
+cargo test -p membrane-gate github
+cargo test -p membrane-gate tool_invoke_policy
 cargo test -p membrane-core
 ```
+
+Real GitHub connector (operators, not this demo): [github-connector.md](github-connector.md).
