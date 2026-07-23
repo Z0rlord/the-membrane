@@ -16,7 +16,8 @@ use membrane_core::{
 };
 use membrane_gate::{
     demo_registry, run_demo_dashboard, run_gate_server, ChannelRegistry, DemoRuntime,
-    DemoServerState, Gate, GateServerState, LlmProxy, RouterSessionRequest,
+    DemoServerState, Gate, GateServerState, GitHubConnector, GitHubConnectorConfig, LlmProxy,
+    RouterSessionRequest, ENV_TOKEN_FALLBACK, ENV_TOKEN_PRIMARY,
 };
 
 mod chat;
@@ -61,6 +62,11 @@ enum Commands {
     Iac {
         #[command(subcommand)]
         command: IacCommands,
+    },
+    /// Invoke a real allowlisted tool through the production gate
+    Tools {
+        #[command(subcommand)]
+        command: ToolsCommands,
     },
     /// Sovereign local LLM chat through the membrane gate (auto IAC + receipts)
     Chat {
@@ -300,6 +306,9 @@ enum IacCommands {
         parent_cp_hash: Option<String>,
         #[arg(long, default_value = "local-llm")]
         channel: Vec<String>,
+        /// Allowed tool ids (repeatable), e.g. `--tool github.comment`
+        #[arg(long = "tool")]
+        tools: Vec<String>,
         #[arg(long)]
         out: PathBuf,
     },
@@ -318,6 +327,33 @@ enum IacCommands {
         input: PathBuf,
         #[arg(long)]
         pubkey: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ToolsCommands {
+    /// POST /v1/tools/invoke on a running gate (real connector; not the demo simulator)
+    Invoke {
+        #[arg(long, default_value = "http://127.0.0.1:8787")]
+        gate_url: String,
+        #[arg(long)]
+        iac: PathBuf,
+        #[arg(long)]
+        tool: String,
+        #[arg(long)]
+        model: String,
+        #[arg(long)]
+        owner: String,
+        #[arg(long)]
+        repo: String,
+        #[arg(long)]
+        issue_number: Option<u64>,
+        #[arg(long)]
+        pull_number: Option<u64>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        commit_title: Option<String>,
     },
 }
 
@@ -386,6 +422,7 @@ async fn main() -> Result<()> {
                 ttl_secs,
                 parent_cp_hash,
                 channel,
+                tools,
                 out,
             } => {
                 iac_issue(
@@ -396,12 +433,41 @@ async fn main() -> Result<()> {
                     ttl_secs,
                     parent_cp_hash.as_deref(),
                     &channel,
+                    &tools,
                     &out,
                 )
                 .await
             }
             IacCommands::Sign { nsec, input, out } => iac_sign(nsec, &input, &out),
             IacCommands::Verify { input, pubkey } => iac_verify(&input, &pubkey),
+        },
+        Commands::Tools { command } => match command {
+            ToolsCommands::Invoke {
+                gate_url,
+                iac,
+                tool,
+                model,
+                owner,
+                repo,
+                issue_number,
+                pull_number,
+                body,
+                commit_title,
+            } => {
+                tools_invoke(
+                    &gate_url,
+                    &iac,
+                    &tool,
+                    &model,
+                    &owner,
+                    &repo,
+                    issue_number,
+                    pull_number,
+                    body.as_deref(),
+                    commit_title.as_deref(),
+                )
+                .await
+            }
         },
         Commands::Demo { listen } => run_local_demo(&listen).await,
         Commands::IacSmoke {
@@ -628,8 +694,21 @@ async fn gate_start(
     }
     println!("gate: Δt={}s", registry.delta_t_secs);
 
+    let github_cfg = GitHubConnectorConfig::from_env(registry.github_repo_allowlist.clone());
     let model_api = registry.model_api_url.as_deref().unwrap_or("<mock>");
     println!("gate: IAC ok, model_api={model_api}, listen={listen}");
+    println!(
+        "gate: GitHub connector repos={:?} token_env={}/{} configured={}",
+        registry.github_repo_allowlist,
+        ENV_TOKEN_PRIMARY,
+        ENV_TOKEN_FALLBACK,
+        github_cfg.has_token()
+    );
+    if registry.github_repo_allowlist.is_empty() {
+        println!(
+            "gate: github_repo_allowlist empty — real GitHub invokes will fail closed until configured"
+        );
+    }
 
     let proxy = Arc::new(LlmProxy::new(registry.model_api_url.clone()));
     let state = GateServerState {
@@ -637,6 +716,7 @@ async fn gate_start(
         proxy,
         default_iac: Some(default_iac),
         session_chain: Arc::new(tokio::sync::Mutex::new(session_chain)),
+        github: Arc::new(GitHubConnector::new(github_cfg)),
     };
 
     run_gate_server(state, listen).await
@@ -790,6 +870,7 @@ async fn iac_issue(
     ttl_secs: i64,
     parent_cp_hash: Option<&str>,
     channels: &[String],
+    tools: &[String],
     out: &PathBuf,
 ) -> Result<()> {
     let keys = load_keys(nsec)?;
@@ -807,13 +888,14 @@ async fn iac_issue(
         }
     };
 
-    let mut iac = IntentAuthorizationCredential::new_session(
+    let mut iac = IntentAuthorizationCredential::new_session_with_tools(
         scope_id.clone(),
         model,
         parent.clone(),
         now + ttl_secs,
         channels.to_vec(),
         vec!["cloud-telemetry".into(), "training-retention".into()],
+        tools.to_vec(),
     );
     iac.sign(&keys).map_err(|e| anyhow::anyhow!("{e}"))?;
     let iac_hash = iac.hash_hex()?;
@@ -856,10 +938,65 @@ async fn iac_issue(
     println!("session IAC written to {}", out.display());
     println!("  scope_id: {scope_id}");
     println!("  model: {model}");
+    println!("  tools: {:?}", iac.tool_allowlist);
     println!("  valid_until: {} (+{ttl_secs}s)", iac.valid_until);
     println!("  parent_cp_hash: {parent}");
     println!("  signer: {}", keys.public_key().to_hex());
     println!("  authorization_event: {}", issued_event_id.to_hex());
+    Ok(())
+}
+
+async fn tools_invoke(
+    gate_url: &str,
+    iac_path: &PathBuf,
+    tool: &str,
+    model: &str,
+    owner: &str,
+    repo: &str,
+    issue_number: Option<u64>,
+    pull_number: Option<u64>,
+    body: Option<&str>,
+    commit_title: Option<&str>,
+) -> Result<()> {
+    let iac_raw = std::fs::read_to_string(iac_path).context("read IAC")?;
+    let url = format!(
+        "{}/v1/tools/invoke",
+        gate_url.trim_end_matches('/')
+    );
+    let payload = serde_json::json!({
+        "tool": tool,
+        "model": model,
+        "owner": owner,
+        "repo": repo,
+        "issue_number": issue_number,
+        "pull_number": pull_number,
+        "body": body,
+        "commit_title": commit_title,
+    });
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("X-Membrane-IAC", iac_raw.trim())
+        .json(&payload)
+        .send()
+        .await
+        .context("POST /v1/tools/invoke")?;
+    let status = resp.status();
+    let cp = resp
+        .headers()
+        .get("x-membrane-cp-hash")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let text = resp.text().await.context("read response body")?;
+    println!("HTTP {status}");
+    if let Some(cp) = cp {
+        println!("x-membrane-cp-hash: {cp}");
+    }
+    println!("{text}");
+    if !status.is_success() {
+        bail!("tool invoke blocked or failed");
+    }
     Ok(())
 }
 
@@ -1077,6 +1214,58 @@ mod cli_tests {
                 }
             ));
         }
+    }
+
+    #[test]
+    fn iac_issue_accepts_tool_flags() {
+        let cli = Cli::try_parse_from([
+            "membrane",
+            "iac",
+            "issue",
+            "--model",
+            "sha256:demo-model",
+            "--tool",
+            "github.comment",
+            "--out",
+            "session-iac.json",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Iac {
+                command: IacCommands::Issue { tools, .. },
+            } => assert_eq!(tools, vec!["github.comment".to_string()]),
+            _ => panic!("expected iac issue"),
+        }
+    }
+
+    #[test]
+    fn tools_invoke_parses() {
+        let cli = Cli::try_parse_from([
+            "membrane",
+            "tools",
+            "invoke",
+            "--iac",
+            "session-iac.json",
+            "--tool",
+            "github.comment",
+            "--model",
+            "demo",
+            "--owner",
+            "acme",
+            "--repo",
+            "pilot",
+            "--issue-number",
+            "1",
+            "--body",
+            "hi",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Tools {
+                command: ToolsCommands::Invoke { .. }
+            }
+        ));
     }
 
     #[test]

@@ -23,6 +23,8 @@ pub enum GateError {
     ModelDenied(String),
     #[error("tool not in allowlist: {0}")]
     ToolDenied(String),
+    #[error("repo not in allowlist: {0}")]
+    RepoDenied(String),
     #[error("export forbidden: {0}")]
     ExportForbidden(String),
     #[error("context merkle root exceeds IAC bound")]
@@ -31,6 +33,8 @@ pub enum GateError {
     SessionDegraded(String, String),
     #[error("router CP stale: last CP {0}s ago exceeds Δt={1}s")]
     SessionStale(i64, u64),
+    #[error("connector misconfigured: {0}")]
+    Connector(String),
     #[error("registry error: {0}")]
     Registry(String),
     #[error("bus error: {0}")]
@@ -46,6 +50,9 @@ pub struct ChannelRegistry {
     pub delta_t_secs: u64,
     #[serde(default, alias = "llama_cpp_url", alias = "ollama_url")]
     pub model_api_url: Option<String>,
+    /// Explicit `owner/name` repos the GitHub connector may touch. Empty = deny all.
+    #[serde(default)]
+    pub github_repo_allowlist: Vec<String>,
 }
 
 fn default_delta_t_secs() -> u64 {
@@ -193,10 +200,37 @@ impl Gate {
         last_cp_hash: &str,
         prev_event_id: Option<&str>,
     ) -> Result<String, GateError> {
+        self.publish_action_blocked_detailed(
+            scope_id,
+            model_id,
+            None,
+            &[],
+            iac_hash,
+            reason,
+            now,
+            last_cp_hash,
+            prev_event_id,
+        )
+        .await
+    }
+
+    pub async fn publish_action_blocked_detailed(
+        &self,
+        scope_id: Option<&str>,
+        model_id: Option<&str>,
+        tool_id: Option<&str>,
+        tool_allowlist: &[String],
+        iac_hash: Option<&str>,
+        reason: &str,
+        now: i64,
+        last_cp_hash: &str,
+        prev_event_id: Option<&str>,
+    ) -> Result<String, GateError> {
         let payload = MembranePayload::Generic(serde_json::json!({
             "scope_id": scope_id,
             "model_allowlist": model_id.into_iter().collect::<Vec<_>>(),
-            "tool_allowlist": Vec::<String>::new(),
+            "tool_id": tool_id,
+            "tool_allowlist": tool_allowlist,
             "iac_hash": iac_hash,
             "reason": reason,
         }));
@@ -307,6 +341,7 @@ pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
 }
 
 pub mod demo;
+pub mod github;
 pub mod proxy;
 pub mod server;
 pub mod watchdog;
@@ -315,6 +350,12 @@ pub use demo::{
     demo_registry, run_demo_dashboard, verify_evidence_pack, DemoRuntime, DemoServerState,
     EvidencePack, DEMO_ALLOWED_TOOLS, DEMO_BLOCKED_TOOL, DEMO_MODEL, DEMO_SWAP_MODEL,
     DEMO_TTL_SECS,
+};
+pub use github::{
+    authorize_repo_and_args, body_sha256_hex, is_github_tool, GitHubConnector,
+    GitHubConnectorConfig, GitHubConnectorError, ToolInvokeRequest, ToolReceiptContext,
+    TOOL_GITHUB_COMMENT, TOOL_GITHUB_ISSUE_READ, TOOL_GITHUB_MERGE, ENV_TOKEN_FALLBACK,
+    ENV_TOKEN_PRIMARY,
 };
 pub use proxy::{ChatMessage, ChatRequest, ChatResponse, LlmProxy};
 pub use server::{run_gate_server, GateServerState, SessionReceipt};
@@ -335,6 +376,7 @@ mod tests {
             model_allowlist: vec!["demo".into()],
             delta_t_secs: delta_t,
             model_api_url: None,
+            github_repo_allowlist: vec![],
         };
         let publisher = BusPublisher::new(BusPublisherConfig {
             relay_url: "ws://localhost:7777".into(),
@@ -393,6 +435,7 @@ mod tests {
             model_allowlist: vec!["demo".into()],
             delta_t_secs: 300,
             model_api_url: None,
+            github_repo_allowlist: vec!["acme/pilot".into()],
         };
         let publisher = BusPublisher::new(BusPublisherConfig {
             relay_url: "memory://test".into(),
@@ -406,13 +449,13 @@ mod tests {
             4_102_444_800,
             vec!["local-llm".into()],
             vec!["cloud-telemetry".into(), "training-retention".into()],
-            vec!["jira.comment".into()],
+            vec!["github.comment".into()],
         );
         iac.sign(&keys).unwrap();
         let err = gate
             .authorize_tool(&iac, "github.merge", 1_000)
             .unwrap_err();
         assert!(matches!(err, GateError::ToolDenied(_)));
-        gate.authorize_tool(&iac, "jira.comment", 1_000).unwrap();
+        gate.authorize_tool(&iac, "github.comment", 1_000).unwrap();
     }
 }

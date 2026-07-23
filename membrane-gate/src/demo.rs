@@ -189,6 +189,8 @@ pub fn demo_registry() -> crate::ChannelRegistry {
         // Generous Δt so a live demo is not interrupted mid-narrative.
         delta_t_secs: 86_400,
         model_api_url: None,
+        // Demo stays simulation-only — no real GitHub connector.
+        github_repo_allowlist: vec![],
     }
 }
 

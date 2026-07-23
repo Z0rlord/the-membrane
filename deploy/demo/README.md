@@ -17,6 +17,9 @@ data, or access to a production network.
 - Jira, Slack, and GitHub results are fixed local simulations. The Rust
   container uses an internal network with no outbound route. A separate,
   unprivileged ingress sidecar can only proxy loopback traffic to that network.
+- Do **not** set `MEMBRANE_GITHUB_TOKEN` / `GITHUB_TOKEN` or a non-empty
+  `github_repo_allowlist` on this host. Real connectors belong on operator
+  installs only (`membrane gate start`), not the public sandbox.
 - The service binds only to host loopback. Publish it through an authenticated
   HTTPS edge tunnel; do not expose port 8790 directly.
 - The process runs unprivileged with a read-only filesystem, dropped

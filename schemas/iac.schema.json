@@ -34,7 +34,7 @@
     "tool_allowlist": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
-      "description": "Tools authorized for this session (e.g. jira.comment). Empty means no tools."
+      "description": "Tools authorized for this session (e.g. github.comment). Empty means no tools."
     },
     "decoder_version": { "type": "string" },
     "stimulation_policy": { "type": "string" },

@@ -12,3 +12,7 @@ model_allowlist:
 delta_t_secs: 300
 
 model_api_url: http://llama:8080
+
+# Keep empty on shared hosts unless an operator explicitly pilots a disposable repo.
+# Public demo must never mount this connector with a token.
+github_repo_allowlist: []
