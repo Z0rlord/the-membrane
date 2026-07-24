@@ -8,8 +8,6 @@ The Membrane is a fail-closed authorization gateway for AI agents with productio
 
 **Primary: sovereign operators** — including mil/gov and other high-assurance environments that must self-host, hold their own keys, and prove agent actions under constrained postures (air-gapped, restricted, defense-adjacent). No dependency on a vendor opaque control plane for authorization continuity. Attested actions, reconstructable evidence, fail-closed when scope dies.
 
-Designed for operators who need that posture. It does **not** claim FedRAMP, IL*, CMMC, ATO, NERC, NATO approval, classified/SCIF readiness, or “approved for DoD use.”
-
 The same gate can later serve commercial teams that self-host for assurance; that is not a separate product line or equal co-headline.
 
 ## What’s real vs demo

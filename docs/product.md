@@ -29,9 +29,7 @@ Operators—including mil/gov and other high-assurance environments—who must:
 - Self-host the gate and hold their own keys
 - Avoid dependence on a vendor opaque control plane for authorization continuity
 - Keep attested actions, reconstructable evidence, and fail-closed behavior when scope dies
-- Fit air-gapped, restricted, or defense-adjacent *postures* without claiming specific certifications
-
-Designed for that class of operator. **Not** a claim of FedRAMP, IL*, CMMC, ATO, NERC, NATO approval, classified/SCIF readiness, or “approved for DoD use.”
+- Fit air-gapped, restricted, or defense-adjacent *postures*
 
 ### Commercial self-host (secondary)
 
@@ -105,7 +103,7 @@ authorization gateway; fail-closed; enforcement and evidence; signed authorizati
 ### Avoid
 
 - Overclaims: "prevents all misuse," "guarantees compliance," "proves the agent's intent/reasoning," "proves nothing was deleted," "detects everything the agent does." (Coverage is limited to gateway-routed traffic.)
-- Certification / approval claims: FedRAMP, IL*, CMMC, ATO, NERC, NATO, “approved for DoD use,” classified/SCIF readiness.
+- False certification or approval claims.
 - Category confusion: "observability," "monitoring," "AI safety," "guardrails," "alignment"—these blur the fail-closed enforcement position.
 - Equal co-headline with broad commercial “Series B SaaS enterprise” ICP; that audience is secondary.
 - Vague hype: "revolutionary," "trustless," "unhackable," "military-grade."
@@ -113,7 +111,7 @@ authorization gateway; fail-closed; enforcement and evidence; signed authorizati
 
 ### Honest scope
 
-The Membrane enforces and proves the traffic routed through it. It does not make claims about an agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory compliance on its own. It is designed for operators who must self-host, control keys, and prove agent actions under high-assurance constraints—not for claiming a specific accreditation.
+The Membrane enforces and proves the traffic routed through it. It does not make claims about an agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory compliance on its own. It is designed for operators who must self-host, control keys, and prove agent actions under high-assurance constraints.
 
 Architecture, attestation-bus research, BCI channels, and zk roadmap belong in the whitepaper and appendix—not the product lede.
 
