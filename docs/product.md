@@ -109,10 +109,6 @@ authorization gateway; fail-closed; enforcement and evidence; signed authorizati
 - Vague hype: "revolutionary," "trustless," "unhackable," "military-grade."
 - OpenAI branding; infra location name-dropping; Attestable as a live product name.
 
-### Honest scope
-
-The Membrane enforces and proves the traffic routed through it. It does not make claims about an agent's hidden reasoning, data deletion, activity that bypasses the gateway, or regulatory compliance on its own. It is designed for operators who must self-host, control keys, and prove agent actions under high-assurance constraints.
-
 Architecture, attestation-bus research, BCI channels, and zk roadmap belong in the whitepaper and appendix—not the product lede.
 
 ---

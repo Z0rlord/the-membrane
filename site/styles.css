@@ -345,10 +345,6 @@ a { color: inherit; }
   background:
     linear-gradient(165deg, #e4ecef 0%, #dce8e4 100%);
 }
-.section-scope {
-  background:
-    linear-gradient(180deg, var(--paper) 0%, #e2e9ee 100%);
-}
 
 /* ---------- AUDIENCE ---------- */
 

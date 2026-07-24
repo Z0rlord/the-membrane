@@ -51,8 +51,6 @@ Rebuild MD/PDF: `./scripts/build-paper.sh`
 
 Make the gate the required path for in-scope agents. A routed model or tool call proceeds only with a live signed authorization for its model, tools, task, and lifetime; each action links to the prior receipt so continuity failures are visible and enforceable. Observability explains after the fact; filters rewrite prompts; The Membrane **enforces** before production is touched.
 
-**Scope:** Membrane enforces and provides evidence for traffic routed through its gate. It does not prove hidden reasoning, prove deletion, observe off-gateway activity, read minds, or guarantee regulatory compliance.
-
 ## Local demo dashboard
 
 **Primary path for anyone cloning the repo** — no secrets, no relay, no paid APIs.

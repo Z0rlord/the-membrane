@@ -65,10 +65,6 @@ the public sandbox).
 
 The older relay-backed IAC smoke test remains available to operators as `membrane iac-smoke`. It requires a relay and your signing key and is not the public product demo.
 
-## Honest scope
-
-The Membrane enforces and proves traffic routed through the gateway. This demo does not claim hidden reasoning, deletion, off-gateway coverage, or compliance guarantees.
-
 ## Tests
 
 ```bash
