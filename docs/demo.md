@@ -2,7 +2,7 @@
 
 Browser dashboard for The Membrane fail-closed narrative, backed by real Membrane gate IAC checks and CP receipt chaining.
 
-Product positioning (sovereign / high-assurance first): [product.md](product.md).
+Product positioning (sovereigns, nation-states, enterprise): [product.md](product.md).
 
 This is the **primary public demo path** — no secrets, relay setup, or external
 tool access. For the operator full stack (relay + gate + your signed IAC), see

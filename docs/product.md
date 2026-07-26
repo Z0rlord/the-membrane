@@ -4,7 +4,7 @@
 
 Every model and tool call needs a live, signed, time-bounded scope; each action writes a tamper-evident receipt; broken continuity blocks or severs the agent.
 
-Primary audience: sovereign operators — including mil/gov and other high-assurance environments. Self-host the gate; hold your own keys; no dependency on a vendor opaque control plane for authorization continuity.
+Customers: **sovereigns**, **nation-states**, and **enterprise**. One product — a fail-closed authorization gateway for AI agents with production / operational write access. Self-host the gate; hold your own keys; prove every agent action.
 
 ---
 
@@ -22,18 +22,19 @@ The Membrane enforces and proves the traffic that runs through it. Deploy it as 
 
 ## Who it’s for
 
-### Sovereign / high-assurance operators (primary)
+One product for three customer classes:
 
-Operators—including mil/gov and other high-assurance environments—who must:
+### Sovereigns
 
-- Self-host the gate and hold their own keys
-- Avoid dependence on a vendor opaque control plane for authorization continuity
-- Keep attested actions, reconstructable evidence, and fail-closed behavior when scope dies
-- Fit air-gapped, restricted, or defense-adjacent *postures*
+Operators who require self-hosted control, own their keys, and keep attested actions with reconstructable evidence — including high-assurance and mil/gov postures that need fail-closed authorization continuity.
 
-### Commercial self-host (secondary)
+### Nation-states
 
-The same gate can serve commercial software orgs that self-host for assurance, or later broader commercial teams if useful. That is not a separate SKU or equal marketing pillar.
+National and government operators who put agents on production or operational write paths and must prove, stop, and reconstruct authorized actions under their own infra and keys.
+
+### Enterprise
+
+Enterprises that grant AI agents production write access and run the same gate in-house: live signed scopes, tamper-evident receipts, block or sever when continuity breaks.
 
 ---
 
@@ -75,7 +76,7 @@ Self-hosted pilots in the operator’s environment, then license and support. No
 >
 > The Membrane is a fail-closed authorization gateway in front of those agents. Every model call and every tool action needs a live, signed, time-bounded scope. Every action writes a tamper-evident receipt. If the authorization is expired, out of scope, or continuity breaks, we block—or sever—the agent.
 >
-> Sovereign and high-assurance operators self-host the gate, hold their own keys, and keep reconstructable evidence without relying on a vendor opaque control plane. The same mechanics can serve commercial teams that self-host for assurance later—one product line.
+> Sovereigns, nation-states, and enterprise self-host the gate, hold their own keys, and keep reconstructable evidence for every agent action that runs through it.
 >
 > We enforce and prove everything that runs through the gateway. Approved actions are provable; unauthorized ones never hit production.
 
@@ -98,14 +99,14 @@ Local walkthrough: [demo.md](demo.md) (`cargo run -p membrane-cli -- demo`). Hos
 
 ### Prefer
 
-authorization gateway; fail-closed; enforcement and evidence; signed authorization; time-bounded scope; tamper-evident receipt chain; block; sever; prove-and-stop; production / operational write access; self-host; hold your own keys; high-assurance; sovereign operators; SIEM telemetry out.
+authorization gateway; fail-closed; enforcement and evidence; signed authorization; time-bounded scope; tamper-evident receipt chain; block; sever; prove-and-stop; production / operational write access; self-host; hold your own keys; sovereigns; nation-states; enterprise; high-assurance; SIEM telemetry out.
 
 ### Avoid
 
 - Overclaims: "prevents all misuse," "guarantees compliance," "proves the agent's intent/reasoning," "proves nothing was deleted," "detects everything the agent does." (Coverage is limited to gateway-routed traffic.)
 - False certification or approval claims.
 - Category confusion: "observability," "monitoring," "AI safety," "guardrails," "alignment"—these blur the fail-closed enforcement position.
-- Equal co-headline with broad commercial “Series B SaaS enterprise” ICP; that audience is secondary.
+- Framing enterprise as a separate SKU or hosted production SaaS; all three customer classes buy the same self-hosted gate.
 - Vague hype: "revolutionary," "trustless," "unhackable," "military-grade."
 - OpenAI branding; infra location name-dropping; Attestable as a live product name.
 
@@ -117,6 +118,4 @@ Architecture, attestation-bus research, BCI channels, and zk roadmap belong in t
 
 **Use case:** Tool-using agents that can mutate production or operational systems—for example, an SRE or support agent authorized to comment on incidents, post to Slack, and open or change tickets—where operators must prove, per action, which model and policy authorized it and be able to stop it instantly.
 
-**Ideal customer profile (primary):** Sovereign / high-assurance operators (including mil/gov and similar postures) who self-host, hold keys, require attested actions and reconstructable evidence, and fail closed when authorization continuity breaks. Not chatbot pilots; environments whose agents already hold write scopes.
-
-**Secondary:** Commercial software orgs that self-host the same gate for assurance; broader commercial teams only if useful later—not a co-equal marketing pillar.
+**Ideal customer profile:** Sovereigns, nation-states, and enterprise — operators who self-host, hold keys, require attested actions and reconstructable evidence, and fail closed when authorization continuity breaks. Not chatbot pilots; environments whose agents already hold write scopes. High-assurance and mil/gov postures sit under sovereign and nation-state customers.

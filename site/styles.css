@@ -181,14 +181,6 @@ a { color: inherit; }
   animation: rise-in 0.9s var(--ease) 0.32s both;
 }
 
-.hero-trust-note {
-  margin: 1rem 0 0;
-  max-width: 32rem;
-  font-size: 0.9rem;
-  color: rgba(196, 214, 222, 0.72);
-  animation: rise-in 0.9s var(--ease) 0.4s both;
-}
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -344,14 +336,6 @@ a { color: inherit; }
 .section-run {
   background:
     linear-gradient(165deg, #e4ecef 0%, #dce8e4 100%);
-}
-
-/* ---------- AUDIENCE ---------- */
-
-.audience-secondary {
-  margin-top: 1.25rem;
-  color: var(--muted);
-  font-size: 1.02rem;
 }
 
 /* ---------- DIFFERENTIATORS ---------- */
