@@ -51,6 +51,20 @@ Rebuild MD/PDF: `./scripts/build-paper.sh`
 
 Make the gate the required path for in-scope agents. A routed model or tool call proceeds only with a live signed authorization for its model, tools, task, and lifetime; each action links to the prior receipt so continuity failures are visible and enforceable. Observability explains after the fact; filters rewrite prompts; The Membrane **enforces** before production is touched.
 
+## Worked example: gating agents that touch licensed content
+
+Detection finds infringing or synthetic media after it spreads. The Membrane works one layer earlier: an agent that fetches, transforms, or republishes licensed assets passes through the gate first, and the gate fails closed when provenance is missing or unverifiable.
+
+The setup: an agent drafts or edits content built from third-party assets (footage, stills, music, character IP). Each tool call - `content.fetch`, `content.transform`, `content.publish` - needs a live, signed, time-bounded IAC naming the asset and the permitted operation. At scope-issuance time, operator policy checks the asset's provenance:
+
+- **C2PA-signed asset.** The asset carries a Content Credential: a signed manifest of assertions and claims about who created it and how it was edited. Policy verifies the claim signature and checks the signing credential was valid and unrevoked when the claim was signed.
+- **Missing manifest, bad signature, revoked credential, untrusted signer.** No scope is issued. The call is blocked and the denial is written into the receipt chain. Missing provenance is a denial, not a warning.
+- **Allowed calls.** Each one writes a tamper-evident CP receipt chained to the prior receipt, so the audit record shows which signed scope authorized which operation on which asset.
+
+Nothing new is built: provenance verification is operator policy evaluated when the IAC is issued, not a separate product. The repo ships no C2PA verifier today; adding one is a connector-and-policy exercise of the same shape that turns simulated tool calls into real ones in [docs/github-connector.md](docs/github-connector.md).
+
+The asymmetry this buys: enforcement that only detects after publication is always behind the leak. A fail-closed gate makes "unverified content never enters the pipeline" the default state rather than an audit finding.
+
 ## Local demo dashboard
 
 **Primary path for anyone cloning the repo** — no secrets, no relay, no paid APIs.
