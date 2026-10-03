@@ -82,3 +82,26 @@ cargo run -p membrane-gate --example audit-preview
 
 The example emits three synthetic decisions and an idle policy view. It must not be
 used to represent a production gate. Stop the example before starting the operator gate.
+
+## Alarm delivery
+
+The gate raises an alarm for three conditions that have a clock on them, and only these:
+
+| Alarm | Raised when |
+| --- | --- |
+| `stuck_agent` | An identity that was previously allowed has been denied continuously for `MEMBRANE_ALARM_STUCK_SECS` (default 900) and is still retrying. |
+| `deny_spike` | At least `MEMBRANE_ALARM_SPIKE_MIN_DENIES` (default 10) denials make up at least `MEMBRANE_ALARM_SPIKE_MIN_RATE` (default 0.5) of decisions inside `MEMBRANE_ALARM_SPIKE_WINDOW_SECS` (default 300). Re-arms once the window clears. |
+| `first_seen_identity` | A key-verified caller identity makes its first request since the gate started. List identities in `MEMBRANE_ALARM_KNOWN_IDENTITIES` (comma-separated public keys) to exempt them. |
+
+Set `MEMBRANE_ALARM_WEBHOOK_URL` to deliver each alarm as a JSON POST (`kind`, `identity`,
+`summary`, `raised_at`, plus a chat-compatible `text` field). The URL must be `https`, or a literal
+loopback address for a local relay. `MEMBRANE_ALARM_WEBHOOK_SECRET` is sent in
+`MEMBRANE_ALARM_WEBHOOK_SECRET_HEADER` (default `X-Membrane-Alarm-Secret`). Delivery makes three
+attempts.
+
+Alarms are derived from the bounded audit log and are observational: they never feed an
+authorization decision. Invalid alarm settings stop the gate at startup. A delivery that is
+rejected or unreachable is recorded as `failed`, never `delivered`, and with no webhook set the
+status is `not_configured`. Alarms and their delivery status appear in the loopback `/audit`
+snapshot under `alarms`. The audit log holds the last 500 decisions, so a streak older than that is
+measured from its oldest retained decision.
