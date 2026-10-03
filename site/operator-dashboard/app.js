@@ -21,3 +21,50 @@ function render(data) {
 $('filter').addEventListener('change',renderRows);$('search').addEventListener('input',renderRows);
 const fixture={schema_version:1,observed_at:1790998200,status:'idle',last_cp_age_secs:null,router_stale:false,degraded:false,audit_available:true,retained:3,total_observed:3,allowed:1,denied:2,deny_rate:2/3,policy:{permitted_channels:['local-llm'],forbidden_exports:['cloud-telemetry','training-retention'],model_allowlist:['local-model'],github_repo_allowlist:['acme/pilot'],delta_t_secs:300},decisions:[{timestamp:1790998200,outcome:'deny',rule:'iac_signature',action:'chat',agent:'synthetic-gate-identity',scope:null},{timestamp:1790998140,outcome:'deny',rule:'tool_allowlist',action:'tool',agent:'synthetic-gate-identity',scope:null},{timestamp:1790998080,outcome:'allow',rule:'all_authorization_checks_passed',action:'chat',agent:'synthetic-gate-identity',scope:'preview-scope'}]};
 render(fixture);$('status').textContent='DEMO / IDLE';$('updated').textContent='Synthetic sample, not a live observation';$('alert').hidden=false;$('alert').textContent='Static preview with invented decisions. Not connected to a gate. No live status, credentials or external effects.';
+
+// Visualize only the retained fixture. No destinations or live health are inferred.
+let selectedDecision = 0;
+function inspectDecision(index) {
+  selectedDecision = index;
+  const d = fixture.decisions[index];
+  document.querySelectorAll('.decision-card').forEach((el, i) => el.setAttribute('aria-pressed', String(i === index)));
+  const detail = $('map-detail');
+  detail.replaceChildren();
+  detail.dataset.outcome = d.outcome;
+  cell(detail, 'code', d.rule);
+  cell(detail, 'span', d.outcome === 'allow' ? ' - Allowed in this invented sample. The illustrative path crosses the gate; no external effect occurred.' : ' - Denied in this invented sample. The path stops at the gate; the action boundary is not reached.');
+  cell(detail, 'span', ' Scope: ');
+  cell(detail, 'code', d.scope || 'not verified');
+}
+fixture.decisions.forEach((d, index) => {
+  const button = cell($('map-decisions'), 'button', '', 'decision-card');
+  button.type = 'button';
+  button.setAttribute('aria-controls', 'map-detail');
+  cell(button, 'span', d.outcome.toUpperCase(), 'badge ' + d.outcome);
+  cell(button, 'span', d.rule === 'all_authorization_checks_passed' ? 'All checks passed' : d.rule);
+  button.addEventListener('click', () => inspectDecision(index));
+});
+inspectDecision(selectedDecision);
+let replayTimer;
+$('replay').addEventListener('click', () => {
+  const panel = document.querySelector('.boundary-panel');
+  if (panel.classList.contains('replaying')) {
+    clearTimeout(replayTimer);
+    panel.classList.remove('replaying');
+    $('replay').textContent = 'Replay sample ↗';
+    $('replay-note').textContent = 'Replay stopped. Static fixture remains visible; no requests were sent.';
+    return;
+  }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    $('replay-note').textContent = 'Reduced motion: showing the static sample paths. One allow, two denies. No requests were sent.';
+    return;
+  }
+  panel.classList.add('replaying');
+  $('replay').textContent = 'Stop replay';
+  $('replay-note').textContent = 'Replaying three invented samples once. This is animation, not live activity.';
+  replayTimer = setTimeout(() => {
+    panel.classList.remove('replaying');
+    $('replay').textContent = 'Replay sample ↗';
+    $('replay-note').textContent = 'Replay complete. One allow, two denies. Static fixture only; no requests were sent.';
+  }, 5400);
+});
