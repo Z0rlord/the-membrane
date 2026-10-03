@@ -58,16 +58,27 @@ function record(d,pre){
 }
 
 // ---------- Rendering ----------
+const ROWS_COMPACT=5;let logOpen=false;
 function renderRows(fresh){
   const body=$('rows');replace(body);
   const q=$('search').value.toLowerCase(),filter=$('filter').value;
-  const rows=buffer.filter(d=>(filter==='all'||d.outcome===filter)&&[d.rule,d.scope,d.agent,d.action,d.name].some(v=>(v||'').toLowerCase().includes(q))).slice(0,ROWS_SHOWN);
+  const all=buffer.filter(d=>(filter==='all'||d.outcome===filter)&&[d.rule,d.scope,d.agent,d.action,d.name].some(v=>(v||'').toLowerCase().includes(q))).slice(0,ROWS_SHOWN);
+  const rows=logOpen?all:all.slice(0,ROWS_COMPACT);
+  const more=all.length-ROWS_COMPACT;
+  const tog=$('logtoggle'),sum=$('logsum');
+  $('logwrap').className='tablewrap logscroll'+(logOpen?' open':'');
+  if(more>0){
+    const older=all.slice(ROWS_COMPACT),od=older.filter(d=>d.outcome==='deny').length;
+    sum.textContent=logOpen?'Showing all '+all.length+' retained decisions. Scroll inside the log.':more+' earlier decisions hidden: '+(older.length-od)+' allowed, '+od+' denied.';
+    tog.textContent=logOpen?'Show latest '+ROWS_COMPACT+' only':'Show all '+all.length;
+    tog.setAttribute('aria-expanded',logOpen?'true':'false');tog.hidden=false;
+  }else{sum.textContent=all.length?'Showing all '+all.length+' retained decisions.':'';tog.hidden=true;}
   if(!rows.length){const tr=cell(body,'tr','');const td=cell(tr,'td','No simulated decisions match this view.','empty');td.colSpan=5;return;}
   rows.forEach((d,i)=>{const tr=cell(body,'tr','');if(fresh&&i===0&&d===buffer[0])tr.className='fresh is-'+d.outcome;
     cell(tr,'td',new Date(d.timestamp).toLocaleTimeString([],{hour12:false}));
     const out=cell(tr,'td','');cell(out,'span',d.outcome.toUpperCase(),'badge '+d.outcome);
     cell(tr,'td',d.rule);cell(tr,'td',d.action);
-    const who=cell(tr,'td','');const identity=cell(who,'code',d.agent.slice(0,12)+'…','identity');identity.title=d.name+' (simulated)';cell(who,'code',d.scope||'Scope not verified');});
+    const who=cell(tr,'td','');const identity=cell(who,'code',d.agent.slice(0,12)+'\u2026','identity');identity.title=d.name+' (simulated)';cell(who,'code',d.scope||'Scope not verified');});
 }
 function renderStats(now){
   const win=buffer.filter(d=>now-d.timestamp<=WINDOW_MS);
@@ -90,7 +101,7 @@ function renderPolicy(){
   replace($('policy'));const names={permitted_channels:'Permitted channels',forbidden_exports:'Forbidden exports',model_allowlist:'Model allowlist',github_repo_allowlist:'GitHub repositories',delta_t_secs:'Checkpoint freshness'};
   Object.entries(names).forEach(([k,l])=>{cell($('policy'),'dt',l);const v=POLICY[k];cell($('policy'),'dd',Array.isArray(v)?v.join(', '):v+' seconds');});
 }
-$('filter').addEventListener('change',()=>renderRows(false));$('search').addEventListener('input',()=>renderRows(false));
+$('logtoggle').addEventListener('click',()=>{logOpen=!logOpen;renderRows(false);});$('filter').addEventListener('change',()=>renderRows(false));$('search').addEventListener('input',()=>renderRows(false));
 renderPolicy();
 
 // ---------- Motion: missile-command style, capped particles ----------
