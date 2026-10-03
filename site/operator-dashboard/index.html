@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Membrane | Operator audit</title><link rel="stylesheet" href="./style.css"><script src="./app.js" defer></script></head>
-<body><header><div class="wordmark"><span class="symbol" aria-hidden="true">M</span> THE MEMBRANE <span class="tag">OPERATOR AUDIT</span></div><span class="readonly">Synthetic demo / no live data</span></header>
+<body><header><a class="wordmark" href="https://membrane.dojopop.live/" aria-label="The Membrane home"><span class="symbol" aria-hidden="true">M</span> THE MEMBRANE <span class="tag">OPERATOR AUDIT</span></a><div class="headright"><span class="readonly">Synthetic demo / no live data</span><a class="homelink" href="https://membrane.dojopop.live/">&larr; Home</a></div></header>
 <main><div class="intro"><div><p class="eyebrow">OBSERVE. DON'T OVERRIDE.</p><h1>Every boundary, visible.</h1><p class="muted">Authorization decisions and the policy behind them. No controls, no write access.</p></div><div class="statusbox"><span id="status" class="badge unknown" role="status">UNKNOWN</span><p id="updated" class="muted">Waiting for a verified snapshot</p></div></div>
 <div id="alert" role="alert">Static preview with invented decisions. Not connected to a gate. No live status, credentials or external effects.</div>
 <section class="panel boundary-panel" aria-labelledby="boundary-title">
-<div class="sectionhead"><div><p class="eyebrow">THE AUTHORIZATION BOUNDARY</p><h2 id="boundary-title">One gate. Every attempted crossing.</h2><p class="muted">Illustrative paths from the same three synthetic decisions below. Not a network inventory.</p></div><button id="replay" type="button">Replay sample <span aria-hidden="true">↗</span></button></div>
+<div class="sectionhead"><div><p class="eyebrow">THE AUTHORIZATION BOUNDARY</p><h2 id="boundary-title">One gate. Every attempted crossing.</h2><p class="muted">Illustrative paths from the same three synthetic decisions below. Not a network inventory.</p></div><button id="replay" type="button">Pause <span aria-hidden="true">❚❚</span></button></div>
 <div class="map-summary"><span class="map-chip"><i class="dot neutral" aria-hidden="true"></i>1 sample identity</span><span class="map-chip"><i class="dot" aria-hidden="true"></i>1 allowed crossing</span><span class="map-chip"><i class="dot red" aria-hidden="true"></i>2 stopped at the gate</span><span class="map-chip muted">LIVE STATE UNKNOWN</span></div>
 <div class="boundary-map">
-<svg class="desktop-map" viewBox="0 0 1060 340" role="img" aria-labelledby="map-title map-desc">
+<div class="stage desktop-stage"><svg class="desktop-map" viewBox="0 0 1060 340" role="img" aria-labelledby="map-title map-desc">
 <title id="map-title">Synthetic authorization boundary map</title><desc id="map-desc">One sample identity makes three attempts. A chat attempt passes all authorization checks. A tool attempt is denied by the tool allowlist. Another chat attempt is denied by the IAC signature check. Denied paths stop at the membrane. Destinations are illustrative action categories, not verified services.</desc>
 <defs><pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" fill="none" stroke="#263241" stroke-width=".5"/></pattern></defs>
 <rect width="1060" height="340" fill="url(#grid)" opacity=".45"/>
@@ -23,8 +23,8 @@
 <g class="lane" id="lane-1"><path d="M570 188 H800" class="flow unreached"/><circle cx="498" cy="188" r="22" class="deny-gate"/><path d="M491 181 l14 14 m0 -14 l-14 14" class="check"/><text x="603" y="177" class="path-label deny-text">DENY · tool allowlist</text><circle class="packet" cx="291" cy="188" r="5"/><rect x="800" y="163" width="225" height="50" rx="9" class="node"/><text x="820" y="194" class="node-title">Tool boundary</text></g>
 <g class="lane" id="lane-0"><path d="M570 263 H800" class="flow unreached"/><circle cx="498" cy="263" r="22" class="deny-gate"/><path d="M491 256 l14 14 m0 -14 l-14 14" class="check"/><text x="603" y="252" class="path-label deny-text">DENY · IAC signature</text><circle class="packet" cx="291" cy="263" r="5"/><rect x="800" y="238" width="225" height="50" rx="9" class="node"/><text x="820" y="269" class="node-title">Chat channel</text></g>
 <text x="603" y="316" class="map-small">Dashed paths = not reached</text>
-</svg>
-<svg class="mobile-map" viewBox="0 0 360 400" role="img" aria-labelledby="mobile-title mobile-desc">
+</svg><canvas class="fx" aria-hidden="true"></canvas></div>
+<div class="stage mobile-stage"><svg class="mobile-map" viewBox="0 0 360 400" role="img" aria-labelledby="mobile-title mobile-desc">
 <title id="mobile-title">Sample paths through the membrane</title><desc id="mobile-desc">Three synthetic attempts from one sample identity. Only the allowed chat path crosses the membrane. The tool and second chat paths are denied at the gate.</desc>
 <rect x="72" y="12" width="216" height="72" rx="10" class="node"/><text x="180" y="39" text-anchor="middle" class="node-title">Sample agent</text><text x="180" y="63" text-anchor="middle" class="map-small">3 fixture attempts</text>
 <path d="M180 84 V110 H62 V157 M180 110 V157 M180 110 H298 V157" class="flow deny-path"/><path d="M180 84 V110 H62 V157" class="flow allow-path"/>
@@ -35,14 +35,14 @@
 <rect x="15" y="301" width="94" height="48" rx="8" class="node"/><text x="62" y="330" text-anchor="middle" class="node-title">Chat</text><rect x="133" y="301" width="94" height="48" rx="8" class="node"/><text x="180" y="330" text-anchor="middle" class="node-title">Tool</text><rect x="251" y="301" width="94" height="48" rx="8" class="node"/><text x="298" y="330" text-anchor="middle" class="node-title">Chat</text>
 <text x="62" y="370" text-anchor="middle" class="map-small">Crossed</text><text x="180" y="370" text-anchor="middle" class="map-small">Not reached</text><text x="298" y="370" text-anchor="middle" class="map-small">Not reached</text>
 <circle class="mobile-packet mobile-allow" cx="62" cy="121" r="4"/><circle class="mobile-packet mobile-deny first-deny" cx="180" cy="121" r="4"/><circle class="mobile-packet mobile-deny second-deny" cx="298" cy="121" r="4"/>
-</svg>
+</svg><canvas class="fx" aria-hidden="true"></canvas></div>
 </div>
 <div id="map-decisions" class="map-decisions" aria-label="Inspect a sample decision"></div>
 <div class="map-detail" id="map-detail" aria-live="polite"></div>
-<p class="map-footnote" id="replay-note" role="status">Static fixture. Replay animates these samples only; it does not run an agent or send a request.</p>
+<p class="map-footnote" id="replay-note" role="status">Animated from three invented decisions, looping. It does not run an agent or send a request.</p>
 </section>
 <section class="metrics" aria-label="Audit metrics"><article><h2>Gate liveness</h2><strong id="liveness">Unknown</strong><p id="cp" class="muted">No checkpoint data</p></article><article><h2>Decisions retained</h2><strong id="count">-</strong><p class="muted">3 synthetic sample decisions</p></article><article><h2>Deny rate</h2><strong id="rate">-</strong><p id="counts" class="muted">Over retained decisions</p></article><article><h2>Observed since start</h2><strong id="total">-</strong><p class="muted">Invented preview, not real traffic</p></article></section>
 <section class="panel"><div class="sectionhead"><div><h2>Decision log</h2><p class="muted">Newest first. Rule codes, not request bodies.</p></div><div class="filters"><label>Outcome<select id="filter"><option value="all">All decisions</option><option value="deny">Deny only</option><option value="allow">Allow only</option></select></label><label>Search<input id="search" type="search" placeholder="Rule, scope or identity"></label></div></div><div class="tablewrap"><table><thead><tr><th scope="col">Time (local)</th><th scope="col">Decision</th><th scope="col">Rule matched</th><th scope="col">Action</th><th scope="col">Gate identity / scope</th></tr></thead><tbody id="rows"><tr><td colspan="5" class="empty">No verified decisions yet.</td></tr></tbody></table></div></section>
 <section class="panel policy"><div class="sectionhead"><div><h2>Loaded policy</h2><p class="muted">Registry loaded by the running gate. Configuration stays in files.</p></div><span class="tag">VIEW ONLY</span></div><dl id="policy"><dt>Source</dt><dd>Waiting for gate</dd></dl><p class="footnote">The registry is one authorization layer. Signed per-request IAC scopes can restrict it further; this is not a view of every agent's effective permissions.</p></section>
-<footer>Observational telemetry, not a signed evidence archive. No prompts, credentials or tool payloads. <span id="refresh">Synthetic fixture only. <a href="/">Back to The Membrane</a></span></footer>
+<footer>Observational telemetry, not a signed evidence archive. No prompts, credentials or tool payloads. <span id="refresh">Synthetic fixture only. <a href="https://membrane.dojopop.live/">Back to The Membrane</a></span></footer>
 </main></body></html>
