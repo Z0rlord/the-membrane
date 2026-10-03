@@ -277,4 +277,61 @@ mod tests {
         std::fs::remove_file(path).unwrap();
         assert!(g.authorize_identity(&id, &i, "m", None).is_err());
     }
+    #[test]
+    fn old_gate_challenge_cannot_replay_after_restart() {
+        let (g, c, i) = fixture();
+        let p = proof(&g, &c, &i);
+        let restarted = Gate::new(
+            g.registry().clone(),
+            BusPublisher::new(BusPublisherConfig {
+                relay_url: "memory://restart".into(),
+                keys: g.publisher().keys().clone(),
+            }),
+        );
+        assert_ne!(g.caller_audience(), restarted.caller_audience());
+        assert!(auth(&restarted, &i, &p, 100).is_err());
+    }
+    #[test]
+    fn replay_capacity_and_poisoned_lock_fail_closed() {
+        let (g, c, i) = fixture();
+        g.replay
+            .lock()
+            .unwrap()
+            .extend((0..10_000).map(|n| (format!("occupied-{n}"), 100)));
+        assert!(auth(&g, &i, &proof(&g, &c, &i), 100).is_err());
+        let g = std::sync::Arc::new(g);
+        let other = g.clone();
+        let _ = std::thread::spawn(move || {
+            let _lock = other.replay.lock().unwrap();
+            panic!("poison replay cache");
+        })
+        .join();
+        assert!(auth(&g, &i, &proof(&g, &c, &i), 100).is_err());
+    }
+    #[test]
+    fn simultaneous_replay_has_exactly_one_winner() {
+        let (g, c, i) = fixture();
+        let p = proof(&g, &c, &i);
+        let g = std::sync::Arc::new(g);
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let jobs: Vec<_> = (0..8)
+            .map(|_| {
+                let g = g.clone();
+                let i = i.clone();
+                let p = p.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    auth(&g, &i, &p, 100).is_ok()
+                })
+            })
+            .collect();
+        assert_eq!(
+            jobs.into_iter()
+                .filter(|j| j.thread().id() != std::thread::current().id())
+                .map(|j| j.join().unwrap() as usize)
+                .sum::<usize>(),
+            1
+        );
+    }
 }
