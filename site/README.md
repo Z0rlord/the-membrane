@@ -1,12 +1,13 @@
 # The Membrane landing site
 
-Static public marketing page for **The Membrane** — a fail-closed authorization gateway for AI agents with production write access.
+Static public marketing page for **The Membrane** - a fail-closed authorization gateway for AI agents with production write access.
 
 Copy source of truth: [`docs/product.md`](../docs/product.md).
 
-This site is **marketing only**. It does not embed the operator console or
-production controls. It links to the isolated Rust simulation dashboard at
-`https://membrane-demo.dojopop.live` and to the local `membrane demo` path.
+This site presents the software and links to its demo. It does not expose
+production controls. The demo demonstrates gate checks and receipt chaining with
+simulated tool effects; the operator dashboard and gate run separately in the
+operator's environment.
 
 ## Preview locally
 
@@ -42,7 +43,7 @@ site/
 
 ## Deploy (Cloudflare Pages)
 
-### Option A — Wrangler (already provisioned)
+### Option A - Wrangler (already provisioned)
 
 ```bash
 # from repo root; requires CLOUDFLARE_API_TOKEN + account access
@@ -57,7 +58,7 @@ Custom domain `membrane.dojopop.live` is a proxied CNAME → `membrane-landing.p
 
 Legacy `attestable.dojopop.live` still points at the old Pages project `attestable` (currently redeployed with The Membrane branding). Prefer a Cloudflare redirect rule to `https://membrane.dojopop.live` when a token with Rules Write is available; otherwise remove the legacy custom domain + DNS CNAME.
 
-### Option B — Git-connected Pages
+### Option B - Git-connected Pages
 
 1. Cloudflare Dashboard → Workers & Pages → Create → Pages → Connect to Git
 2. Select `Z0rlord/the-membrane`
@@ -67,7 +68,7 @@ Legacy `attestable.dojopop.live` still points at the old Pages project `attestab
    - Build output directory: `site`
 4. Add custom domain `membrane.dojopop.live`
 
-### Option C — Tunnel / existing CF ingress
+### Option C - Tunnel / existing CF ingress
 
 If Pages is unavailable, serve `site/` from any static host behind the existing
 `dojopop.live` Cloudflare tunnel and point `membrane.dojopop.live` at that origin.
@@ -77,5 +78,5 @@ See `deploy/grasp/update-tunnel-ingress.sh` for the tunnel pattern used elsewher
 
 | Deferred | Why |
 |----------|-----|
-| Production operator console | The public dashboard is a separate simulation-only sandbox |
+| Production controls | The public demo is separate from the operator deployment |
 | Nostr / BCI / ZK deep research pitch | Out of scope for product landing |
