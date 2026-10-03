@@ -2,6 +2,8 @@
 // SIMULATED LIVE TRAFFIC. Every decision below is invented in this browser tab.
 // No gate is read, no request is sent, nothing leaves the page.
 const $ = id => document.getElementById(id);
+// Older WebKit has no replaceChildren; keep text rendering independent of canvas.
+function replace(el, ...items){while(el.firstChild)el.removeChild(el.firstChild);items.forEach(item=>el.appendChild(typeof item==='string'?document.createTextNode(item):item));}
 function cell(parent, tag, text, cls) { const el=document.createElement(tag); el.textContent=text; if(cls)el.className=cls; parent.append(el); return el; }
 
 // ---------- Invented world ----------
@@ -57,7 +59,7 @@ function record(d,pre){
 
 // ---------- Rendering ----------
 function renderRows(fresh){
-  const body=$('rows');body.replaceChildren();
+  const body=$('rows');replace(body);
   const q=$('search').value.toLowerCase(),filter=$('filter').value;
   const rows=buffer.filter(d=>(filter==='all'||d.outcome===filter)&&[d.rule,d.scope,d.agent,d.action,d.name].some(v=>(v||'').toLowerCase().includes(q))).slice(0,ROWS_SHOWN);
   if(!rows.length){const tr=cell(body,'tr','');const td=cell(tr,'td','No simulated decisions match this view.','empty');td.colSpan=5;return;}
@@ -80,12 +82,12 @@ function renderStats(now){
     $('mlane-allow-'+i).textContent=c.allow+' crossed';$('mlane-deny-'+i).textContent=c.deny+' stopped';$('mgc-'+i).textContent=c.allow+c.deny;});
 }
 function renderTicker(d){
-  const t=$('ticker');t.dataset.outcome=d.outcome;t.replaceChildren();
+  const t=$('ticker');t.dataset.outcome=d.outcome;replace(t);
   cell(t,'b',d.outcome.toUpperCase());t.append(' '+d.name+' · '+d.action+' · ');cell(t,'b',d.rule.replace('all_authorization_checks_passed','all checks passed'));
   t.append(d.outcome==='allow'?' · crossed (simulated)':' · stopped at the gate (simulated)');
 }
 function renderPolicy(){
-  $('policy').replaceChildren();const names={permitted_channels:'Permitted channels',forbidden_exports:'Forbidden exports',model_allowlist:'Model allowlist',github_repo_allowlist:'GitHub repositories',delta_t_secs:'Checkpoint freshness'};
+  replace($('policy'));const names={permitted_channels:'Permitted channels',forbidden_exports:'Forbidden exports',model_allowlist:'Model allowlist',github_repo_allowlist:'GitHub repositories',delta_t_secs:'Checkpoint freshness'};
   Object.entries(names).forEach(([k,l])=>{cell($('policy'),'dt',l);const v=POLICY[k];cell($('policy'),'dd',Array.isArray(v)?v.join(', '):v+' seconds');});
 }
 $('filter').addEventListener('change',()=>renderRows(false));$('search').addEventListener('input',()=>renderRows(false));
@@ -98,7 +100,7 @@ const GEO={
   mobile:{w:360,h:400,laneX:[110,250],origin:i=>[40+i*56,88]}
 };
 const FLY=1.1, MAXP=12;
-const fx=[...document.querySelectorAll('.fx')].map((canvas,i)=>({canvas,ctx:canvas.getContext('2d'),mobile:!!i,scale:1}));
+const fx=[...document.querySelectorAll('.fx')].map((canvas,i)=>({canvas,ctx:(()=>{try{return canvas.getContext('2d');}catch(e){return null;}})(),mobile:!!i,scale:1}));
 const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
 const q=(p0,c,p1,u)=>{const m=1-u;return[m*m*p0[0]+2*m*u*c[0]+u*u*p1[0],m*m*p0[1]+2*m*u*c[1]+u*u*p1[1]];};
 function path(f,d){
@@ -147,49 +149,53 @@ function drawParticle(ctx,L,deny,tt){
     else{const k=Math.min(1,(a-run)/.6);ring(ctx,L.e[0],L.e[1],5+14*k,ACC,1-k,2);}
   }
 }
-let particles=[], playing=false, raf=0, timer=0, visible=true, paused=false, clock=0;
+let particles=[], playing=false, raf=0, timer=0, visible=true, paused=reduce.matches, canvasOK=fx.every(f=>!!f.ctx);
 function life(p){return p.deny?FLY+.8:FLY+.75+.9;}
 function frame(now){
   raf=0;
   particles=particles.filter(p=>(now-p.t0)/1000<life(p));
   fx.forEach(f=>{
-    if(!size(f))return;
+    try{
+    if(!f.ctx||!size(f))return;
     const ctx=f.ctx;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,f.canvas.width,f.canvas.height);ctx.setTransform(f.scale,0,0,f.scale,0,0);
     particles.forEach(p=>{const L=path(f,p);L.mob=f.mobile;drawParticle(ctx,L,p.deny,Math.max(0,(now-p.t0)/1000));});
+    }catch(e){canvasOK=false;particles=[];label();}
   });
   if(particles.length&&playing&&visible)raf=requestAnimationFrame(frame);
 }
 function spawn(d){
-  if(!playing||!visible||document.hidden||particles.length>=MAXP)return;
+  if(reduce.matches||!canvasOK||!playing||!visible||document.hidden||particles.length>=MAXP)return;
   particles.push({lane:d.lane,ident:d.ident,deny:d.outcome==='deny',j:rnd(),k:rnd(),t0:performance.now()});
   if(!raf)raf=requestAnimationFrame(frame);
 }
-function clearFx(){particles=[];if(raf){cancelAnimationFrame(raf);raf=0;}fx.forEach(f=>f.ctx.clearRect(0,0,f.canvas.width,f.canvas.height));}
+function clearFx(){particles=[];if(raf){cancelAnimationFrame(raf);raf=0;}fx.forEach(f=>{if(f.ctx)f.ctx.clearRect(0,0,f.canvas.width,f.canvas.height);});}
 
 // ---------- Scheduler ----------
+// Lifecycle events restart the timer, not just a boolean. Safari can suspend a tab
+// (including back-forward cache) without delivering a pending timeout on return.
 function tick(){
-  timer=0;if(!playing)return;
-  const d=generate(Date.now());record(d);renderStats(Date.now());renderRows(true);renderTicker(d);spawn(d);
+  timer=0;if(!playing||document.hidden)return;
+  const now=Date.now(),d=generate(now);record(d);renderStats(now);renderRows(true);renderTicker(d);
+  // A canvas problem must never freeze the decision log or its timer.
+  try{spawn(d);}catch(e){canvasOK=false;clearFx();label();}
   timer=setTimeout(tick,nextGap()*1000);
 }
 function setPlaying(on){
-  const want=on&&!document.hidden&&!reduce.matches;
-  if(want&&!playing){playing=true;if(!timer)timer=setTimeout(tick,400);}
-  if(!want&&playing){playing=false;if(timer)clearTimeout(timer);timer=0;clearFx();}
+  if(timer)clearTimeout(timer);timer=0;
+  playing=on&&!document.hidden;
+  if(playing)timer=setTimeout(tick,400);else clearFx();
 }
 function setStatus(){
-  const sim=playing||(!paused&&!reduce.matches);
-  $('status').textContent=reduce.matches?'SIMULATED / STATIC':paused?'SIMULATED / PAUSED':'SIMULATED / RUNNING';
+  const staticMode=paused&&reduce.matches;
+  $('status').textContent=staticMode?'SIMULATED / STATIC':paused?'SIMULATED / PAUSED':document.hidden?'SIMULATED / BACKGROUND':reduce.matches||!canvasOK?'SIMULATED / TEXT ONLY':'SIMULATED / RUNNING';
   $('status').className='badge idle';
-  $('updated').textContent='Synthetic stream, not a live observation';
+  $('updated').textContent=staticMode?'System Reduce Motion is on. Static preview, not a loading failure. Press Start text stream to update without animation.':paused?'Simulation paused. Press Play to resume.':reduce.matches?'Reduce Motion is on. Decisions update without animation.':!canvasOK?'Map animation unavailable. The simulated log still updates.':'Synthetic stream, not a live observation';
   $('liveness').textContent='Simulated';
 }
 function label(){
-  const b=$('replay'),n=$('replay-note');setStatus();
-  if(reduce.matches){b.textContent='Motion off';b.disabled=true;n.textContent='Reduced motion is on, so the stream and map stay still: a static snapshot of simulated decisions. No requests were sent.';return;}
-  b.disabled=false;
-  if(paused){b.replaceChildren('Play ','▶');n.textContent='Paused. The simulated log is frozen; nothing was sent.';}
-  else{b.replaceChildren('Pause ','❚❚');n.textContent='Simulated live traffic: a few decisions a minute to a few a second in bursts, invented in this page. Allowed calls cross the gate; denied calls are intercepted at it. No agent is running and no requests are sent.';}
+  const b=$('replay'),n=$('replay-note');setStatus();b.disabled=false;
+  if(paused){b.textContent=reduce.matches?'Start text stream':'Play ▶';n.textContent=reduce.matches?'Your system Reduce Motion setting keeps this preview still. Start text stream updates the simulated decisions and counters, with no map animation. No requests are sent.':'Paused. The simulated log is frozen; nothing was sent.';}
+  else{b.textContent='Pause ❚❚';n.textContent=reduce.matches?'Text-only simulation running. Reduce Motion is respected: the map stays still while decisions and counters update. No requests are sent.':'Simulated live traffic: a few decisions a minute to a few a second in bursts, invented in this page. Allowed calls cross the gate; denied calls are intercepted at it. No agent is running and no requests are sent.';}
 }
 function backfill(){
   const now=Date.now();let t=now-150000;
@@ -199,7 +205,11 @@ function backfill(){
 }
 $('replay').addEventListener('click',()=>{paused=!paused;setPlaying(!paused);label();});
 if('IntersectionObserver' in window){new IntersectionObserver(es=>{visible=es[es.length-1].isIntersecting;if(!visible)clearFx();}).observe(document.querySelector('.boundary-map'));}
-document.addEventListener('visibilitychange',()=>{setPlaying(!paused);label();});
-(reduce.addEventListener?reduce.addEventListener.bind(reduce,'change'):reduce.addListener.bind(reduce))(()=>{setPlaying(!paused);label();});
+function resume(){setPlaying(!paused);renderStats(Date.now());label();}
+document.addEventListener('visibilitychange',resume);
+window.addEventListener('pageshow',resume);
+window.addEventListener('focus',resume);
+window.addEventListener('pagehide',()=>setPlaying(false));
+(reduce.addEventListener?reduce.addEventListener.bind(reduce,'change'):reduce.addListener.bind(reduce))(()=>{if(reduce.matches){paused=true;clearFx();}resume();});
 $('alert').hidden=false;
 backfill();label();setPlaying(!paused);
