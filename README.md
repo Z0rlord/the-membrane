@@ -12,9 +12,9 @@ Self-host the gate and hold your own keys. The Membrane checks authorization bef
 
 ## Software and demo
 
-The Rust workspace includes the authorization gate, CLI, receipt and attestation components, read-only operator dashboard, and deterministic recommendation advisor. These are working software, not demo stand-ins. The gate authenticates callers through caller-bound signed IACs and request proofs; operator-owned identity grants limit access and support revocation.
+The Rust workspace includes the authorization gate, CLI, receipt and attestation components, read-only operator dashboard, and deterministic recommendation advisor. The gate authenticates callers through caller-bound signed IACs and request proofs; operator-owned identity grants limit access and support revocation.
 
-The repo also includes a demo of the gate's authorization checks and receipt chaining. The demo uses ephemeral keys, an in-memory bus, and simulated tool effects. It does not hold production credentials or make changes to external systems.
+The repo also includes a demo that approximates the operator workflow, including the gate's authorization checks and receipt chaining. The demo uses ephemeral keys, an in-memory bus, and simulated tool effects. It does not hold production credentials or make changes to external systems.
 
 - **Run the software:** configure your operator registry, relay, signed IACs, caller keys and grants. Connect the gate to your model backend and supported tools. See [caller identity](docs/caller-identity.md) and the [GitHub connector](docs/github-connector.md).
 - **Try the demo:** open [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live) or run `membrane demo` locally.
