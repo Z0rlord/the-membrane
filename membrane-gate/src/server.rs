@@ -48,6 +48,9 @@ pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Re
     let listener = tokio::net::TcpListener::bind(listen).await?;
     let audit_task = crate::audit::bind(state.clone(), &audit_listen).await?;
     spawn_delta_t_watchdog(state.gate.clone(), state.session_chain.clone());
+    // Invalid alarm settings stop startup; they never silently disable alarms.
+    let alarm_config = crate::alarm::AlarmConfig::from_env().map_err(anyhow::Error::msg)?;
+    crate::alarm::spawn_alarm_task(state.audit.clone(), alarm_config);
 
     let app = axum::Router::new()
         .route("/health", get(health))

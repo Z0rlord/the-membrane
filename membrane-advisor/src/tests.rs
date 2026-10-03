@@ -40,6 +40,7 @@ fn snap(decisions: Vec<Decision>) -> Snapshot {
         denied,
         deny_rate: Some(1.0),
         audit_available: true,
+        alarms: vec![],
     }
 }
 
