@@ -717,6 +717,7 @@ async fn gate_start(
         default_iac: Some(default_iac),
         session_chain: Arc::new(tokio::sync::Mutex::new(session_chain)),
         github: Arc::new(GitHubConnector::new(github_cfg)),
+        audit: Arc::new(membrane_gate::audit::AuditLog::default()),
     };
 
     run_gate_server(state, listen).await
