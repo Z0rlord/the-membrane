@@ -57,7 +57,7 @@ The setup: an agent drafts or edits content built from third-party assets (foota
 - **Missing manifest, bad signature, revoked credential, untrusted signer.** No scope is issued. The call is blocked and the denial is written into the receipt chain. Missing provenance is a denial, not a warning.
 - **Allowed calls.** Each one writes a tamper-evident CP receipt chained to the prior receipt, so the audit record shows which signed scope authorized which operation on which asset.
 
-Nothing new is built: provenance verification is operator policy evaluated when the IAC is issued, not a separate product. The repo ships no C2PA verifier today; adding one is a connector-and-policy exercise of the same shape that turns simulated tool calls into real ones in [docs/github-connector.md](docs/github-connector.md).
+Nothing new is built: provenance verification is operator policy evaluated when the IAC is issued, not a separate product. The repo ships no C2PA verifier today; adding one is a connector-and-policy exercise using the same connector-and-policy pattern as external tool execution in [docs/github-connector.md](docs/github-connector.md).
 
 The asymmetry this buys: enforcement that only detects after publication is always behind the leak. A fail-closed gate makes "unverified content never enters the pipeline" the default state rather than an audit finding.
 
@@ -137,7 +137,7 @@ cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 
 **Gate HTTP:** `POST /v1/chat/completions` with a standard chat/completions JSON body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` file is only valid when signed by the same key the gate is running as.
 
-**Tool invoke (real GitHub connector):** `POST /v1/tools/invoke` after `membrane iac issue --tool github.comment`. Requires `MEMBRANE_GITHUB_TOKEN` (or `GITHUB_TOKEN`) and a non-empty `github_repo_allowlist` in the channel registry. Out-of-scope tools (for example `github.merge`) are blocked with a receipt before any GitHub HTTP. Helper: `membrane tools invoke …`. Full recipe: [docs/github-connector.md](docs/github-connector.md). Do not enable this on the public demo sandbox.
+**Tool invoke (GitHub connector):** `POST /v1/tools/invoke` after `membrane iac issue --tool github.comment`. Requires `MEMBRANE_GITHUB_TOKEN` (or `GITHUB_TOKEN`) and a non-empty `github_repo_allowlist` in the channel registry. Out-of-scope tools (for example `github.merge`) are blocked with a receipt before any GitHub HTTP. Helper: `membrane tools invoke …`. Full recipe: [docs/github-connector.md](docs/github-connector.md). Do not enable this on the public demo sandbox.
 
 ### Self-hosted session (local LLM with receipts)
 
@@ -213,7 +213,7 @@ GitHub is day-to-day; Grasp is the decentralized backup remote.
 
 ## Architecture & research
 
-Protocol foundations, attestation bus details, BCI channel research, and zk roadmap live here so cold readers meet the **product** first. None of this changes the sovereign / nation-state / enterprise customer framing above.
+Protocol foundations, attestation bus details, BCI channel research and the zk roadmap are documented below.
 
 **Foundations:** SHA-256 Merkle commitments, signed Chain Proof receipts, TEE attestation, and web-of-trust witnesses, with zk-STARK proofs on the roadmap. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollups provide independently verifiable audit time. The same fail-closed boundary model can extend to local AI, cloud inference, BCI telemetry, and other exogenous channels without splitting the product.
 
@@ -244,7 +244,7 @@ Do **not** use `relay.dojopop.live` for Membrane attestation - it allowlists Doj
 
 ## Status
 
-Gate, session-scoped IAC, CP receipt chain, sovereign/`membrane chat` client, SIEM export, and daily OTS rollup CLI are real. Hosted sandbox tools remain simulated; production connectors are opt-in (see GitHub connector docs). No Winterfell STARK or BCI integration yet.
+The workspace includes the gate, caller-bound IACs and identity grants, CP receipt chain, `membrane chat` client, operator dashboard, recommendation advisor, SIEM export and daily OTS rollup CLI. The demo is a simulated approximation of the operator workflow. Configure supported connectors for external tool execution (see GitHub connector docs). Winterfell STARK and BCI integrations remain research work.
 
 ## License
 
