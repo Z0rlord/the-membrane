@@ -10,6 +10,7 @@ fn deny(seq: u64, rule: &str, subject: Option<&str>) -> Decision {
         outcome: "deny".into(),
         rule: rule.into(),
         agent: "gate".into(),
+        authenticated_identity: None,
         scope: None,
         action: "tool".into(),
         subject: subject.map(Into::into),
@@ -222,4 +223,21 @@ fn old_snapshots_without_subject_still_parse() {
     let json = r#"{"sequence":1,"timestamp":1,"outcome":"deny","rule":"tool_allowlist","agent":"g","scope":null,"action":"tool"}"#;
     let d: Decision = serde_json::from_str(json).unwrap();
     assert!(d.subject.is_none());
+}
+
+#[test]
+fn authenticated_callers_group_separately_and_never_widen_global_policy() {
+    let a = "a".repeat(64);
+    let b = "b".repeat(64);
+    let mut one = deny(1, "model_allowlist", Some("new-model"));
+    one.authenticated_identity = Some(a.clone());
+    let mut two = deny(2, "model_allowlist", Some("new-model"));
+    two.authenticated_identity = Some(b.clone());
+    let r = analyze(&snap(vec![one, two]), REGISTRY, "registry.yaml", 1).unwrap();
+    assert_eq!(r.recommendations.len(), 2);
+    assert!(r.patch.is_empty());
+    assert!(r
+        .recommendations
+        .iter()
+        .all(|x| x.summary.contains(".revoked to true") && x.authenticated_identity.is_some()));
 }
