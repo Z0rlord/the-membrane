@@ -20,6 +20,9 @@ pub enum IacVerifyError {
 pub struct IntentAuthorizationCredential {
     pub version: String,
     pub scope_id: String,
+    /// Operator-signed caller key. None remains parseable but cannot enter production.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_pubkey: Option<String>,
     pub permitted_channels: Vec<String>,
     pub model_allowlist: Vec<String>,
     /// Tools this credential authorizes (e.g. `jira.comment`). Empty = no tools.
@@ -41,6 +44,9 @@ pub struct IntentAuthorizationCredential {
 pub struct SignableIac {
     pub version: String,
     pub scope_id: String,
+    /// Operator-signed caller key. None remains parseable but cannot enter production.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_pubkey: Option<String>,
     pub permitted_channels: Vec<String>,
     pub model_allowlist: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -62,6 +68,7 @@ impl IntentAuthorizationCredential {
         SignableIac {
             version: self.version.clone(),
             scope_id: self.scope_id.clone(),
+            caller_pubkey: self.caller_pubkey.clone(),
             permitted_channels: self.permitted_channels.clone(),
             model_allowlist: self.model_allowlist.clone(),
             tool_allowlist: self.tool_allowlist.clone(),
@@ -128,6 +135,7 @@ impl IntentAuthorizationCredential {
         Self {
             version: Self::SCHEMA_VERSION.to_string(),
             scope_id: scope_id.into(),
+            caller_pubkey: None,
             permitted_channels,
             model_allowlist: vec![model_id.into()],
             tool_allowlist,
@@ -204,6 +212,7 @@ mod tests {
     fn sample_iac() -> IntentAuthorizationCredential {
         IntentAuthorizationCredential {
             version: IntentAuthorizationCredential::SCHEMA_VERSION.to_string(),
+            caller_pubkey: None,
             scope_id: "test-scope".into(),
             permitted_channels: vec!["local-llm".into()],
             model_allowlist: vec!["demo".into()],
