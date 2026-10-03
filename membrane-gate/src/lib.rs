@@ -340,6 +340,7 @@ pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
         .ok_or_else(|| GateError::Registry("empty context".into()))
 }
 
+pub mod audit;
 pub mod demo;
 pub mod github;
 pub mod proxy;
@@ -458,4 +459,4 @@ mod tests {
         assert!(matches!(err, GateError::ToolDenied(_)));
         gate.authorize_tool(&iac, "github.comment", 1_000).unwrap();
     }
-}
+            }
