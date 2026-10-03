@@ -183,6 +183,7 @@ impl Default for DemoRuntime {
 
 pub fn demo_registry() -> crate::ChannelRegistry {
     crate::ChannelRegistry {
+        identities: Default::default(),
         permitted_channels: vec!["local-llm".into()],
         forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
         model_allowlist: vec![DEMO_MODEL.into()],
@@ -1219,7 +1220,9 @@ fn simulate_tool(
 
 fn demo_err(err: GateError) -> Response {
     let status = match &err {
-        GateError::NoValidIac(_)
+        GateError::IdentityAuthentication(_)
+        | GateError::IdentityGrant(_)
+        | GateError::NoValidIac(_)
         | GateError::InvalidIacSignature(_)
         | GateError::ChannelDenied(_)
         | GateError::ModelDenied(_)

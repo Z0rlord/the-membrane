@@ -17,3 +17,15 @@ model_api_url: http://127.0.0.1:8080
 # Real GitHub connector (POST /v1/tools/invoke). Empty = deny all repos (fail closed).
 # Example: github_repo_allowlist: ["your-org/disposable-pilot-repo"]
 github_repo_allowlist: []
+
+# Production identity grants. Keys are caller Schnorr public keys (64 lowercase hex).
+# Empty denies all production callers. Replace with an operator-reviewed exact grant.
+# identities:
+#   <caller-public-key>:
+#     revoked: false
+#     scopes: [pilot-scope]
+#     permitted_channels: [local-llm]
+#     model_allowlist: [sha256:demo-model]
+#     tool_allowlist: [github.comment]
+#     github_repo_allowlist: [your-org/disposable-pilot-repo]
+identities: {}

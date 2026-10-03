@@ -74,6 +74,7 @@ async fn health(State(state): State<GateServerState>) -> impl IntoResponse {
     Json(json!({
         "status": if router_stale || degraded_scope.is_some() { "degraded" } else { "ok" },
         "gate": "membrane-phase-0",
+        "caller_audience": state.gate.caller_audience(),
         "delta_t_secs": delta_t_secs,
         "last_cp_age_secs": last_cp_age_secs,
         "router_stale": router_stale,
@@ -103,12 +104,31 @@ async fn chat_completions(
             return rejection.into_response();
         }
     };
+    let mut identity = None;
+    let authorization = (|| {
+        let iac = load_iac(&headers, state.default_iac.as_ref())?;
+        let proof = load_caller_proof(&headers)?;
+        identity = Some(state.gate.authenticate_caller(
+            &iac,
+            &proof,
+            "/v1/chat/completions",
+            &req,
+            now_secs(),
+        )?);
+        state
+            .gate
+            .authorize_identity(identity.as_deref().unwrap(), &iac, &req.model, None)
+    })();
+    if let Err(err) = authorization {
+        record_denied_identity(&state, &err, "chat", identity);
+        return gate_error_response(err);
+    }
     let mut authorized = false;
     match handle_chat(&state, &headers, &mut req, &mut authorized).await {
         Ok((resp, receipt)) => chat_success_response(resp, &receipt),
         Err(err) => {
             if !authorized {
-                record_denied(&state, &err, "chat");
+                record_denied_identity(&state, &err, "chat", identity.clone());
             }
             publish_blocked_receipt(&state, &headers, Some(&req.model), None, &err).await;
             gate_error_response(err)
@@ -132,12 +152,37 @@ async fn tools_invoke(
             return rejection.into_response();
         }
     };
+    let mut identity = None;
+    let authorization = (|| {
+        let iac = load_iac(&headers, state.default_iac.as_ref())?;
+        let proof = load_caller_proof(&headers)?;
+        identity = Some(state.gate.authenticate_caller(
+            &iac,
+            &proof,
+            "/v1/tools/invoke",
+            &req,
+            now_secs(),
+        )?);
+        state.gate.authorize_identity(
+            identity.as_deref().unwrap(),
+            &iac,
+            &req.model,
+            Some((
+                req.tool.as_str(),
+                format!("{}/{}", req.owner, req.repo).as_str(),
+            )),
+        )
+    })();
+    if let Err(err) = authorization {
+        record_denied_identity(&state, &err, "tool", identity);
+        return gate_error_response(err);
+    }
     let mut authorized = false;
     match handle_tool_invoke(&state, &headers, &req, &mut authorized).await {
         Ok((body, receipt)) => tool_success_response(body, &receipt),
         Err(err) => {
             if !authorized {
-                record_denied(&state, &err, "tool");
+                record_denied_identity(&state, &err, "tool", identity.clone());
             }
             publish_blocked_receipt(&state, &headers, Some(&req.model), Some(&req.tool), &err)
                 .await;
@@ -147,22 +192,33 @@ async fn tools_invoke(
 }
 
 fn record_allowed(state: &GateServerState, iac: &IntentAuthorizationCredential, action: &str) {
-    state.audit.record(
+    state.audit.record_authenticated(
         "allow",
         "all_authorization_checks_passed",
         state.gate.publisher_pubkey_hex(),
         Some(iac.scope_id.clone()),
         action,
+        None,
+        iac.caller_pubkey.clone(),
     );
 }
 fn record_denied(state: &GateServerState, err: &GateError, action: &str) {
-    state.audit.record_with_subject(
+    record_denied_identity(state, err, action, None);
+}
+fn record_denied_identity(
+    state: &GateServerState,
+    err: &GateError,
+    action: &str,
+    identity: Option<String>,
+) {
+    state.audit.record_authenticated(
         "deny",
         crate::audit::rule(err),
         state.gate.publisher_pubkey_hex(),
         None,
         action,
         crate::audit::subject(err),
+        identity,
     );
 }
 
@@ -267,6 +323,14 @@ async fn handle_chat(
 
     drop(chain);
 
+    state.gate.authorize_identity(
+        iac.caller_pubkey
+            .as_deref()
+            .ok_or_else(|| GateError::IdentityAuthentication("missing caller binding".into()))?,
+        &iac,
+        &req.model,
+        None,
+    )?;
     *authorized = true;
     record_allowed(state, &iac, "chat");
     let response = state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))?;
@@ -309,6 +373,14 @@ async fn handle_tool_invoke(
         ensure_live_session(state, &iac, &mut chain, now).await?;
     }
 
+    state.gate.authorize_identity(
+        iac.caller_pubkey
+            .as_deref()
+            .ok_or_else(|| GateError::IdentityAuthentication("missing caller binding".into()))?,
+        &iac,
+        &req.model,
+        Some((&req.tool, &format!("{}/{}", req.owner, req.repo))),
+    )?;
     *authorized = true;
     record_allowed(state, &iac, "tool");
     let tool_ctx = state.github.execute(req).await.map_err(map_github_err)?;
@@ -482,6 +554,15 @@ fn set_header(headers: &mut HeaderMap, name: &'static str, value: &str) {
     }
 }
 
+fn load_caller_proof(headers: &HeaderMap) -> Result<membrane_core::caller::CallerProof, GateError> {
+    let raw = headers
+        .get("x-membrane-caller-proof")
+        .and_then(|h| h.to_str().ok())
+        .ok_or_else(|| GateError::IdentityAuthentication("missing caller proof".into()))?;
+    serde_json::from_str(raw)
+        .map_err(|_| GateError::IdentityAuthentication("invalid caller proof".into()))
+}
+
 fn load_iac(
     headers: &HeaderMap,
     default: Option<&IntentAuthorizationCredential>,
@@ -515,7 +596,9 @@ fn parse_iac_header(raw: &str) -> Result<IntentAuthorizationCredential, GateErro
 fn gate_error_response(err: GateError) -> Response {
     warn!(error = %err, "gate fail-closed");
     let status = match &err {
-        GateError::NoValidIac(_)
+        GateError::IdentityAuthentication(_)
+        | GateError::IdentityGrant(_)
+        | GateError::NoValidIac(_)
         | GateError::InvalidIacSignature(_)
         | GateError::ChannelDenied(_)
         | GateError::ModelDenied(_)
@@ -564,6 +647,18 @@ mod tool_invoke_policy_tests {
     ) -> (GateServerState, IntentAuthorizationCredential) {
         let keys = Keys::generate();
         let registry = ChannelRegistry {
+            identities: [(
+                keys.public_key().to_hex(),
+                crate::identity::IdentityGrant {
+                    revoked: false,
+                    scopes: vec!["pilot-scope".into()],
+                    permitted_channels: vec!["local-llm".into()],
+                    model_allowlist: vec!["demo".into()],
+                    tool_allowlist: tools.clone(),
+                    github_repo_allowlist: repos.clone(),
+                },
+            )]
+            .into(),
             permitted_channels: vec!["local-llm".into()],
             forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
             model_allowlist: vec!["demo".into()],
@@ -585,6 +680,7 @@ mod tool_invoke_policy_tests {
             vec!["cloud-telemetry".into(), "training-retention".into()],
             tools,
         );
+        iac.caller_pubkey = Some(keys.public_key().to_hex());
         iac.sign(&keys).unwrap();
         let github = GitHubConnector::new(GitHubConnectorConfig {
             repo_allowlist: repos,
@@ -617,6 +713,20 @@ mod tool_invoke_policy_tests {
         };
         let mut headers = HeaderMap::new();
         headers.insert("x-agent-id", "spoofed-agent".parse().unwrap());
+        let proof = membrane_core::caller::CallerProof::sign(
+            state.gate.publisher().keys(),
+            &state.gate.caller_audience(),
+            "/v1/tools/invoke",
+            &req,
+            state.default_iac.as_ref().unwrap(),
+            now_secs(),
+            nostr::Keys::generate().public_key().to_hex(),
+        )
+        .unwrap();
+        headers.insert(
+            "x-membrane-caller-proof",
+            serde_json::to_string(&proof).unwrap().parse().unwrap(),
+        );
         let response = tools_invoke(State(state.clone()), headers, Ok(Json(req))).await;
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         let view = crate::audit::snapshot(&state).await;
@@ -640,7 +750,22 @@ mod tool_invoke_policy_tests {
             body: Some("local test".into()),
             commit_title: None,
         };
-        let _ = tools_invoke(State(state.clone()), HeaderMap::new(), Ok(Json(req))).await;
+        let mut headers = HeaderMap::new();
+        let proof = membrane_core::caller::CallerProof::sign(
+            state.gate.publisher().keys(),
+            &state.gate.caller_audience(),
+            "/v1/tools/invoke",
+            &req,
+            state.default_iac.as_ref().unwrap(),
+            now_secs(),
+            nostr::Keys::generate().public_key().to_hex(),
+        )
+        .unwrap();
+        headers.insert(
+            "x-membrane-caller-proof",
+            serde_json::to_string(&proof).unwrap().parse().unwrap(),
+        );
+        let _ = tools_invoke(State(state.clone()), headers, Ok(Json(req))).await;
         let view = crate::audit::snapshot(&state).await;
         assert_eq!(view.allowed, 1);
         assert_eq!(view.denied, 0);
@@ -729,5 +854,118 @@ mod tool_invoke_policy_tests {
             .await
             .unwrap_err();
         assert!(matches!(err, GateError::SessionDegraded(_, _)));
+    }
+    #[tokio::test]
+    async fn unauthenticated_handler_has_no_identity_and_never_allows() {
+        let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let req = ToolInvokeRequest {
+            tool: TOOL_GITHUB_COMMENT.into(),
+            model: "demo".into(),
+            owner: "acme".into(),
+            repo: "pilot".into(),
+            issue_number: Some(1),
+            pull_number: None,
+            body: Some("test".into()),
+            commit_title: None,
+        };
+        let mut h = HeaderMap::new();
+        h.insert("x-agent-id", "forged".parse().unwrap());
+        let response = tools_invoke(State(state.clone()), h, Ok(Json(req))).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let v = crate::audit::snapshot(&state).await;
+        assert_eq!(v.allowed, 0);
+        assert_eq!(v.decisions[0].rule, "identity_authentication");
+        assert_eq!(v.decisions[0].authenticated_identity, None);
+    }
+    #[tokio::test]
+    async fn distinct_caller_is_recorded_on_chat_allow_and_identity_denial() {
+        let (mut state, mut iac) = test_state(vec![], vec![]);
+        let caller = Keys::generate();
+        let id = caller.public_key().to_hex();
+        iac.caller_pubkey = Some(id.clone());
+        iac.sign(state.gate.publisher().keys()).unwrap();
+        let mut registry = state.gate.registry().clone();
+        let mut grant = registry.identities.values().next().unwrap().clone();
+        registry.identities = [(id.clone(), grant.clone())].into();
+        state.gate = Arc::new(Gate::new(
+            registry.clone(),
+            BusPublisher::new(BusPublisherConfig {
+                relay_url: "memory://identity-http".into(),
+                keys: state.gate.publisher().keys().clone(),
+            }),
+        ));
+        state.default_iac = Some(iac.clone());
+        let req = ChatRequest {
+            model: "demo".into(),
+            messages: vec![crate::ChatMessage {
+                role: "user".into(),
+                content: "hello".into(),
+            }],
+            stream: false,
+        };
+        let proof = membrane_core::caller::CallerProof::sign(
+            &caller,
+            &state.gate.caller_audience(),
+            "/v1/chat/completions",
+            &req,
+            &iac,
+            now_secs(),
+            Keys::generate().public_key().to_hex(),
+        )
+        .unwrap();
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-membrane-caller-proof",
+            serde_json::to_string(&proof).unwrap().parse().unwrap(),
+        );
+        assert_eq!(
+            chat_completions(State(state.clone()), h, Ok(Json(req.clone())))
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let v = crate::audit::snapshot(&state).await;
+        assert_eq!(v.allowed, 1);
+        assert_eq!(
+            v.decisions[0].authenticated_identity.as_deref(),
+            Some(id.as_str())
+        );
+        assert_ne!(v.decisions[0].agent, id);
+        grant.revoked = true;
+        registry.identities.insert(id.clone(), grant);
+        state.gate = Arc::new(Gate::new(
+            registry,
+            BusPublisher::new(BusPublisherConfig {
+                relay_url: "memory://identity-http".into(),
+                keys: state.gate.publisher().keys().clone(),
+            }),
+        ));
+        let proof = membrane_core::caller::CallerProof::sign(
+            &caller,
+            &state.gate.caller_audience(),
+            "/v1/chat/completions",
+            &req,
+            &iac,
+            now_secs(),
+            Keys::generate().public_key().to_hex(),
+        )
+        .unwrap();
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-membrane-caller-proof",
+            serde_json::to_string(&proof).unwrap().parse().unwrap(),
+        );
+        assert_eq!(
+            chat_completions(State(state.clone()), h, Ok(Json(req)))
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        let v = crate::audit::snapshot(&state).await;
+        assert_eq!(v.decisions[0].rule, "identity_grant");
+        assert_eq!(
+            v.decisions[0].authenticated_identity.as_deref(),
+            Some(id.as_str())
+        );
     }
 }

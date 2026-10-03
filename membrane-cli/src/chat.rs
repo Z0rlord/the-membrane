@@ -146,6 +146,38 @@ impl ChatClient {
             HeaderValue::from_str(&iac_json).context("IAC header")?,
         );
 
+        let health: serde_json::Value = self
+            .http
+            .get(format!(
+                "{}/health",
+                self.config.gate_url.trim_end_matches('/')
+            ))
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        let audience = health["caller_audience"]
+            .as_str()
+            .context("gate lacks caller challenge")?;
+        anyhow::ensure!(
+            audience.starts_with(&format!("{}:", self.keys.public_key().to_hex())),
+            "foreign gate challenge"
+        );
+        let typed_body: membrane_gate::ChatRequest = serde_json::from_value(body.clone())?;
+        let proof = membrane_core::caller::CallerProof::sign(
+            &self.keys,
+            audience,
+            "/v1/chat/completions",
+            &typed_body,
+            &iac,
+            now_secs(),
+            Keys::generate().public_key().to_hex(),
+        )?;
+        headers.insert(
+            "x-membrane-caller-proof",
+            HeaderValue::from_str(&serde_json::to_string(&proof)?)?,
+        );
         let url = format!(
             "{}/v1/chat/completions",
             self.config.gate_url.trim_end_matches('/')
@@ -227,7 +259,11 @@ pub async fn ensure_session_iac(
     if path.exists() {
         let iac: IntentAuthorizationCredential =
             serde_json::from_str(&std::fs::read_to_string(&path)?)?;
-        if iac.scope_id == scope_id && iac.is_valid_at(now) && iac.model_allowed(&config.model) {
+        if iac.caller_pubkey.as_deref() == Some(keys.public_key().to_hex().as_str())
+            && iac.scope_id == scope_id
+            && iac.is_valid_at(now)
+            && iac.model_allowed(&config.model)
+        {
             if let Err(err) = iac.verify_signature(&keys.public_key().to_hex()) {
                 eprintln!("warning: active IAC invalid ({err}), re-issuing");
             } else {
@@ -247,6 +283,7 @@ pub async fn ensure_session_iac(
         vec!["local-llm".into()],
         vec!["cloud-telemetry".into(), "training-retention".into()],
     );
+    iac.caller_pubkey = Some(keys.public_key().to_hex());
     iac.sign(keys).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     std::fs::write(&path, serde_json::to_string_pretty(&iac)?)?;

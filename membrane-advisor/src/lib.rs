@@ -43,6 +43,7 @@ pub enum Kind {
 #[derive(Debug, Clone, Serialize)]
 pub struct Recommendation {
     pub rule: String,
+    pub authenticated_identity: Option<String>,
     pub subject: Option<String>,
     pub kind: Kind,
     pub denials: usize,
@@ -96,10 +97,18 @@ struct Group {
     last: u64,
 }
 
-fn group_denials(decisions: &[Decision]) -> BTreeMap<(String, Option<String>), Group> {
-    let mut map: BTreeMap<(String, Option<String>), Group> = BTreeMap::new();
+fn group_denials(
+    decisions: &[Decision],
+) -> BTreeMap<(String, Option<String>, Option<String>), Group> {
+    let mut map: BTreeMap<(String, Option<String>, Option<String>), Group> = BTreeMap::new();
     for d in decisions.iter().filter(|d| d.outcome == "deny") {
-        let g = map.entry((d.rule.clone(), d.subject.clone())).or_default();
+        let g = map
+            .entry((
+                d.rule.clone(),
+                d.subject.clone(),
+                d.authenticated_identity.clone(),
+            ))
+            .or_default();
         if g.count == 0 {
             g.first = d.sequence;
             g.last = d.sequence;
@@ -187,7 +196,8 @@ fn checked_add(text: &str, key: &str, item: &str, comment: &str) -> Result<Strin
         let Ok(parsed) = serde_yaml::from_str::<ChannelRegistry>(&edited) else {
             continue;
         };
-        let unchanged = parsed.permitted_channels == registry.permitted_channels
+        let unchanged = parsed.identities == registry.identities
+            && parsed.permitted_channels == registry.permitted_channels
             && parsed.forbidden_exports == registry.forbidden_exports
             && parsed.delta_t_secs == registry.delta_t_secs
             && (key == "model_allowlist" || parsed.model_allowlist == registry.model_allowlist)
@@ -216,12 +226,13 @@ pub fn analyze(
     let mut edited = registry_text.to_string();
     let mut applied: Vec<(String, String)> = Vec::new();
 
-    for ((rule, subject), g) in group_denials(&snapshot.decisions) {
+    for ((rule, subject, identity), g) in group_denials(&snapshot.decisions) {
         if g.count < min_denials {
             continue;
         }
         let mut rec = Recommendation {
             rule: rule.clone(),
+            authenticated_identity: identity.clone(),
             subject: subject.clone(),
             kind: Kind::Investigate,
             denials: g.count,
@@ -266,6 +277,12 @@ pub fn analyze(
                 rec.kind = Kind::IacReissue;
                 rec.summary = "IAC missing or expired. Re-issue a signed IAC with a new valid_until if the session should continue.".into();
             }
+            ("identity_authentication", _) => {
+                rec.summary = "Caller proof missing, forged, stale or replayed. Do not grant a claimed identity or loosen policy.".into();
+            }
+            ("identity_grant", _) => {
+                rec.summary = "Authenticated caller has no active matching identity grant. Inspect the exact scope and revoked flag. Do not automatically grant or un-revoke from a denial.".into();
+            }
             ("iac_signature", _) => {
                 rec.summary = "IAC signature failed. Do not change policy. This is a tampered or foreign credential until shown otherwise.".into();
             }
@@ -289,6 +306,21 @@ pub fn analyze(
             _ => {
                 rec.summary =
                     format!("Unrecognized rule `{rule}`. No recommendation; inspect manually.");
+            }
+        }
+        if let Some(ref key) = identity {
+            // The log is not authority: caller text must still be a canonical key.
+            if key.len() == 64
+                && key
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                rec.summary.push_str(&format!(" Authenticated caller: {key}. If this activity is unintended, set identities.{key}.revoked to true; review before applying."));
+            }
+            if rec.patch_entry.is_some() {
+                rec.kind = Kind::Investigate;
+                rec.patch_entry = None;
+                rec.summary.push_str(" Identity grants are an additional intersection; no global widening patch is generated for this caller.");
             }
         }
         if let Some((key, item)) = rec.patch_entry.clone() {

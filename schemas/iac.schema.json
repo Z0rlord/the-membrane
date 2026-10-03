@@ -20,6 +20,7 @@
       "type": "string",
       "const": "0.9.14"
     },
+    "caller_pubkey": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Operator-signed caller binding; required by production gate, optional for legacy demo parsing." },
     "scope_id": { "type": "string", "minLength": 1 },
     "permitted_channels": {
       "type": "array",

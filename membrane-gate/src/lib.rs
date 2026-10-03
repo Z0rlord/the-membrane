@@ -13,6 +13,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum GateError {
+    #[error("caller authentication failed: {0}")]
+    IdentityAuthentication(String),
+    #[error("identity grant denied: {0}")]
+    IdentityGrant(String),
     #[error("no valid IAC: {0}")]
     NoValidIac(String),
     #[error("invalid IAC signature: {0}")]
@@ -43,6 +47,9 @@ pub enum GateError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelRegistry {
+    /// Exact caller public keys. Empty or absent denies every production caller.
+    #[serde(default)]
+    pub identities: std::collections::BTreeMap<String, identity::IdentityGrant>,
     pub permitted_channels: Vec<String>,
     pub forbidden_exports: Vec<String>,
     pub model_allowlist: Vec<String>,
@@ -71,6 +78,9 @@ pub struct Gate {
     publisher: BusPublisher,
     iac_signer_pubkey: String,
     siem_shipper: Option<Arc<SiemWebhookShipper>>,
+    identity_registry_path: Option<std::path::PathBuf>,
+    caller_challenge: String,
+    replay: std::sync::Mutex<std::collections::BTreeMap<String, i64>>,
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +107,16 @@ impl Gate {
             publisher,
             iac_signer_pubkey,
             siem_shipper: None,
+            identity_registry_path: None,
+            caller_challenge: nostr::Keys::generate().public_key().to_hex(),
+            replay: Default::default(),
         }
+    }
+
+    /// Re-read operator identity grants for each request. A bad/missing file denies.
+    pub fn with_identity_registry_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.identity_registry_path = Some(path.into());
+        self
     }
 
     pub fn with_siem_shipper(mut self, shipper: Arc<SiemWebhookShipper>) -> Self {
@@ -343,6 +362,7 @@ pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
 pub mod audit;
 pub mod demo;
 pub mod github;
+pub mod identity;
 pub mod proxy;
 pub mod server;
 pub mod watchdog;
@@ -355,8 +375,8 @@ pub use demo::{
 pub use github::{
     authorize_repo_and_args, body_sha256_hex, is_github_tool, GitHubConnector,
     GitHubConnectorConfig, GitHubConnectorError, ToolInvokeRequest, ToolReceiptContext,
-    TOOL_GITHUB_COMMENT, TOOL_GITHUB_ISSUE_READ, TOOL_GITHUB_MERGE, ENV_TOKEN_FALLBACK,
-    ENV_TOKEN_PRIMARY,
+    ENV_TOKEN_FALLBACK, ENV_TOKEN_PRIMARY, TOOL_GITHUB_COMMENT, TOOL_GITHUB_ISSUE_READ,
+    TOOL_GITHUB_MERGE,
 };
 pub use proxy::{ChatMessage, ChatRequest, ChatResponse, LlmProxy};
 pub use server::{run_gate_server, GateServerState, SessionReceipt};
@@ -372,6 +392,7 @@ mod tests {
     fn test_gate(delta_t: u64) -> Gate {
         let keys = Keys::generate();
         let registry = ChannelRegistry {
+            identities: Default::default(),
             permitted_channels: vec!["local-llm".into()],
             forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
             model_allowlist: vec!["demo".into()],
@@ -431,6 +452,7 @@ mod tests {
     fn rejects_unknown_tool() {
         let keys = Keys::generate();
         let registry = ChannelRegistry {
+            identities: Default::default(),
             permitted_channels: vec!["local-llm".into()],
             forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
             model_allowlist: vec!["demo".into()],
@@ -459,4 +481,4 @@ mod tests {
         assert!(matches!(err, GateError::ToolDenied(_)));
         gate.authorize_tool(&iac, "github.comment", 1_000).unwrap();
     }
-            }
+}

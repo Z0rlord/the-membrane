@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let registry = ChannelRegistry {
+        identities: Default::default(),
         permitted_channels: vec!["local-llm".into()],
         forbidden_exports: vec!["cloud-telemetry".into(), "training-retention".into()],
         model_allowlist: vec!["local-model".into()],
