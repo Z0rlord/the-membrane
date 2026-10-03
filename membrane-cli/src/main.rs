@@ -306,6 +306,9 @@ enum IacCommands {
         parent_cp_hash: Option<String>,
         #[arg(long, default_value = "local-llm")]
         channel: Vec<String>,
+        /// Public key of caller this operator-issued IAC is bound to.
+        #[arg(long)]
+        caller_pubkey: String,
         /// Allowed tool ids (repeatable), e.g. `--tool github.comment`
         #[arg(long = "tool")]
         tools: Vec<String>,
@@ -338,6 +341,11 @@ enum ToolsCommands {
         gate_url: String,
         #[arg(long)]
         iac: PathBuf,
+        /// Caller signing key (not the operator issuing key).
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        #[arg(long)]
+        gate_pubkey: String,
         #[arg(long)]
         tool: String,
         #[arg(long)]
@@ -423,6 +431,7 @@ async fn main() -> Result<()> {
                 parent_cp_hash,
                 channel,
                 tools,
+                caller_pubkey,
                 out,
             } => {
                 iac_issue(
@@ -434,6 +443,7 @@ async fn main() -> Result<()> {
                     parent_cp_hash.as_deref(),
                     &channel,
                     &tools,
+                    &caller_pubkey,
                     &out,
                 )
                 .await
@@ -445,6 +455,8 @@ async fn main() -> Result<()> {
             ToolsCommands::Invoke {
                 gate_url,
                 iac,
+                nsec,
+                gate_pubkey,
                 tool,
                 model,
                 owner,
@@ -457,6 +469,8 @@ async fn main() -> Result<()> {
                 tools_invoke(
                     &gate_url,
                     &iac,
+                    nsec,
+                    &gate_pubkey,
                     &tool,
                     &model,
                     &owner,
@@ -657,7 +671,8 @@ async fn gate_start(
         relay_url: relay.to_string(),
         keys: keys.clone(),
     });
-    let mut gate = Gate::new(registry.clone(), publisher);
+    let mut gate =
+        Gate::new(registry.clone(), publisher).with_identity_registry_path(registry_path.clone());
     if let Some(shipper) = SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))? {
         println!(
             "gate: SIEM webhook enabled (format={}, fail_open={}, urls={})",
@@ -667,9 +682,7 @@ async fn gate_start(
         );
         gate = gate.with_siem_shipper(Arc::new(shipper));
     } else {
-        println!(
-            "gate: SIEM webhook disabled (set {ENV_WEBHOOK_URL} to enable live shipping)"
-        );
+        println!("gate: SIEM webhook disabled (set {ENV_WEBHOOK_URL} to enable live shipping)");
     }
     let gate = Arc::new(gate);
 
@@ -872,6 +885,7 @@ async fn iac_issue(
     parent_cp_hash: Option<&str>,
     channels: &[String],
     tools: &[String],
+    caller_pubkey: &str,
     out: &PathBuf,
 ) -> Result<()> {
     let keys = load_keys(nsec)?;
@@ -898,6 +912,8 @@ async fn iac_issue(
         vec!["cloud-telemetry".into(), "training-retention".into()],
         tools.to_vec(),
     );
+    nostr::PublicKey::from_hex(caller_pubkey).context("caller public key")?;
+    iac.caller_pubkey = Some(caller_pubkey.to_ascii_lowercase());
     iac.sign(&keys).map_err(|e| anyhow::anyhow!("{e}"))?;
     let iac_hash = iac.hash_hex()?;
 
@@ -922,8 +938,7 @@ async fn iac_issue(
     let issued_event_id = publisher.publish(&mut issued_event, None).await?;
 
     if let Some(shipper) = SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))? {
-        let mapped =
-            SiemEvent::from_membrane_event(&issued_event, Some(&issued_event_id.to_hex()));
+        let mapped = SiemEvent::from_membrane_event(&issued_event, Some(&issued_event_id.to_hex()));
         shipper
             .deliver_respecting_fail_open(&mapped)
             .await
@@ -950,6 +965,8 @@ async fn iac_issue(
 async fn tools_invoke(
     gate_url: &str,
     iac_path: &PathBuf,
+    nsec: Option<String>,
+    gate_pubkey: &str,
     tool: &str,
     model: &str,
     owner: &str,
@@ -960,10 +977,7 @@ async fn tools_invoke(
     commit_title: Option<&str>,
 ) -> Result<()> {
     let iac_raw = std::fs::read_to_string(iac_path).context("read IAC")?;
-    let url = format!(
-        "{}/v1/tools/invoke",
-        gate_url.trim_end_matches('/')
-    );
+    let url = format!("{}/v1/tools/invoke", gate_url.trim_end_matches('/'));
     let payload = serde_json::json!({
         "tool": tool,
         "model": model,
@@ -975,10 +989,42 @@ async fn tools_invoke(
         "commit_title": commit_title,
     });
     let client = reqwest::Client::new();
+    let keys = load_keys(nsec)?;
+    let iac: IntentAuthorizationCredential = serde_json::from_str(&iac_raw)?;
+    iac.verify_signature(gate_pubkey)?;
+    anyhow::ensure!(
+        iac.caller_pubkey.as_deref() == Some(keys.public_key().to_hex().as_str()),
+        "IAC caller does not match caller key"
+    );
+    let health: serde_json::Value = client
+        .get(format!("{}/health", gate_url.trim_end_matches('/')))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    let audience = health["caller_audience"]
+        .as_str()
+        .context("gate lacks caller challenge")?;
+    anyhow::ensure!(
+        audience.starts_with(&format!("{gate_pubkey}:")),
+        "foreign gate challenge"
+    );
+    let typed: membrane_gate::ToolInvokeRequest = serde_json::from_value(payload.clone())?;
+    let proof = membrane_core::caller::CallerProof::sign(
+        &keys,
+        audience,
+        "/v1/tools/invoke",
+        &typed,
+        &iac,
+        now_secs(),
+        nostr::Keys::generate().public_key().to_hex(),
+    )?;
     let resp = client
         .post(&url)
         .header("Content-Type", "application/json")
-        .header("X-Membrane-IAC", iac_raw.trim())
+        .header("X-Membrane-IAC", serde_json::to_string(&iac)?)
+        .header("X-Membrane-Caller-Proof", serde_json::to_string(&proof)?)
         .json(&payload)
         .send()
         .await
@@ -1158,6 +1204,7 @@ async fn run_iac_smoke(relay: &str, nsec: Option<String>, registry_path: &PathBu
 fn demo_iac(keys: &nostr::Keys, now: i64) -> IntentAuthorizationCredential {
     let mut iac = IntentAuthorizationCredential {
         version: IntentAuthorizationCredential::SCHEMA_VERSION.to_string(),
+        caller_pubkey: None,
         scope_id: "demo-session-001".into(),
         permitted_channels: vec!["local-llm".into()],
         model_allowlist: vec!["sha256:demo-model".into()],
@@ -1225,6 +1272,8 @@ mod cli_tests {
             "issue",
             "--model",
             "sha256:demo-model",
+            "--caller-pubkey",
+            "0000000000000000000000000000000000000000000000000000000000000001",
             "--tool",
             "github.comment",
             "--out",
@@ -1247,6 +1296,8 @@ mod cli_tests {
             "invoke",
             "--iac",
             "session-iac.json",
+            "--gate-pubkey",
+            "0000000000000000000000000000000000000000000000000000000000000001",
             "--tool",
             "github.comment",
             "--model",
