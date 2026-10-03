@@ -4,34 +4,30 @@ The Membrane is a fail-closed authorization gateway for AI agents with productio
 
 **Public landing:** [membrane.dojopop.live](https://membrane.dojopop.live) · source in [`site/`](site/)
 
-## Who it’s for
+## Run it under your own control
 
-**Sovereigns · Nation-states · Enterprise** — one product, three customer classes.
+Self-host the gate and hold your own keys. The Membrane checks authorization before an agent reaches your models, tools, or production systems, and keeps receipts for the actions that pass through it.
 
-A fail-closed authorization gateway for AI agents with production or operational write access. Customers self-host the gate, hold their own keys, and prove agent actions with live signed scopes and tamper-evident receipts. High-assurance and mil/gov postures sit with sovereign and nation-state operators; enterprise runs the same gate for production agent write access under its own control.
+## Software and demo
 
-## What’s real vs demo
+The Rust workspace includes the authorization gate, CLI, receipt and attestation components, read-only operator dashboard, and deterministic recommendation advisor. These are working software, not demo stand-ins. The gate authenticates callers through caller-bound signed IACs and request proofs; operator-owned identity grants limit access and support revocation.
 
-| Real today | Demo / sandbox |
-|------------|----------------|
-| Fail-closed gate checks, signed time-bounded scopes (IAC), tamper-evident CP receipt chain, block and sever | Hosted [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live) and local `membrane demo` — same gate logic, **simulated** Jira / Slack / GitHub tool side effects |
-| Operator SIEM export (JSON Lines / OCSF-inspired) and optional fail-open webhook | Public sandbox does not ship webhook traffic or hold production credentials |
-| Production gate tool path when a real connector is configured (see [docs/github-connector.md](docs/github-connector.md)) | Without a connector, tool invokes stay simulated |
+The repo also includes a demo of the gate's authorization checks and receipt chaining. The demo uses ephemeral keys, an in-memory bus, and simulated tool effects. It does not hold production credentials or make changes to external systems.
 
-## How we sell / stage
-
-Self-hosted pilots in your environment, then license and support. No hosted production SaaS.
+- **Run the software:** configure your operator registry, relay, signed IACs, caller keys and grants. Connect the gate to your model backend and supported tools. See [caller identity](docs/caller-identity.md) and the [GitHub connector](docs/github-connector.md).
+- **Try the demo:** open [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live) or run `membrane demo` locally.
+- **Export telemetry:** use JSON Lines or OCSF-inspired SIEM export, with an optional fail-open webhook shipper. The demo does not send webhook traffic.
 
 ## Documents
 
 | File | Description |
 |------|-------------|
-| [docs/product.md](docs/product.md) | Product positioning (sovereigns, nation-states, enterprise) |
+| [docs/product.md](docs/product.md) | Product overview and deployment |
 | [docs/siem-export.md](docs/siem-export.md) | Vendor-neutral SIEM/SOC export (JSON Lines and OCSF-inspired JSON) |
-| [docs/github-connector.md](docs/github-connector.md) | Real GitHub tool path on the production gate |
+| [docs/github-connector.md](docs/github-connector.md) | GitHub connector configuration |
 | [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
-| [docs/demo.md](docs/demo.md) | Local product dashboard — one-command demo |
-| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) — architecture & research |
+| [docs/demo.md](docs/demo.md) | Local product dashboard - one-command demo |
+| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) - architecture & research |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, Phase 0 path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | Single-file edition (whitepaper + Appendix B) |
 | [docs/the-membrane-complete.pdf](docs/the-membrane-complete.pdf) | PDF export with table of contents |
@@ -67,9 +63,9 @@ The asymmetry this buys: enforcement that only detects after publication is alwa
 
 ## Local demo dashboard
 
-**Primary path for anyone cloning the repo** — no secrets, no relay, no paid APIs.
+**Primary path for anyone cloning the repo** - no secrets, no relay, no paid APIs.
 
-Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** - source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
 
 Open the isolated public sandbox at
 **[membrane-demo.dojopop.live](https://membrane-demo.dojopop.live)**, or run
@@ -93,9 +89,9 @@ For the live gate, attestation bus, and session IAC path you need:
 2. Your own `NOSTR_NSEC` (never commit)
 3. An IAC **issued and signed by that same key** (`membrane iac issue` / `iac sign`)
 
-The gate verifies the IAC against the signer pubkey. Bundled files such as `tools/demo-iac.json` only work when your `NOSTR_NSEC` matches the key that signed them — an arbitrary nsec will fail closed. Prefer issuing a fresh session IAC for your key.
+The gate verifies the IAC against the signer pubkey. Bundled files such as `tools/demo-iac.json` only work when your `NOSTR_NSEC` matches the key that signed them - an arbitrary nsec will fail closed. Prefer issuing a fresh session IAC for your key.
 
-1. **Local relay** (self-hosted bus — do not use public relays for writes):
+1. **Local relay** (self-hosted bus - do not use public relays for writes):
 
 ```bash
 docker run --rm -d --name membrane-relay -p 7777:8080 \
@@ -229,7 +225,7 @@ Protocol foundations, attestation bus details, BCI channel research, and zk road
 
 | | |
 |---|---|
-| Public | `wss://membrane-relay.dojopop.live` (after tunnel DNS — see `deploy/relay/`) |
+| Public | `wss://membrane-relay.dojopop.live` (after tunnel DNS - see `deploy/relay/`) |
 | Kinds | 31990, 31991 only |
 | Deploy | `./deploy/relay/deploy.sh` |
 
@@ -244,7 +240,7 @@ export MEMBRANE_RELAY_URL='wss://membrane-relay.dojopop.live'
 
 Common tags: `p` (subject pubkey), `e` (prior event id). Content is canonical `MembraneEvent` JSON (metadata only).
 
-Do **not** use `relay.dojopop.live` for Membrane attestation — it allowlists DojoPop kinds only. Use the dedicated bus above.
+Do **not** use `relay.dojopop.live` for Membrane attestation - it allowlists DojoPop kinds only. Use the dedicated bus above.
 
 ## Status
 
