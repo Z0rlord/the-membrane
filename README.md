@@ -2,6 +2,8 @@
 
 The Membrane is a fail-closed authorization gateway for AI agents with production write access. Every model and tool call needs a live, signed, time-bounded scope; each action writes a tamper-evident receipt; broken continuity blocks or severs the agent.
 
+The Membrane began with the concept of a firewall between human cognition and AI silicon, developed in the [cognitive boundary research](docs/whitepaper.md); the agent gate applies that boundary to model and tool calls.
+
 **Public landing:** [membrane.dojopop.live](https://membrane.dojopop.live) · source in [`site/`](site/)
 
 ## Run it under your own control
@@ -162,7 +164,7 @@ membrane evidence export --format ocsf --since-secs 86400 --out membrane-siem.oc
 
 # Sever active session (fail-closed; requires fresh IAC to resume)
 membrane sever
-membrane sever --scope-id sovereign-1234567890
+membrane sever --scope-id session-1234567890
 ```
 
 Each turn returns `X-Membrane-CP-Hash`, `X-Membrane-Session-Nonce`, and related headers from the gate. Session logs are saved under `~/.local/share/membrane/sessions/`.
