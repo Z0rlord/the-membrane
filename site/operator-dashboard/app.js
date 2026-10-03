@@ -35,7 +35,7 @@ function makeDecision(ts,identIndex,opts){
 
 // ---------- Rolling state ----------
 const BUFFER_MAX=120, ROWS_SHOWN=30, WINDOW_MS=60000;
-let buffer=[], total=0, allowed=0, denied=0;
+let buffer=[], seenTotal=0, allowed=0, denied=0;
 const laneCount=[{allow:0,deny:0},{allow:0,deny:0}];
 let burst={n:0,ident:0,probe:false};
 
@@ -54,7 +54,7 @@ function generate(ts){
 function record(d,pre){
   buffer.unshift(d);if(buffer.length>BUFFER_MAX)buffer.pop();
   if(pre)return;
-  total++;if(d.outcome==='allow'){allowed++;laneCount[d.lane].allow++;}else{denied++;laneCount[d.lane].deny++;}
+  seenTotal++;if(d.outcome==='allow'){allowed++;laneCount[d.lane].allow++;}else{denied++;laneCount[d.lane].deny++;}
 }
 
 // ---------- Rendering ----------
@@ -72,7 +72,7 @@ function renderRows(fresh){
 function renderStats(now){
   const win=buffer.filter(d=>now-d.timestamp<=WINDOW_MS);
   const wd=win.filter(d=>d.outcome==='deny').length;
-  $('count').textContent=buffer.length;$('total').textContent=total;
+  $('count').textContent=buffer.length;$('total').textContent=seenTotal;
   $('rate').textContent=win.length?(wd/win.length*100).toFixed(1)+'%':'N/A';
   $('counts').textContent=wd+' deny / '+(win.length-wd)+' allow in last 60s';
   $('cp').textContent='Synthetic stream, about '+win.length+' decisions/min';
