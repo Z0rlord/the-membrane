@@ -1110,6 +1110,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "membrane-dashboard"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "membrane-gate",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+]
+
+[[package]]
 name = "membrane-gate"
 version = "0.1.0"
 dependencies = [
