@@ -1,4 +1,4 @@
-//! Real GitHub tool connector for the production gate.
+//! GitHub tool connector for the production gate.
 //!
 //! Enforced only after IAC `tool_allowlist` + repo allowlist checks.
 //! Tokens come from env (`MEMBRANE_GITHUB_TOKEN` or `GITHUB_TOKEN`) — never logged.
@@ -545,7 +545,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "set MEMBRANE_GITHUB_INTEGRATION=1 with a real token + disposable repo"]
+    #[ignore = "set MEMBRANE_GITHUB_INTEGRATION=1 with a valid token + disposable repo"]
     async fn live_github_integration() {
         let enabled = std::env::var(ENV_INTEGRATION)
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
