@@ -1,4 +1,5 @@
 //! Bounded, observational telemetry. Never an authorization input or receipt substitute.
+use crate::alarm::{Alarm, AlarmRecord, Delivery, ALARM_LOG_CAPACITY};
 use crate::{server::GateServerState, GateError};
 use axum::{
     extract::{Request, State},
@@ -35,6 +36,8 @@ pub struct Decision {
 struct Buffer {
     sequence: u64,
     decisions: VecDeque<Decision>,
+    alarm_sequence: u64,
+    alarms: VecDeque<AlarmRecord>,
 }
 #[derive(Debug, Default)]
 pub struct AuditLog(Mutex<Buffer>);
@@ -90,6 +93,35 @@ impl AuditLog {
         if buffer.decisions.len() > CAPACITY {
             buffer.decisions.pop_front();
         }
+    }
+    /// Store an alarm raised by the alarm task. Observational only.
+    pub fn record_alarm(&self, alarm: Alarm, delivery: Delivery) -> Option<AlarmRecord> {
+        let mut buffer = self.0.lock().ok()?;
+        buffer.alarm_sequence = buffer.alarm_sequence.saturating_add(1);
+        let record = AlarmRecord {
+            id: buffer.alarm_sequence,
+            alarm,
+            delivery,
+        };
+        buffer.alarms.push_back(record.clone());
+        if buffer.alarms.len() > ALARM_LOG_CAPACITY {
+            buffer.alarms.pop_front();
+        }
+        Some(record)
+    }
+    pub fn set_alarm_delivery(&self, id: u64, delivery: Delivery) {
+        if let Ok(mut buffer) = self.0.lock() {
+            if let Some(r) = buffer.alarms.iter_mut().find(|r| r.id == id) {
+                r.delivery = delivery;
+            }
+        }
+    }
+    /// Newest first.
+    pub fn alarms(&self) -> Vec<AlarmRecord> {
+        self.0
+            .lock()
+            .map(|b| b.alarms.iter().rev().cloned().collect())
+            .unwrap_or_default()
     }
     pub fn snapshot(&self) -> Option<(u64, Vec<Decision>)> {
         self.0
@@ -150,6 +182,9 @@ pub struct Snapshot {
     pub denied: usize,
     pub deny_rate: Option<f64>,
     pub audit_available: bool,
+    /// Clocked alarms raised by the gate, newest first, with delivery status.
+    #[serde(default)]
+    pub alarms: Vec<AlarmRecord>,
 }
 pub async fn snapshot(state: &GateServerState) -> Snapshot {
     let now = chrono::Utc::now().timestamp();
@@ -192,6 +227,7 @@ pub async fn snapshot(state: &GateServerState) -> Snapshot {
         denied,
         deny_rate: (allowed + denied > 0).then(|| denied as f64 / (allowed + denied) as f64),
         audit_available: available,
+        alarms: state.audit.alarms(),
     }
 }
 pub fn loopback_address(value: &str) -> anyhow::Result<SocketAddr> {
