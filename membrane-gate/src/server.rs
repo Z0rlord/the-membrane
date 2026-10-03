@@ -156,12 +156,13 @@ fn record_allowed(state: &GateServerState, iac: &IntentAuthorizationCredential, 
     );
 }
 fn record_denied(state: &GateServerState, err: &GateError, action: &str) {
-    state.audit.record(
+    state.audit.record_with_subject(
         "deny",
         crate::audit::rule(err),
         state.gate.publisher_pubkey_hex(),
         None,
         action,
+        crate::audit::subject(err),
     );
 }
 
@@ -698,6 +699,11 @@ mod tool_invoke_policy_tests {
             .await
             .unwrap_err();
         assert!(matches!(err, GateError::RepoDenied(_)));
+        // The audit log names the denied repo so a read-only advisor can act on it.
+        record_denied(&state, &err, "tool");
+        let (_, rows) = state.audit.snapshot().unwrap();
+        assert_eq!(rows[0].rule, "repository_allowlist");
+        assert_eq!(rows[0].subject.as_deref(), Some("acme/other"));
     }
 
     #[tokio::test]
