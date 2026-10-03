@@ -63,7 +63,7 @@ enum Commands {
         #[command(subcommand)]
         command: IacCommands,
     },
-    /// Invoke a real allowlisted tool through the production gate
+    /// Invoke an allowlisted tool through the production gate
     Tools {
         #[command(subcommand)]
         command: ToolsCommands,
@@ -335,7 +335,7 @@ enum IacCommands {
 
 #[derive(Subcommand)]
 enum ToolsCommands {
-    /// POST /v1/tools/invoke on a running gate (real connector; not the demo simulator)
+    /// POST /v1/tools/invoke on a running gate (connector execution; separate from the demo)
     Invoke {
         #[arg(long, default_value = "http://127.0.0.1:8787")]
         gate_url: String,
@@ -719,7 +719,7 @@ async fn gate_start(
     );
     if registry.github_repo_allowlist.is_empty() {
         println!(
-            "gate: github_repo_allowlist empty — real GitHub invokes will fail closed until configured"
+            "gate: github_repo_allowlist empty - GitHub invokes will fail closed until configured"
         );
     }
 
@@ -1328,4 +1328,4 @@ mod cli_tests {
         let help = Cli::command().render_long_help().to_string();
         assert!(!help.contains("landing-demo"));
     }
-}
+        }
