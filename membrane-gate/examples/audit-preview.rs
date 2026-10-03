@@ -1,4 +1,4 @@
-//! Local UI verification fixture. Synthetic rows; no real tool calls or credentials.
+//! Local UI verification fixture. Synthetic rows; no external tool calls or credentials.
 use membrane_core::{BusPublisher, BusPublisherConfig, SessionChainState};
 use membrane_gate::{
     audit::{bind, AuditLog},
