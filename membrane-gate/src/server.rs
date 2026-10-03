@@ -36,7 +36,7 @@ pub struct GateServerState {
     pub proxy: Arc<LlmProxy>,
     pub default_iac: Option<IntentAuthorizationCredential>,
     pub session_chain: Arc<Mutex<SessionChainState>>,
-    /// Real GitHub connector (operator installs). Demo dashboard does not use this.
+    /// GitHub connector (operator installs). Demo dashboard does not use this.
     pub github: Arc<GitHubConnector>,
     pub audit: Arc<crate::audit::AuditLog>,
 }
@@ -359,7 +359,7 @@ async fn handle_tool_invoke(
 
     if !is_github_tool(&req.tool) {
         return Err(GateError::Connector(format!(
-            "no real connector for tool '{}'; supported: github.comment, github.merge, github.issue.read",
+            "no connector configured for tool '{}'; supported: github.comment, github.merge, github.issue.read",
             req.tool
         )));
     }
@@ -968,4 +968,4 @@ mod tool_invoke_policy_tests {
             Some(id.as_str())
         );
     }
-}
+            }
