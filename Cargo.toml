@@ -4,6 +4,7 @@ members = [
     "membrane-core",
     "membrane-gate",
     "membrane-cli",
+    "membrane-dashboard",
 ]
 default-members = ["membrane-cli"]
 
