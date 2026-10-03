@@ -1,0 +1,239 @@
+//! Bounded, observational telemetry. Never an authorization input or receipt substitute.
+use crate::{server::GateServerState, GateError};
+use axum::{
+    extract::{Request, State},
+    http::{header, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json,
+};
+use serde::{Deserialize, Serialize};
+use std::{collections::VecDeque, net::SocketAddr, sync::Mutex};
+
+pub const CAPACITY: usize = 500;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Decision {
+    pub sequence: u64,
+    pub timestamp: i64,
+    pub outcome: String,
+    pub rule: String,
+    /// Gate signing identity, not a caller-supplied agent header.
+    pub agent: String,
+    pub scope: Option<String>,
+    pub action: String,
+}
+#[derive(Debug, Default)]
+struct Buffer {
+    sequence: u64,
+    decisions: VecDeque<Decision>,
+}
+#[derive(Debug, Default)]
+pub struct AuditLog(Mutex<Buffer>);
+impl AuditLog {
+    pub fn record(
+        &self,
+        outcome: &str,
+        rule: &str,
+        agent: String,
+        scope: Option<String>,
+        action: &str,
+    ) {
+        // Telemetry failure must neither authorize an action nor panic the gate.
+        let Ok(mut buffer) = self.0.lock() else {
+            return;
+        };
+        buffer.sequence = buffer.sequence.saturating_add(1);
+        let sequence = buffer.sequence;
+        buffer.decisions.push_back(Decision {
+            sequence,
+            timestamp: chrono::Utc::now().timestamp(),
+            outcome: outcome.into(),
+            rule: rule.into(),
+            agent,
+            scope,
+            action: action.into(),
+        });
+        if buffer.decisions.len() > CAPACITY {
+            buffer.decisions.pop_front();
+        }
+    }
+    pub fn snapshot(&self) -> Option<(u64, Vec<Decision>)> {
+        self.0
+            .lock()
+            .ok()
+            .map(|b| (b.sequence, b.decisions.iter().rev().cloned().collect()))
+    }
+}
+pub fn rule(err: &GateError) -> &'static str {
+    match err {
+        GateError::NoValidIac(_) => "iac_validity",
+        GateError::InvalidIacSignature(_) => "iac_signature",
+        GateError::ChannelDenied(_) => "channel_allowlist",
+        GateError::ModelDenied(_) => "model_allowlist",
+        GateError::ToolDenied(_) => "tool_allowlist",
+        GateError::RepoDenied(_) => "repository_allowlist",
+        GateError::ExportForbidden(_) => "export_restriction",
+        GateError::ContextBoundExceeded => "context_bound",
+        GateError::SessionDegraded(_, _) => "session_degraded",
+        GateError::SessionStale(_, _) => "session_stale",
+        GateError::Connector(_) => "connector_unavailable",
+        GateError::Registry(_) => "request_or_registry_invalid",
+        GateError::Bus(_) => "receipt_or_upstream_unavailable",
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PolicyView {
+    pub permitted_channels: Vec<String>,
+    pub forbidden_exports: Vec<String>,
+    pub model_allowlist: Vec<String>,
+    pub github_repo_allowlist: Vec<String>,
+    pub delta_t_secs: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snapshot {
+    pub schema_version: u8,
+    pub observed_at: i64,
+    pub status: String,
+    pub last_cp_age_secs: Option<i64>,
+    pub router_stale: bool,
+    pub degraded: bool,
+    pub policy: PolicyView,
+    pub decisions: Vec<Decision>,
+    pub total_observed: u64,
+    pub retained: usize,
+    pub allowed: usize,
+    pub denied: usize,
+    pub deny_rate: Option<f64>,
+    pub audit_available: bool,
+}
+pub async fn snapshot(state: &GateServerState) -> Snapshot {
+    let now = chrono::Utc::now().timestamp();
+    let chain = state.session_chain.lock().await;
+    let registry = state.gate.registry();
+    let stale = chain.is_router_stale(now, registry.delta_t_secs);
+    let degraded = chain.degraded_scope_id.is_some();
+    let data = state.audit.snapshot();
+    let available = data.is_some();
+    let (total, decisions) = data.unwrap_or_default();
+    let allowed = decisions.iter().filter(|d| d.outcome == "allow").count();
+    let denied = decisions.iter().filter(|d| d.outcome == "deny").count();
+    Snapshot {
+        schema_version: 1,
+        observed_at: now,
+        status: if !available {
+            "unknown"
+        } else if stale || degraded {
+            "degraded"
+        } else if chain.active_scope_id.is_none() {
+            "idle"
+        } else {
+            "live"
+        }
+        .into(),
+        last_cp_age_secs: chain.last_router_cp_age_secs(now),
+        router_stale: stale,
+        degraded,
+        policy: PolicyView {
+            permitted_channels: registry.permitted_channels.clone(),
+            forbidden_exports: registry.forbidden_exports.clone(),
+            model_allowlist: registry.model_allowlist.clone(),
+            github_repo_allowlist: registry.github_repo_allowlist.clone(),
+            delta_t_secs: registry.delta_t_secs,
+        },
+        retained: decisions.len(),
+        decisions,
+        total_observed: total,
+        allowed,
+        denied,
+        deny_rate: (allowed + denied > 0).then(|| denied as f64 / (allowed + denied) as f64),
+        audit_available: available,
+    }
+}
+pub fn loopback_address(value: &str) -> anyhow::Result<SocketAddr> {
+    let address: SocketAddr = value.parse()?;
+    anyhow::ensure!(
+        address.ip().is_loopback(),
+        "audit listeners must bind to a literal loopback address"
+    );
+    Ok(address)
+}
+/// Reject cross-origin browser reads and DNS rebinding; no CORS permission is emitted.
+pub async fn local_only(req: Request, next: Next) -> Response {
+    let valid_host = req
+        .headers()
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .is_some_and(|h| {
+            h.parse::<SocketAddr>().is_ok_and(|a| a.ip().is_loopback())
+                || h.strip_prefix("localhost:")
+                    .is_some_and(|p| p.parse::<u16>().is_ok())
+        });
+    let valid_origin = req
+        .headers()
+        .get(header::ORIGIN)
+        .map(|o| {
+            o.to_str().ok().is_some_and(|o| {
+                req.headers()
+                    .get(header::HOST)
+                    .and_then(|h| h.to_str().ok())
+                    .is_some_and(|h| o == format!("http://{h}"))
+            })
+        })
+        .unwrap_or(true);
+    if !valid_host || !valid_origin {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let mut response = next.run(req).await;
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    response
+        .headers_mut()
+        .insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
+    response.headers_mut().insert(header::CONTENT_SECURITY_POLICY, "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'".parse().unwrap());
+    response
+}
+async fn endpoint(State(state): State<GateServerState>) -> Json<Snapshot> {
+    Json(snapshot(&state).await)
+}
+pub fn router(state: GateServerState) -> axum::Router {
+    axum::Router::new()
+        .route("/audit", get(endpoint))
+        .with_state(state)
+        .layer(middleware::from_fn(local_only))
+}
+pub async fn bind(
+    state: GateServerState,
+    listen: &str,
+) -> anyhow::Result<tokio::task::JoinHandle<()>> {
+    let listener = tokio::net::TcpListener::bind(loopback_address(listen)?).await?;
+    Ok(tokio::spawn(async move {
+        if let Err(err) = axum::serve(listener, router(state)).await {
+            tracing::error!(%err, "audit listener stopped");
+        }
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn bounded_newest_first() {
+        let log = AuditLog::default();
+        for _ in 0..CAPACITY + 2 {
+            log.record("deny", "iac_validity", "gate".into(), None, "chat");
+        }
+        let (total, rows) = log.snapshot().unwrap();
+        assert_eq!(total, 502);
+        assert_eq!(rows.len(), CAPACITY);
+        assert_eq!(rows[0].sequence, 502);
+        assert_eq!(rows.last().unwrap().sequence, 3);
+    }
+    #[test]
+    fn non_loopback_is_rejected() {
+        assert!(loopback_address("0.0.0.0:8788").is_err());
+        assert!(loopback_address("example.com:8788").is_err());
+        assert!(loopback_address("[::1]:8788").is_ok());
+    }
+          }
