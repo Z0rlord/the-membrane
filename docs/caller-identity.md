@@ -77,4 +77,4 @@ identity-attributed denials. This bounded observational log is not a receipt sto
 tampered caller binding, wrong body/route/audience, stale/future/unbound proof,
 replay, unknown/revoked identity, permission intersection, live registry edits and
 broken/missing registry, plus HTTP handler audit attribution and advisor grouping.
-The real-money/live GitHub connector test stays ignored unless explicitly enabled.
+The live GitHub connector test stays ignored unless explicitly enabled.

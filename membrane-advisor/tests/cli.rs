@@ -1,5 +1,5 @@
-//! End to end: real registry file from the repo, snapshot JSON in the gate's /audit
-//! shape, real binary, and `git apply --check` on the emitted patch.
+//! End to end: registry file from the repo, snapshot JSON in the gate's /audit
+//! shape, compiled binary, and `git apply --check` on the emitted patch.
 use std::io::Write;
 use std::process::{Command, Stdio};
 

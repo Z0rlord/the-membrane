@@ -2,36 +2,34 @@
 
 The Membrane is a fail-closed authorization gateway for AI agents with production write access. Every model and tool call needs a live, signed, time-bounded scope; each action writes a tamper-evident receipt; broken continuity blocks or severs the agent.
 
+The Membrane began with the concept of a firewall between human cognition and AI silicon, developed in the [cognitive boundary research](docs/whitepaper.md); the agent gate applies that boundary to model and tool calls.
+
 **Public landing:** [membrane.dojopop.live](https://membrane.dojopop.live) · source in [`site/`](site/)
 
-## Who it’s for
+## Run it under your own control
 
-**Sovereigns · Nation-states · Enterprise** — one product, three customer classes.
+Self-host the gate and hold your own keys. The Membrane checks authorization before an agent reaches your models, tools, or production systems, and keeps receipts for the actions that pass through it.
 
-A fail-closed authorization gateway for AI agents with production or operational write access. Customers self-host the gate, hold their own keys, and prove agent actions with live signed scopes and tamper-evident receipts. High-assurance and mil/gov postures sit with sovereign and nation-state operators; enterprise runs the same gate for production agent write access under its own control.
+## Software and demo
 
-## What’s real vs demo
+The Rust workspace includes the authorization gate, CLI, receipt and attestation components, read-only operator dashboard, and deterministic recommendation advisor. The gate authenticates callers through caller-bound signed IACs and request proofs; operator-owned identity grants limit access and support revocation.
 
-| Real today | Demo / sandbox |
-|------------|----------------|
-| Fail-closed gate checks, signed time-bounded scopes (IAC), tamper-evident CP receipt chain, block and sever | Hosted [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live) and local `membrane demo` — same gate logic, **simulated** Jira / Slack / GitHub tool side effects |
-| Operator SIEM export (JSON Lines / OCSF-inspired) and optional fail-open webhook | Public sandbox does not ship webhook traffic or hold production credentials |
-| Production gate tool path when a real connector is configured (see [docs/github-connector.md](docs/github-connector.md)) | Without a connector, tool invokes stay simulated |
+The repo also includes a demo that approximates the operator workflow, including the gate's authorization checks and receipt chaining. The demo uses ephemeral keys, an in-memory bus, and simulated tool effects. It does not hold production credentials or make changes to external systems.
 
-## How we sell / stage
-
-Self-hosted pilots in your environment, then license and support. No hosted production SaaS.
+- **Run the software:** configure your operator registry, relay, signed IACs, caller keys and grants. Connect the gate to your model backend and supported tools. See [caller identity](docs/caller-identity.md) and the [GitHub connector](docs/github-connector.md).
+- **Try the demo:** open [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live) or run `membrane demo` locally.
+- **Export telemetry:** use JSON Lines or OCSF-inspired SIEM export, with an optional fail-open webhook shipper. The demo does not send webhook traffic.
 
 ## Documents
 
 | File | Description |
 |------|-------------|
-| [docs/product.md](docs/product.md) | Product positioning (sovereigns, nation-states, enterprise) |
+| [docs/product.md](docs/product.md) | Product overview and deployment |
 | [docs/siem-export.md](docs/siem-export.md) | Vendor-neutral SIEM/SOC export (JSON Lines and OCSF-inspired JSON) |
-| [docs/github-connector.md](docs/github-connector.md) | Real GitHub tool path on the production gate |
+| [docs/github-connector.md](docs/github-connector.md) | GitHub connector configuration |
 | [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
-| [docs/demo.md](docs/demo.md) | Local product dashboard — one-command demo |
-| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) — architecture & research |
+| [docs/demo.md](docs/demo.md) | Local product dashboard - one-command demo |
+| [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) - architecture & research |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, Phase 0 path |
 | [docs/the-membrane-complete.md](docs/the-membrane-complete.md) | Single-file edition (whitepaper + Appendix B) |
 | [docs/the-membrane-complete.pdf](docs/the-membrane-complete.pdf) | PDF export with table of contents |
@@ -61,15 +59,15 @@ The setup: an agent drafts or edits content built from third-party assets (foota
 - **Missing manifest, bad signature, revoked credential, untrusted signer.** No scope is issued. The call is blocked and the denial is written into the receipt chain. Missing provenance is a denial, not a warning.
 - **Allowed calls.** Each one writes a tamper-evident CP receipt chained to the prior receipt, so the audit record shows which signed scope authorized which operation on which asset.
 
-Nothing new is built: provenance verification is operator policy evaluated when the IAC is issued, not a separate product. The repo ships no C2PA verifier today; adding one is a connector-and-policy exercise of the same shape that turns simulated tool calls into real ones in [docs/github-connector.md](docs/github-connector.md).
+Nothing new is built: provenance verification is operator policy evaluated when the IAC is issued, not a separate product. The repo ships no C2PA verifier today; adding one is a connector-and-policy exercise using the same connector-and-policy pattern as external tool execution in [docs/github-connector.md](docs/github-connector.md).
 
 The asymmetry this buys: enforcement that only detects after publication is always behind the leak. A fail-closed gate makes "unverified content never enters the pipeline" the default state rather than an audit finding.
 
 ## Local demo dashboard
 
-**Primary path for anyone cloning the repo** — no secrets, no relay, no paid APIs.
+**Primary path for anyone cloning the repo** - no secrets, no relay, no paid APIs.
 
-Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** — source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** - source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
 
 Open the isolated public sandbox at
 **[membrane-demo.dojopop.live](https://membrane-demo.dojopop.live)**, or run
@@ -93,9 +91,9 @@ For the live gate, attestation bus, and session IAC path you need:
 2. Your own `NOSTR_NSEC` (never commit)
 3. An IAC **issued and signed by that same key** (`membrane iac issue` / `iac sign`)
 
-The gate verifies the IAC against the signer pubkey. Bundled files such as `tools/demo-iac.json` only work when your `NOSTR_NSEC` matches the key that signed them — an arbitrary nsec will fail closed. Prefer issuing a fresh session IAC for your key.
+The gate verifies the IAC against the signer pubkey. Bundled files such as `tools/demo-iac.json` only work when your `NOSTR_NSEC` matches the key that signed them - an arbitrary nsec will fail closed. Prefer issuing a fresh session IAC for your key.
 
-1. **Local relay** (self-hosted bus — do not use public relays for writes):
+1. **Local relay** (self-hosted bus - do not use public relays for writes):
 
 ```bash
 docker run --rm -d --name membrane-relay -p 7777:8080 \
@@ -141,7 +139,7 @@ cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 
 **Gate HTTP:** `POST /v1/chat/completions` with a standard chat/completions JSON body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` file is only valid when signed by the same key the gate is running as.
 
-**Tool invoke (real GitHub connector):** `POST /v1/tools/invoke` after `membrane iac issue --tool github.comment`. Requires `MEMBRANE_GITHUB_TOKEN` (or `GITHUB_TOKEN`) and a non-empty `github_repo_allowlist` in the channel registry. Out-of-scope tools (for example `github.merge`) are blocked with a receipt before any GitHub HTTP. Helper: `membrane tools invoke …`. Full recipe: [docs/github-connector.md](docs/github-connector.md). Do not enable this on the public demo sandbox.
+**Tool invoke (GitHub connector):** `POST /v1/tools/invoke` after `membrane iac issue --tool github.comment`. Requires `MEMBRANE_GITHUB_TOKEN` (or `GITHUB_TOKEN`) and a non-empty `github_repo_allowlist` in the channel registry. Out-of-scope tools (for example `github.merge`) are blocked with a receipt before any GitHub HTTP. Helper: `membrane tools invoke …`. Full recipe: [docs/github-connector.md](docs/github-connector.md). Do not enable this on the public demo sandbox.
 
 ### Self-hosted session (local LLM with receipts)
 
@@ -166,7 +164,7 @@ membrane evidence export --format ocsf --since-secs 86400 --out membrane-siem.oc
 
 # Sever active session (fail-closed; requires fresh IAC to resume)
 membrane sever
-membrane sever --scope-id sovereign-1234567890
+membrane sever --scope-id session-1234567890
 ```
 
 Each turn returns `X-Membrane-CP-Hash`, `X-Membrane-Session-Nonce`, and related headers from the gate. Session logs are saved under `~/.local/share/membrane/sessions/`.
@@ -217,7 +215,7 @@ GitHub is day-to-day; Grasp is the decentralized backup remote.
 
 ## Architecture & research
 
-Protocol foundations, attestation bus details, BCI channel research, and zk roadmap live here so cold readers meet the **product** first. None of this changes the sovereign / nation-state / enterprise customer framing above.
+Protocol foundations, attestation bus details, BCI channel research and the zk roadmap are documented below.
 
 **Foundations:** SHA-256 Merkle commitments, signed Chain Proof receipts, TEE attestation, and web-of-trust witnesses, with zk-STARK proofs on the roadmap. Optional daily [OpenTimestamps](https://opentimestamps.org/) rollups provide independently verifiable audit time. The same fail-closed boundary model can extend to local AI, cloud inference, BCI telemetry, and other exogenous channels without splitting the product.
 
@@ -229,7 +227,7 @@ Protocol foundations, attestation bus details, BCI channel research, and zk road
 
 | | |
 |---|---|
-| Public | `wss://membrane-relay.dojopop.live` (after tunnel DNS — see `deploy/relay/`) |
+| Public | `wss://membrane-relay.dojopop.live` (after tunnel DNS - see `deploy/relay/`) |
 | Kinds | 31990, 31991 only |
 | Deploy | `./deploy/relay/deploy.sh` |
 
@@ -244,11 +242,11 @@ export MEMBRANE_RELAY_URL='wss://membrane-relay.dojopop.live'
 
 Common tags: `p` (subject pubkey), `e` (prior event id). Content is canonical `MembraneEvent` JSON (metadata only).
 
-Do **not** use `relay.dojopop.live` for Membrane attestation — it allowlists DojoPop kinds only. Use the dedicated bus above.
+Do **not** use `relay.dojopop.live` for Membrane attestation - it allowlists DojoPop kinds only. Use the dedicated bus above.
 
 ## Status
 
-Gate, session-scoped IAC, CP receipt chain, sovereign/`membrane chat` client, SIEM export, and daily OTS rollup CLI are real. Hosted sandbox tools remain simulated; production connectors are opt-in (see GitHub connector docs). No Winterfell STARK or BCI integration yet.
+The workspace includes the gate, caller-bound IACs and identity grants, CP receipt chain, `membrane chat` client, operator dashboard, recommendation advisor, SIEM export and daily OTS rollup CLI. The demo is a simulated approximation of the operator workflow. Configure supported connectors for external tool execution (see GitHub connector docs). Winterfell STARK and BCI integrations remain research work.
 
 ## License
 

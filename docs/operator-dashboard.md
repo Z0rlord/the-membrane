@@ -81,4 +81,4 @@ cargo run -p membrane-gate --example audit-preview
 ```
 
 The example emits three synthetic decisions and an idle policy view. It must not be
-used to represent a production gate. Stop the example before starting the real gate.
+used to represent a production gate. Stop the example before starting the operator gate.

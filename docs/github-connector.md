@@ -1,4 +1,4 @@
-# GitHub connector (real tool path)
+# GitHub connector
 
 Operator vertical slice for The Membrane: allowlisted GitHub mutations go through
 the production gate (`POST /v1/tools/invoke`) with live IAC, CP receipts, sever,
@@ -57,7 +57,7 @@ membrane gate start \
   --iac session-iac.json \
   --listen 127.0.0.1:8787
 
-# 3) Allowed: real comment
+# 3) Allowed: create a comment
 membrane tools invoke \
   --iac session-iac.json \
   --tool github.comment \
@@ -93,12 +93,11 @@ curl -sS http://127.0.0.1:8787/v1/tools/invoke \
   -d '{"tool":"github.comment","model":"sha256:demo-model","owner":"your-org","repo":"disposable-pilot-repo","issue_number":1,"body":"hello"}'
 ```
 
-## Simulated vs real
+## Connector execution and demo
 
-| Path | GitHub / Jira / Slack | IAC / CP / sever |
-| --- | --- | --- |
-| `membrane demo` / public sandbox | Simulated JSON only | Real checks |
-| `membrane gate start` + `/v1/tools/invoke` | Real GitHub API when token + repo allowlist set | Real |
+The operator gate calls the GitHub API when a token and repository allowlist are configured. Authorization checks run before the request is sent. An unconfigured connector denies the request.
+
+The demo approximates this workflow with simulated tool effects. It demonstrates authorization checks and receipt chaining without sending GitHub requests or holding connector credentials.
 
 ## Tests
 

@@ -43,7 +43,7 @@ nothing, the denial is the gate working.
 - **Unsupported shapes are refused.** Inline lists (`[a, b]`) are not rewritten.
 - **Review-by comment.** Added entries carry a `review by <date>` comment
   (snapshot time plus 7 days). The registry format has no expiry, so this is a
-  reminder, not enforcement. Real time-boxing needs an IAC `valid_until`.
+  reminder, not enforcement. Enforced time-boxing needs an IAC `valid_until`.
 - **Per-identity grants are not available yet.** The IAC does not authenticate a
   caller-specific agent id (see `operator-dashboard.md`), so the advisor cannot name
   "identity X". Per-identity and deny-spike recommendations wait on that.
