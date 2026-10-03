@@ -659,4 +659,4 @@ mod tests {
         log.set_alarm_delivery(rows[0].id, Delivery::Failed);
         assert_eq!(log.alarms()[0].delivery, Delivery::Failed);
     }
-                              }
+}
