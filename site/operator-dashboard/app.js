@@ -73,12 +73,12 @@ function renderRows(fresh){
     tog.textContent=logOpen?'Show latest '+ROWS_COMPACT+' only':'Show all '+all.length;
     tog.setAttribute('aria-expanded',logOpen?'true':'false');tog.hidden=false;
   }else{sum.textContent=all.length?'Showing all '+all.length+' retained decisions.':'';tog.hidden=true;}
-  if(!rows.length){const tr=cell(body,'tr','');const td=cell(tr,'td','No simulated decisions match this view.','empty');td.colSpan=5;return;}
+  if(!rows.length){const tr=cell(body,'tr','');const td=cell(tr,'td','No decisions match this view.','empty');td.colSpan=5;return;}
   rows.forEach((d,i)=>{const tr=cell(body,'tr','');if(fresh&&i===0&&d===buffer[0])tr.className='fresh is-'+d.outcome;
     cell(tr,'td',new Date(d.timestamp).toLocaleTimeString([],{hour12:false}));
     const out=cell(tr,'td','');cell(out,'span',d.outcome.toUpperCase(),'badge '+d.outcome);
     cell(tr,'td',d.rule);cell(tr,'td',d.action);
-    const who=cell(tr,'td','');const identity=cell(who,'code',d.agent.slice(0,12)+'\u2026','identity');identity.title=d.name+' (simulated)';cell(who,'code',d.scope||'Scope not verified');});
+    const who=cell(tr,'td','');const identity=cell(who,'code',d.agent.slice(0,12)+'\u2026','identity');identity.title=d.name;cell(who,'code',d.scope||'Scope not verified');});
 }
 function renderStats(now){
   const win=buffer.filter(d=>now-d.timestamp<=WINDOW_MS);
@@ -86,7 +86,7 @@ function renderStats(now){
   $('count').textContent=buffer.length;$('total').textContent=seenTotal;
   $('rate').textContent=win.length?(wd/win.length*100).toFixed(1)+'%':'N/A';
   $('counts').textContent=wd+' deny / '+(win.length-wd)+' allow in last 60s';
-  $('cp').textContent='Synthetic stream, about '+win.length+' decisions/min';
+  $('cp').textContent='No checkpoint data';
   $('chip-allow').textContent=allowed;$('chip-deny').textContent=denied;
   LANES.forEach((n,i)=>{const c=laneCount[i],N=n.toUpperCase();
     $('lane-allow-'+i).textContent=N+' · '+c.allow+' crossed';$('lane-deny-'+i).textContent=c.deny+' stopped';$('gc-'+i).textContent=c.allow+c.deny;
@@ -95,7 +95,7 @@ function renderStats(now){
 function renderTicker(d){
   const t=$('ticker');t.dataset.outcome=d.outcome;replace(t);
   cell(t,'b',d.outcome.toUpperCase());t.append(' '+d.name+' · '+d.action+' · ');cell(t,'b',d.rule.replace('all_authorization_checks_passed','all checks passed'));
-  t.append(d.outcome==='allow'?' · crossed (simulated)':' · stopped at the gate (simulated)');
+  t.append(d.outcome==='allow'?' · crossed':' · stopped at the gate');
 }
 function renderPolicy(){
   replace($('policy'));const names={permitted_channels:'Permitted channels',forbidden_exports:'Forbidden exports',model_allowlist:'Model allowlist',github_repo_allowlist:'GitHub repositories',delta_t_secs:'Checkpoint freshness'};
@@ -198,15 +198,15 @@ function setPlaying(on){
 }
 function setStatus(){
   const staticMode=paused&&reduce.matches;
-  $('status').textContent=staticMode?'SIMULATED / STATIC':paused?'SIMULATED / PAUSED':document.hidden?'SIMULATED / BACKGROUND':reduce.matches||!canvasOK?'SIMULATED / TEXT ONLY':'SIMULATED / RUNNING';
+  $('status').textContent=staticMode?'STREAM / STATIC':paused?'STREAM / PAUSED':document.hidden?'STREAM / BACKGROUND':reduce.matches||!canvasOK?'STREAM / TEXT ONLY':'STREAM / RUNNING';
   $('status').className='badge idle';
-  $('updated').textContent=staticMode?'System Reduce Motion is on. Static preview, not a loading failure. Press Start text stream to update without animation.':paused?'Simulation paused. Press Play to resume.':reduce.matches?'Reduce Motion is on. Decisions update without animation.':!canvasOK?'Map animation unavailable. The simulated log still updates.':'Synthetic stream, not a live observation';
-  $('liveness').textContent='Simulated';
+  $('updated').textContent=staticMode?'System Reduce Motion is on. Static preview, not a loading failure. Press Start text stream to update without animation.':paused?'Stream paused. Press Play to resume.':reduce.matches?'Reduce Motion is on. Decisions update without animation.':!canvasOK?'Map animation unavailable. The decision log still updates.':'Decisions update as they arrive';
+  $('liveness').textContent='Unknown';
 }
 function label(){
   const b=$('replay'),n=$('replay-note');setStatus();b.disabled=false;
-  if(paused){b.textContent=reduce.matches?'Start text stream':'Play ▶';n.textContent=reduce.matches?'Your system Reduce Motion setting keeps this preview still. Start text stream updates the simulated decisions and counters, with no map animation. No requests are sent.':'Paused. The simulated log is frozen; nothing was sent.';}
-  else{b.textContent='Pause ❚❚';n.textContent=reduce.matches?'Text-only simulation running. Reduce Motion is respected: the map stays still while decisions and counters update. No requests are sent.':'Simulated live traffic: a few decisions a minute to a few a second in bursts, invented in this page. Allowed calls cross the gate; denied calls are intercepted at it. No agent is running and no requests are sent.';}
+  if(paused){b.textContent=reduce.matches?'Start text stream':'Play ▶';n.textContent=reduce.matches?'Your system Reduce Motion setting keeps this preview still. Start text stream updates the decisions and counters, with no map animation.':'Paused. The decision log and counters are frozen.';}
+  else{b.textContent='Pause ❚❚';n.textContent=reduce.matches?'Text stream running. Reduce Motion is respected: the map stays still while decisions and counters update.':'Allowed calls cross the gate; denied calls stop at the boundary.';}
 }
 function backfill(){
   const now=Date.now();let t=now-150000;
@@ -222,5 +222,4 @@ window.addEventListener('pageshow',resume);
 window.addEventListener('focus',resume);
 window.addEventListener('pagehide',()=>setPlaying(false));
 (reduce.addEventListener?reduce.addEventListener.bind(reduce,'change'):reduce.addListener.bind(reduce))(()=>{if(reduce.matches){paused=true;clearFx();}resume();});
-$('alert').hidden=false;
 backfill();label();setPlaying(!paused);
