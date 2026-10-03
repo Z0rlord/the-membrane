@@ -1,0 +1,25 @@
+'use strict';
+const $ = id => document.getElementById(id);
+let snapshot = null;
+function cell(parent, tag, text, cls) { const el=document.createElement(tag); el.textContent=text; if(cls)el.className=cls; parent.append(el); return el; }
+function renderRows() {
+  $('rows').replaceChildren();
+  const q=$('search').value.toLowerCase(), filter=$('filter').value;
+  const rows=(snapshot?.decisions||[]).filter(d=>(filter==='all'||d.outcome===filter)&&[d.rule,d.scope,d.agent,d.action].some(v=>(v||'').toLowerCase().includes(q)));
+  if(!rows.length){const tr=cell($('rows'),'tr','');const td=cell(tr,'td',snapshot?'No decisions match this view.':'No verified decisions yet.','empty');td.colSpan=5;return;}
+  rows.forEach(d=>{const tr=cell($('rows'),'tr','');cell(tr,'td',new Date(d.timestamp*1000).toLocaleString());const out=cell(tr,'td','');cell(out,'span',d.outcome.toUpperCase(),'badge '+(d.outcome==='allow'?'allow':'deny'));cell(tr,'td',d.rule);cell(tr,'td',d.action);const who=cell(tr,'td','');const identity=cell(who,'code',d.agent?.slice(0,12)+'…','identity');identity.title=d.agent||'';cell(who,'code',d.scope||'Scope not verified');});
+}
+function clearUnknown(message) {
+  snapshot=null; $('status').textContent='UNKNOWN';$('status').className='badge unknown';$('updated').textContent='No current verified snapshot';$('liveness').textContent='Unknown';$('cp').textContent='No checkpoint data';['count','rate','total'].forEach(id=>$(id).textContent='-');$('counts').textContent='Metrics unavailable';$('policy').replaceChildren();cell($('policy'),'dt','Source');cell($('policy'),'dd','Unavailable');$('alert').hidden=false;$('alert').textContent=message;renderRows();
+}
+function render(data) {
+  snapshot=data;$('alert').hidden=true;$('status').textContent=data.status.toUpperCase();$('status').className='badge '+(['live','idle','degraded'].includes(data.status)?data.status:'unknown');$('updated').textContent='Observed '+new Date(data.observed_at*1000).toLocaleTimeString();$('liveness').textContent=data.status[0].toUpperCase()+data.status.slice(1);$('cp').textContent=data.last_cp_age_secs===null?'No active checkpoint':'Last checkpoint '+data.last_cp_age_secs+'s ago';$('count').textContent=data.retained;$('total').textContent=data.total_observed;$('rate').textContent=data.deny_rate===null?'N/A':(data.deny_rate*100).toFixed(1)+'%';$('counts').textContent=data.denied+' deny / '+data.allowed+' allow';
+  $('policy').replaceChildren();const names={permitted_channels:'Permitted channels',forbidden_exports:'Forbidden exports',model_allowlist:'Model allowlist',github_repo_allowlist:'GitHub repositories',delta_t_secs:'Checkpoint freshness'};
+  Object.entries(names).forEach(([key,label])=>{cell($('policy'),'dt',label);const v=data.policy[key];cell($('policy'),'dd',Array.isArray(v)?(v.join(', ')||'(empty: no grants)'):v+' seconds');});renderRows();
+}
+async function poll() {
+  if(document.hidden)return;
+  try { const response=await fetch('/api/snapshot',{cache:'no-store',signal:AbortSignal.timeout(5000)});if(!response.ok)throw Error();const data=await response.json();const age=Date.now()/1000-data.observed_at;if(data.schema_version!==1||!data.audit_available||age>20||age< -5)throw Error();render(data); }
+  catch {clearUnknown('Audit source unavailable or stale. Gate status is not verified. No cached status is shown.');}
+}
+$('filter').addEventListener('change',renderRows);$('search').addEventListener('input',renderRows);document.addEventListener('visibilitychange',()=>{if(document.hidden)clearUnknown('Polling paused while this page is hidden.');else poll();});poll();setInterval(poll,10000);

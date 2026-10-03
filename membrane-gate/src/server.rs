@@ -38,9 +38,15 @@ pub struct GateServerState {
     pub session_chain: Arc<Mutex<SessionChainState>>,
     /// Real GitHub connector (operator installs). Demo dashboard does not use this.
     pub github: Arc<GitHubConnector>,
+    pub audit: Arc<crate::audit::AuditLog>,
 }
 
 pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Result<()> {
+    // Dedicated loopback-only telemetry listener, never the production write router.
+    let audit_listen =
+        std::env::var("MEMBRANE_AUDIT_LISTEN").unwrap_or_else(|_| "127.0.0.1:8788".into());
+    let listener = tokio::net::TcpListener::bind(listen).await?;
+    let audit_task = crate::audit::bind(state.clone(), &audit_listen).await?;
     spawn_delta_t_watchdog(state.gate.clone(), state.session_chain.clone());
 
     let app = axum::Router::new()
@@ -49,9 +55,10 @@ pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Re
         .route("/v1/tools/invoke", post(tools_invoke))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(listen).await?;
     info!(listen = %listen, "membrane gate listening");
-    axum::serve(listener, app).await?;
+    let result = axum::serve(listener, app).await;
+    audit_task.abort();
+    result?;
     Ok(())
 }
 
@@ -83,11 +90,26 @@ async fn health(State(state): State<GateServerState>) -> impl IntoResponse {
 async fn chat_completions(
     State(state): State<GateServerState>,
     headers: HeaderMap,
-    Json(mut req): Json<ChatRequest>,
+    request: Result<Json<ChatRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
-    match handle_chat(&state, &headers, &mut req).await {
+    let mut req = match request {
+        Ok(Json(req)) => req,
+        Err(rejection) => {
+            record_denied(
+                &state,
+                &GateError::Registry("invalid JSON request".into()),
+                "chat",
+            );
+            return rejection.into_response();
+        }
+    };
+    let mut authorized = false;
+    match handle_chat(&state, &headers, &mut req, &mut authorized).await {
         Ok((resp, receipt)) => chat_success_response(resp, &receipt),
         Err(err) => {
+            if !authorized {
+                record_denied(&state, &err, "chat");
+            }
             publish_blocked_receipt(&state, &headers, Some(&req.model), None, &err).await;
             gate_error_response(err)
         }
@@ -97,22 +119,50 @@ async fn chat_completions(
 async fn tools_invoke(
     State(state): State<GateServerState>,
     headers: HeaderMap,
-    Json(req): Json<ToolInvokeRequest>,
+    request: Result<Json<ToolInvokeRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
-    match handle_tool_invoke(&state, &headers, &req).await {
+    let req = match request {
+        Ok(Json(req)) => req,
+        Err(rejection) => {
+            record_denied(
+                &state,
+                &GateError::Registry("invalid JSON request".into()),
+                "tool",
+            );
+            return rejection.into_response();
+        }
+    };
+    let mut authorized = false;
+    match handle_tool_invoke(&state, &headers, &req, &mut authorized).await {
         Ok((body, receipt)) => tool_success_response(body, &receipt),
         Err(err) => {
-            publish_blocked_receipt(
-                &state,
-                &headers,
-                Some(&req.model),
-                Some(&req.tool),
-                &err,
-            )
-            .await;
+            if !authorized {
+                record_denied(&state, &err, "tool");
+            }
+            publish_blocked_receipt(&state, &headers, Some(&req.model), Some(&req.tool), &err)
+                .await;
             gate_error_response(err)
         }
     }
+}
+
+fn record_allowed(state: &GateServerState, iac: &IntentAuthorizationCredential, action: &str) {
+    state.audit.record(
+        "allow",
+        "all_authorization_checks_passed",
+        state.gate.publisher_pubkey_hex(),
+        Some(iac.scope_id.clone()),
+        action,
+    );
+}
+fn record_denied(state: &GateServerState, err: &GateError, action: &str) {
+    state.audit.record(
+        "deny",
+        crate::audit::rule(err),
+        state.gate.publisher_pubkey_hex(),
+        None,
+        action,
+    );
 }
 
 async fn publish_blocked_receipt(
@@ -165,6 +215,7 @@ async fn handle_chat(
     state: &GateServerState,
     headers: &HeaderMap,
     req: &ChatRequest,
+    authorized: &mut bool,
 ) -> Result<(ChatResponse, SessionReceipt), GateError> {
     let iac = load_iac(headers, state.default_iac.as_ref())?;
     let now = now_secs();
@@ -215,6 +266,8 @@ async fn handle_chat(
 
     drop(chain);
 
+    *authorized = true;
+    record_allowed(state, &iac, "chat");
     let response = state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))?;
     Ok((response, receipt))
 }
@@ -224,6 +277,7 @@ async fn handle_tool_invoke(
     state: &GateServerState,
     headers: &HeaderMap,
     req: &ToolInvokeRequest,
+    authorized: &mut bool,
 ) -> Result<(serde_json::Value, SessionReceipt), GateError> {
     let iac = load_iac(headers, state.default_iac.as_ref())?;
     let now = now_secs();
@@ -254,6 +308,8 @@ async fn handle_tool_invoke(
         ensure_live_session(state, &iac, &mut chain, now).await?;
     }
 
+    *authorized = true;
+    record_allowed(state, &iac, "tool");
     let tool_ctx = state.github.execute(req).await.map_err(map_github_err)?;
 
     let mut chain = state.session_chain.lock().await;
@@ -263,8 +319,8 @@ async fn handle_tool_invoke(
     let session_nonce = chain.next_session_nonce();
     let prev_event_id = chain.last_event_id.clone();
 
-    let context_chunks = vec![serde_json::to_vec(&tool_ctx)
-        .map_err(|e| GateError::Registry(e.to_string()))?];
+    let context_chunks =
+        vec![serde_json::to_vec(&tool_ctx).map_err(|e| GateError::Registry(e.to_string()))?];
 
     let outcome = state
         .gate
@@ -330,10 +386,7 @@ async fn ensure_live_session(
     now: i64,
 ) -> Result<(), GateError> {
     // Check degraded before begin_scope — switching onto a severed scope must not clear it.
-    if let Err(err) = state
-        .gate
-        .check_session_liveness(chain, &iac.scope_id, now)
-    {
+    if let Err(err) = state.gate.check_session_liveness(chain, &iac.scope_id, now) {
         if matches!(err, GateError::SessionDegraded(_, _)) {
             return Err(err);
         }
@@ -376,9 +429,9 @@ fn map_github_err(err: crate::github::GitHubConnectorError) -> GateError {
     match err {
         GitHubConnectorError::TokenMissing => GateError::Connector(err.to_string()),
         GitHubConnectorError::RepoDenied(r) => GateError::RepoDenied(r),
-        GitHubConnectorError::UnsupportedTool(t) => GateError::Connector(format!(
-            "unsupported tool: {t}"
-        )),
+        GitHubConnectorError::UnsupportedTool(t) => {
+            GateError::Connector(format!("unsupported tool: {t}"))
+        }
         GitHubConnectorError::InvalidArgs(m) => GateError::Registry(m),
         GitHubConnectorError::Api { status, message } => {
             GateError::Connector(format!("GitHub API {status}: {message}"))
@@ -504,7 +557,10 @@ mod tool_invoke_policy_tests {
     use membrane_core::{BusPublisher, BusPublisherConfig};
     use nostr::Keys;
 
-    fn test_state(tools: Vec<String>, repos: Vec<String>) -> (GateServerState, IntentAuthorizationCredential) {
+    fn test_state(
+        tools: Vec<String>,
+        repos: Vec<String>,
+    ) -> (GateServerState, IntentAuthorizationCredential) {
         let keys = Keys::generate();
         let registry = ChannelRegistry {
             permitted_channels: vec!["local-llm".into()],
@@ -540,16 +596,73 @@ mod tool_invoke_policy_tests {
             default_iac: Some(iac.clone()),
             session_chain: Arc::new(Mutex::new(SessionChainState::genesis())),
             github: Arc::new(github),
+            audit: Arc::new(crate::audit::AuditLog::default()),
         };
         (state, iac)
     }
 
     #[tokio::test]
+    async fn handler_records_denial_without_trusting_agent_headers() {
+        let (state, _) = test_state(vec![], vec!["acme/pilot".into()]);
+        let req = ToolInvokeRequest {
+            tool: TOOL_GITHUB_MERGE.into(),
+            model: "demo".into(),
+            owner: "acme".into(),
+            repo: "pilot".into(),
+            issue_number: None,
+            pull_number: None,
+            body: None,
+            commit_title: None,
+        };
+        let mut headers = HeaderMap::new();
+        headers.insert("x-agent-id", "spoofed-agent".parse().unwrap());
+        let response = tools_invoke(State(state.clone()), headers, Ok(Json(req))).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let view = crate::audit::snapshot(&state).await;
+        assert_eq!(view.denied, 1);
+        assert_eq!(view.allowed, 0);
+        assert_eq!(view.decisions[0].rule, "tool_allowlist");
+        assert_eq!(view.decisions[0].agent, state.gate.publisher_pubkey_hex());
+        assert_eq!(view.deny_rate, Some(1.0));
+        assert_eq!(view.status, "idle");
+    }
+    #[tokio::test]
+    async fn upstream_failure_does_not_rewrite_allow_as_deny() {
+        let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let req = ToolInvokeRequest {
+            tool: TOOL_GITHUB_COMMENT.into(),
+            model: "demo".into(),
+            owner: "acme".into(),
+            repo: "pilot".into(),
+            issue_number: Some(1),
+            pull_number: None,
+            body: Some("local test".into()),
+            commit_title: None,
+        };
+        let _ = tools_invoke(State(state.clone()), HeaderMap::new(), Ok(Json(req))).await;
+        let view = crate::audit::snapshot(&state).await;
+        assert_eq!(view.allowed, 1);
+        assert_eq!(view.denied, 0);
+        assert_eq!(view.decisions[0].rule, "all_authorization_checks_passed");
+    }
+    #[tokio::test]
+    async fn metrics_empty_and_degraded_are_honest() {
+        let (state, iac) = test_state(vec![], vec![]);
+        let view = crate::audit::snapshot(&state).await;
+        assert_eq!(view.deny_rate, None);
+        state
+            .session_chain
+            .lock()
+            .await
+            .mark_degraded(&iac.scope_id, "subject_sever", now_secs());
+        let view = crate::audit::snapshot(&state).await;
+        assert_eq!(view.status, "degraded");
+        assert!(view.degraded);
+    }
+
+    #[tokio::test]
     async fn blocks_merge_before_github_http() {
-        let (state, _) = test_state(
-            vec![TOOL_GITHUB_COMMENT.into()],
-            vec!["acme/pilot".into()],
-        );
+        let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let headers = HeaderMap::new();
         let req = ToolInvokeRequest {
             tool: TOOL_GITHUB_MERGE.into(),
@@ -561,7 +674,7 @@ mod tool_invoke_policy_tests {
             body: None,
             commit_title: None,
         };
-        let err = handle_tool_invoke(&state, &headers, &req)
+        let err = handle_tool_invoke(&state, &headers, &req, &mut false)
             .await
             .unwrap_err();
         assert!(matches!(err, GateError::ToolDenied(_)));
@@ -569,10 +682,7 @@ mod tool_invoke_policy_tests {
 
     #[tokio::test]
     async fn blocks_unlisted_repo_before_github_http() {
-        let (state, _) = test_state(
-            vec![TOOL_GITHUB_COMMENT.into()],
-            vec!["acme/pilot".into()],
-        );
+        let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let headers = HeaderMap::new();
         let req = ToolInvokeRequest {
             tool: TOOL_GITHUB_COMMENT.into(),
@@ -584,7 +694,7 @@ mod tool_invoke_policy_tests {
             body: Some("nope".into()),
             commit_title: None,
         };
-        let err = handle_tool_invoke(&state, &headers, &req)
+        let err = handle_tool_invoke(&state, &headers, &req, &mut false)
             .await
             .unwrap_err();
         assert!(matches!(err, GateError::RepoDenied(_)));
@@ -593,10 +703,7 @@ mod tool_invoke_policy_tests {
     #[tokio::test]
     async fn fails_closed_after_sever() {
         use membrane_core::ALERT_REASON_SUBJECT_SEVER;
-        let (state, _) = test_state(
-            vec![TOOL_GITHUB_COMMENT.into()],
-            vec!["acme/pilot".into()],
-        );
+        let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         {
             let mut chain = state.session_chain.lock().await;
             chain.mark_degraded("pilot-scope", ALERT_REASON_SUBJECT_SEVER, now_secs());
@@ -612,7 +719,7 @@ mod tool_invoke_policy_tests {
             body: Some("after sever".into()),
             commit_title: None,
         };
-        let err = handle_tool_invoke(&state, &headers, &req)
+        let err = handle_tool_invoke(&state, &headers, &req, &mut false)
             .await
             .unwrap_err();
         assert!(matches!(err, GateError::SessionDegraded(_, _)));

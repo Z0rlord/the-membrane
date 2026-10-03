@@ -258,3 +258,9 @@ Gate, session-scoped IAC, CP receipt chain, sovereign/`membrane chat` client, SI
 ## Author
 
 Zorie R. Barber
+
+## Local operator audit
+
+A separate read-only Rust dashboard observes the running gate: authorization decisions,
+matched rules, liveness, loaded registry policy and deny rate. Loopback only, no policy
+editor or gate write path. See [local run instructions and limits](docs/operator-dashboard.md).
