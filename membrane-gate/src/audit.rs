@@ -22,6 +22,11 @@ pub struct Decision {
     pub agent: String,
     pub scope: Option<String>,
     pub action: String,
+    /// The model, tool or repository a denial named. Caller-chosen, so untrusted
+    /// text: bounded and sanitized here, and observational only (never an
+    /// authorization input). Absent on allows and on older gates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
 }
 #[derive(Debug, Default)]
 struct Buffer {
@@ -39,6 +44,17 @@ impl AuditLog {
         scope: Option<String>,
         action: &str,
     ) {
+        self.record_with_subject(outcome, rule, agent, scope, action, None);
+    }
+    pub fn record_with_subject(
+        &self,
+        outcome: &str,
+        rule: &str,
+        agent: String,
+        scope: Option<String>,
+        action: &str,
+        subject: Option<String>,
+    ) {
         // Telemetry failure must neither authorize an action nor panic the gate.
         let Ok(mut buffer) = self.0.lock() else {
             return;
@@ -53,6 +69,7 @@ impl AuditLog {
             agent,
             scope,
             action: action.into(),
+            subject,
         });
         if buffer.decisions.len() > CAPACITY {
             buffer.decisions.pop_front();
@@ -81,6 +98,15 @@ pub fn rule(err: &GateError) -> &'static str {
         GateError::Registry(_) => "request_or_registry_invalid",
         GateError::Bus(_) => "receipt_or_upstream_unavailable",
     }
+}
+/// The caller-named object of a denial, when the rule names one. Control characters
+/// are dropped and length is capped; consumers must still validate before use.
+pub fn subject(err: &GateError) -> Option<String> {
+    let raw = match err {
+        GateError::ModelDenied(s) | GateError::ToolDenied(s) | GateError::RepoDenied(s) => s,
+        _ => return None,
+    };
+    Some(raw.chars().filter(|c| !c.is_control()).take(128).collect())
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyView {
@@ -231,9 +257,27 @@ mod tests {
         assert_eq!(rows.last().unwrap().sequence, 3);
     }
     #[test]
+    fn denial_subject_is_bounded_and_only_for_named_rules() {
+        let long = "x".repeat(500);
+        let s = subject(&GateError::RepoDenied(format!("a/b\n{long}"))).unwrap();
+        assert!(s.len() <= 128 && !s.contains('\n'));
+        assert!(subject(&GateError::NoValidIac("x".into())).is_none());
+        assert!(subject(&GateError::ChannelDenied("x".into())).is_none());
+        let log = AuditLog::default();
+        log.record_with_subject(
+            "deny",
+            "tool_allowlist",
+            "g".into(),
+            None,
+            "tool",
+            Some("t".into()),
+        );
+        assert_eq!(log.snapshot().unwrap().1[0].subject.as_deref(), Some("t"));
+    }
+    #[test]
     fn non_loopback_is_rejected() {
         assert!(loopback_address("0.0.0.0:8788").is_err());
         assert!(loopback_address("example.com:8788").is_err());
         assert!(loopback_address("[::1]:8788").is_ok());
     }
-          }
+}
