@@ -20,6 +20,9 @@ pub struct Decision {
     pub rule: String,
     /// Gate signing identity, not a caller-supplied agent header.
     pub agent: String,
+    /// Caller key verified by proof of possession. Never copied from a claimed header.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticated_identity: Option<String>,
     pub scope: Option<String>,
     pub action: String,
     /// The model, tool or repository a denial named. Caller-chosen, so untrusted
@@ -55,6 +58,18 @@ impl AuditLog {
         action: &str,
         subject: Option<String>,
     ) {
+        self.record_authenticated(outcome, rule, agent, scope, action, subject, None);
+    }
+    pub fn record_authenticated(
+        &self,
+        outcome: &str,
+        rule: &str,
+        agent: String,
+        scope: Option<String>,
+        action: &str,
+        subject: Option<String>,
+        authenticated_identity: Option<String>,
+    ) {
         // Telemetry failure must neither authorize an action nor panic the gate.
         let Ok(mut buffer) = self.0.lock() else {
             return;
@@ -63,6 +78,7 @@ impl AuditLog {
         let sequence = buffer.sequence;
         buffer.decisions.push_back(Decision {
             sequence,
+            authenticated_identity,
             timestamp: chrono::Utc::now().timestamp(),
             outcome: outcome.into(),
             rule: rule.into(),
@@ -84,6 +100,8 @@ impl AuditLog {
 }
 pub fn rule(err: &GateError) -> &'static str {
     match err {
+        GateError::IdentityAuthentication(_) => "identity_authentication",
+        GateError::IdentityGrant(_) => "identity_grant",
         GateError::NoValidIac(_) => "iac_validity",
         GateError::InvalidIacSignature(_) => "iac_signature",
         GateError::ChannelDenied(_) => "channel_allowlist",
