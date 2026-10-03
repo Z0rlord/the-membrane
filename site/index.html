@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>The Membrane — Fail-closed authorization for AI agents with production write access</title>
-  <meta name="description" content="The Membrane is a fail-closed authorization gateway for AI agents with production or operational write access — for sovereigns, nation-states, and enterprise. Live signed scopes, tamper-evident receipts, block or sever on broken continuity." />
+  <title>The Membrane - Fail-closed authorization for AI agents with production write access</title>
+  <meta name="description" content="The Membrane is a fail-closed authorization gateway for AI agents with production or operational write access. Self-hosted under the operator's keys. Live signed scopes, tamper-evident receipts, block or sever on broken continuity." />
   <meta name="theme-color" content="#0b1a22" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="The Membrane — fail-closed authorization gateway for AI agents" />
+  <meta property="og:title" content="The Membrane - fail-closed authorization gateway for AI agents" />
   <meta property="og:description" content="Every model and tool call needs a live, signed, time-bounded scope. Each action writes a tamper-evident receipt. Broken continuity blocks or severs the agent." />
   <meta property="og:image" content="assets/og.svg" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -53,9 +53,9 @@
       <p class="eyebrow">The problem</p>
       <h2 class="section-title">Agents have the keys. Logs can't prove who authorized what.</h2>
       <p class="lede">
-        Teams are handing AI agents real write access: agents that merge code, change
+        Teams are handing AI agents write access: agents that merge code, change
         infrastructure, edit tickets, and touch customer data. When an agent does the wrong thing,
-        what’s left is scattered logs and third-party chat histories — editable, incomplete, and
+        what's left is scattered logs and third-party chat histories - editable, incomplete, and
         unable to prove that an action was authorized by an unexpired policy. Incident reconstruction
         is slow and unreliable.
       </p>
@@ -75,21 +75,19 @@
 
     <!-- ============ WHO ============ -->
     <section class="section section-audience reveal" id="who">
-      <p class="eyebrow">Who it’s for</p>
-      <h2 class="section-title">Sovereigns. Nation-states. Enterprise.</h2>
+      <p class="eyebrow">Under your control</p>
+      <h2 class="section-title">Your systems. Your keys. Your policy.</h2>
       <p class="lede">
-        One product — a fail-closed authorization gateway for AI agents with production or operational
-        write access — sold to three customer classes: sovereigns, nation-states, and enterprise.
-        Self-host the gate, hold your own keys, and prove every agent action with live signed scopes and
-        tamper-evident receipts. High-assurance and mil/gov postures sit with sovereign and nation-state
-        operators who need attested actions and fail-closed continuity.
+        Self-host the gate in your own environment. Hold your own keys, set the allowed models and
+        tools, and check authorization before agents reach your systems. Keep a tamper-evident
+        receipt chain for the actions that pass through the gate.
       </p>
     </section>
 
     <!-- ============ DIFFERENTIATORS ============ -->
     <section class="section section-diff reveal" id="how">
       <p class="eyebrow">Why it's different</p>
-      <h2 class="section-title">Enforce — don’t just observe or filter.</h2>
+      <h2 class="section-title">Enforce - don't just observe or filter.</h2>
       <div class="diff-grid">
         <div class="diff-item">
           <span class="diff-num">01</span>
@@ -108,7 +106,7 @@
           <span class="diff-num">03</span>
           <h3>Incident reconstruction in minutes.</h3>
           <p>Because approvals and actions are hash-linked, you can trace any action to its authorizing
-            policy and issuer — and hand auditors a signed evidence pack. No dependence on a provider's
+            policy and issuer - and hand auditors a signed evidence pack. No dependence on a provider's
             mutable logs.</p>
         </div>
       </div>
@@ -123,7 +121,7 @@
       
       <h2 class="section-title">Gate every step. Fail closed on missing provenance.</h2>
       
-      <p class="lede">Agents that fetch, transform, or publish licensed assets pass through the Membrane first. Each operation needs a live, signed, time-bounded scope; if the asset’s provenance is missing or unverifiable, no scope is issued and the call is blocked.</p>
+      <p class="lede">Agents that fetch, transform, or publish licensed assets pass through the Membrane first. Each operation needs a live, signed, time-bounded scope; if the asset's provenance is missing or unverifiable, no scope is issued and the call is blocked.</p>
       
     </section>
       
@@ -163,7 +161,7 @@
           <span class="step-state" aria-hidden="true"></span>
           <div class="step-body">
             <h3>Blocked swap</h3>
-            <p>The agent reaches for a different model, or for <span class="mono">github.merge</span> —
+            <p>The agent reaches for a different model, or for <span class="mono">github.merge</span> -
               outside the authorization. The Membrane blocks it; a red receipt shows exactly why.</p>
           </div>
         </li>
@@ -180,7 +178,7 @@
           <div class="step-body">
             <h3>Reconstruct</h3>
             <p>Open the timeline, click any action, and see the model, context scope, policy,
-              and issuer behind it — no log spelunking.</p>
+              and issuer behind it - no log spelunking.</p>
           </div>
         </li>
         <li class="step step-neutral">
@@ -200,8 +198,9 @@
       <p class="eyebrow">Run it locally</p>
       <h2 class="section-title">One command. No relay, no secrets, no paid APIs.</h2>
       <p class="lede">
-        The local dashboard walks the full fail-closed narrative — issue, allow, block, sever, evidence —
-        backed by real Membrane gate checks and CP receipt chaining, using ephemeral keys and an in-memory bus.
+        The software includes the gate, CLI, receipt components, read-only operator dashboard and
+        recommendation advisor. The local demo demonstrates gate checks and receipt chaining
+        with ephemeral keys, an in-memory bus and simulated tool effects.
         Receipts also export as JSON Lines or OCSF-inspired JSON for an existing SIEM.
       </p>
       <div class="run-panel">
@@ -234,7 +233,7 @@ cargo run -p membrane-cli -- demo</code></pre>
         <a class="btn btn-ghost" href="#run">Run the local demo</a>
       </div>
       <p class="footer-meta">
-        Open protocol and gate — fail-closed by design.
+        Open protocol and gate - fail-closed by design.
         Documentation licensed CC BY 4.0 · code AGPL-3.0.
       </p>
       <nav class="footer-legal" aria-label="Legal">
