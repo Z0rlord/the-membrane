@@ -206,7 +206,7 @@ function setStatus(){
 function label(){
   const b=$('replay'),n=$('replay-note');setStatus();b.disabled=false;
   if(paused){b.textContent=reduce.matches?'Start text stream':'Play ▶';n.textContent=reduce.matches?'Your system Reduce Motion setting keeps this preview still. Start text stream updates the decisions and counters, with no map animation.':'Paused. The decision log and counters are frozen.';}
-  else{b.textContent='Pause ❚❚';n.textContent=reduce.matches?'Text stream running. Reduce Motion is respected: the map stays still while decisions and counters update.':'Allowed calls cross the gate; denied calls stop at the boundary.';}
+  else{b.textContent='Pause ❚❚';n.textContent=reduce.matches?'Text stream running. Reduce Motion is respected: the map stays still while decisions and counters update.':'Only verified calls cross the gate; the rest stop at the boundary.';}
 }
 function backfill(){
   const now=Date.now();let t=now-150000;
