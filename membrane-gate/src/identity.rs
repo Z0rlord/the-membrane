@@ -562,4 +562,4 @@ mod tests {
             serde_yaml::from_str("scopes: [s]\nnot_before: 10\nvalid_for: 2h\n").unwrap();
         assert_eq!(g.effective_expiry().unwrap(), Some(7_210));
     }
-                                            }
+}
