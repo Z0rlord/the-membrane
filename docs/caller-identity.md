@@ -65,7 +65,19 @@ identities:
     expires_at: 1791186400   # stops working at this time (exclusive)
 ```
 
-Both fields are optional; a grant with neither is a standing grant, as before. Outside the window
+Both fields are optional; a grant with neither is a standing grant, as before. Instead of
+`expires_at`, a grant can give a length counted from `not_before`:
+
+```yaml
+    not_before: 1791100000
+    valid_for: 24h           # s, m, h or d; whole numbers only
+```
+
+`valid_for` needs `not_before` and cannot be combined with `expires_at`. The window is still
+absolute once written, so the registry file means the same thing whenever it is read (a length
+counted from "now" would renew itself on every hot reload). Zero, unknown units, decimals, a
+missing `not_before`, both forms together and overflow all deny. The gate raises a
+`grant_expiring` alarm before a window ends; see the operator dashboard doc. Outside the window
 the request is denied with rule `grant_window`, which the audit log, readings and advisor report
 separately from `identity_grant`. A contradictory window (`expires_at` not after `not_before`)
 denies at every time, and so does an unreadable system clock. The window is read on every

@@ -24,6 +24,7 @@ pub const ENV_KNOWN_IDENTITIES: &str = "MEMBRANE_ALARM_KNOWN_IDENTITIES";
 pub const ENV_STUCK_SECS: &str = "MEMBRANE_ALARM_STUCK_SECS";
 pub const ENV_SPIKE_WINDOW_SECS: &str = "MEMBRANE_ALARM_SPIKE_WINDOW_SECS";
 pub const ENV_SPIKE_MIN_DENIES: &str = "MEMBRANE_ALARM_SPIKE_MIN_DENIES";
+pub const ENV_GRANT_LEAD_SECS: &str = "MEMBRANE_ALARM_GRANT_LEAD_SECS";
 pub const ENV_SPIKE_MIN_RATE: &str = "MEMBRANE_ALARM_SPIKE_MIN_RATE";
 
 const DEFAULT_SECRET_HEADER: &str = "X-Membrane-Alarm-Secret";
@@ -38,6 +39,7 @@ pub enum AlarmKind {
     StuckAgent,
     DenySpike,
     FirstSeenIdentity,
+    GrantExpiring,
 }
 
 impl AlarmKind {
@@ -46,6 +48,7 @@ impl AlarmKind {
             Self::StuckAgent => "stuck_agent",
             Self::DenySpike => "deny_spike",
             Self::FirstSeenIdentity => "first_seen_identity",
+            Self::GrantExpiring => "grant_expiring",
         }
     }
 }
@@ -88,6 +91,8 @@ pub struct AlarmConfig {
     pub spike_window_secs: i64,
     pub spike_min_denies: usize,
     pub spike_min_rate: f64,
+    /// Alarm this long before a grant's `expires_at`.
+    pub grant_lead_secs: i64,
 }
 
 impl Default for AlarmConfig {
@@ -101,6 +106,7 @@ impl Default for AlarmConfig {
             spike_window_secs: 300,
             spike_min_denies: 10,
             spike_min_rate: 0.5,
+            grant_lead_secs: 86_400,
         }
     }
 }
@@ -147,8 +153,13 @@ impl AlarmConfig {
             spike_window_secs: env_parse(ENV_SPIKE_WINDOW_SECS, defaults.spike_window_secs)?,
             spike_min_denies: env_parse(ENV_SPIKE_MIN_DENIES, defaults.spike_min_denies)?,
             spike_min_rate: env_parse(ENV_SPIKE_MIN_RATE, defaults.spike_min_rate)?,
+            grant_lead_secs: env_parse(ENV_GRANT_LEAD_SECS, defaults.grant_lead_secs)?,
         };
-        if config.stuck_secs <= 0 || config.spike_window_secs <= 0 || config.spike_min_denies == 0 {
+        if config.stuck_secs <= 0
+            || config.grant_lead_secs <= 0
+            || config.spike_window_secs <= 0
+            || config.spike_min_denies == 0
+        {
             return Err("alarm thresholds must be positive".into());
         }
         if !(config.spike_min_rate > 0.0 && config.spike_min_rate <= 1.0) {
@@ -208,6 +219,7 @@ pub struct Engine {
     streaks: HashMap<String, Streak>,
     stuck_raised: HashSet<String>,
     spike_active: bool,
+    expiring_raised: HashSet<(String, i64)>,
 }
 
 impl Engine {
@@ -222,7 +234,47 @@ impl Engine {
             streaks: HashMap::new(),
             stuck_raised: HashSet::new(),
             spike_active: false,
+            expiring_raised: HashSet::new(),
         }
+    }
+
+    /// `grants` is (identity, expiry time) for grants that have a window. Raises one alarm per
+    /// grant and expiry time when the expiry is within the lead time and still in the future.
+    /// Renewing a grant changes its expiry, so the next window raises again. A grant that has
+    /// already expired is not alarmed: its denials are visible in the decision log.
+    pub fn evaluate_grants(&mut self, now: i64, grants: &[(String, i64)]) -> Vec<Alarm> {
+        let live: HashSet<(String, i64)> = grants
+            .iter()
+            .map(|(id, t)| (id.to_ascii_lowercase(), *t))
+            .collect();
+        self.expiring_raised.retain(|k| live.contains(k));
+        let mut due: Vec<(String, i64)> = live
+            .into_iter()
+            .filter(|(_, until)| *until > now && *until - now <= self.config.grant_lead_secs)
+            .filter(|k| !self.expiring_raised.contains(k))
+            .collect();
+        due.sort();
+        due.into_iter()
+            .map(|(id, until)| {
+                self.expiring_raised.insert((id.clone(), until));
+                let remaining = until - now;
+                let left = if remaining >= 3_600 {
+                    format!("{} hours", remaining / 3_600)
+                } else {
+                    format!("{} minutes", (remaining + 59) / 60)
+                };
+                Alarm {
+                    kind: AlarmKind::GrantExpiring,
+                    raised_at: now,
+                    identity: Some(display_identity(&id)),
+                    summary: format!(
+                        "Grant for identity {} expires in about {}. Renewal is an operator registry edit.",
+                        display_identity(&id),
+                        left
+                    ),
+                }
+            })
+            .collect()
     }
 
     /// `decisions` is the audit snapshot, newest first.
@@ -374,7 +426,7 @@ async fn deliver(client: &reqwest::Client, config: &AlarmConfig, record: &AlarmR
 
 /// Evaluate the audit log on an interval and deliver new alarms. Delivery runs
 /// off the request path; nothing here can block or allow a gate decision.
-pub fn spawn_alarm_task(audit: Arc<AuditLog>, config: AlarmConfig) {
+pub fn spawn_alarm_task(audit: Arc<AuditLog>, gate: Arc<crate::Gate>, config: AlarmConfig) {
     tokio::spawn(async move {
         let client = match reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -404,7 +456,12 @@ pub fn spawn_alarm_task(audit: Arc<AuditLog>, config: AlarmConfig) {
                 continue;
             };
             let now = chrono::Utc::now().timestamp();
-            for alarm in engine.evaluate(now, &decisions) {
+            let mut raised = engine.evaluate(now, &decisions);
+            match gate.grant_expiries() {
+                Ok(grants) => raised.extend(engine.evaluate_grants(now, &grants)),
+                Err(err) => warn!(error = %err, "grant expiry check skipped: registry unavailable"),
+            }
+            for alarm in raised {
                 let initial = if config.webhook_url.is_some() {
                     Delivery::Pending
                 } else {
@@ -658,5 +715,41 @@ mod tests {
         assert_eq!(rows[0].id, (ALARM_LOG_CAPACITY + 5) as u64);
         log.set_alarm_delivery(rows[0].id, Delivery::Failed);
         assert_eq!(log.alarms()[0].delivery, Delivery::Failed);
+    }
+
+    #[test]
+    fn grant_expiring_raises_once_inside_the_lead_and_rearms_on_renewal() {
+        let cfg = AlarmConfig {
+            grant_lead_secs: 3_600,
+            ..AlarmConfig::default()
+        };
+        let mut e = Engine::new(cfg);
+        let g = |t| vec![("AABB".to_string(), t)];
+        // Too early, then inside the lead.
+        assert!(e.evaluate_grants(1_000, &g(10_000)).is_empty());
+        let alarms = e.evaluate_grants(7_000, &g(10_000));
+        assert_eq!(kinds(&alarms), vec![AlarmKind::GrantExpiring]);
+        assert_eq!(alarms[0].identity.as_deref(), Some("aabb"));
+        assert!(e.evaluate_grants(7_100, &g(10_000)).is_empty());
+        // Already expired: no alarm; the denials are the signal.
+        assert!(e.evaluate_grants(10_000, &g(10_000)).is_empty());
+        // Renewed to a new expiry: a later window raises again.
+        assert!(e.evaluate_grants(10_001, &g(20_000)).is_empty());
+        assert_eq!(
+            kinds(&e.evaluate_grants(17_000, &g(20_000))),
+            vec![AlarmKind::GrantExpiring]
+        );
+    }
+
+    #[test]
+    fn grant_expiring_forgets_removed_grants_and_names_no_extra_text() {
+        let mut e = Engine::new(AlarmConfig::default());
+        let grants = vec![("a\nb".to_string(), 1_800)];
+        let alarms = e.evaluate_grants(0, &grants);
+        assert_eq!(alarms.len(), 1);
+        assert!(!alarms[0].summary.contains('\n'));
+        assert!(alarms[0].summary.contains("30 minutes"));
+        assert!(e.evaluate_grants(1, &[]).is_empty());
+        assert_eq!(e.expiring_raised.len(), 0);
     }
 }

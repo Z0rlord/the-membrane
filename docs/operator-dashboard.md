@@ -85,12 +85,13 @@ used to represent a production gate. Stop the example before starting the operat
 
 ## Alarm delivery
 
-The gate raises an alarm for three conditions that have a clock on them, and only these:
+The gate raises an alarm for four conditions that have a clock on them, and only these:
 
 | Alarm | Raised when |
 | --- | --- |
 | `stuck_agent` | An identity that was previously allowed has been denied continuously for `MEMBRANE_ALARM_STUCK_SECS` (default 900) and is still retrying. |
 | `deny_spike` | At least `MEMBRANE_ALARM_SPIKE_MIN_DENIES` (default 10) denials make up at least `MEMBRANE_ALARM_SPIKE_MIN_RATE` (default 0.5) of decisions inside `MEMBRANE_ALARM_SPIKE_WINDOW_SECS` (default 300). Re-arms once the window clears. |
+| `grant_expiring` | A grant with a window is within `MEMBRANE_ALARM_GRANT_LEAD_SECS` (default 86400, one day) of its end and has not expired yet. Raised once per grant and expiry time; renewing the grant to a new expiry arms it again. Already expired grants raise no alarm, since their denials appear in the decision log as `grant_window`. |
 | `first_seen_identity` | A key-verified caller identity makes its first request since the gate started. List identities in `MEMBRANE_ALARM_KNOWN_IDENTITIES` (comma-separated public keys) to exempt them. |
 
 Set `MEMBRANE_ALARM_WEBHOOK_URL` to deliver each alarm as a JSON POST (`kind`, `identity`,

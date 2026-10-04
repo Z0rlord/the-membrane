@@ -25,11 +25,66 @@ pub struct IdentityGrant {
     /// standing grant with no expiry.
     #[serde(default)]
     pub expires_at: Option<i64>,
+    /// Length of the window, counted from `not_before`: a number followed by `s`, `m`, `h` or
+    /// `d` (for example `90m`, `24h`, `7d`). Requires `not_before` and excludes `expires_at`, so
+    /// a registry file means the same thing whenever it is read.
+    #[serde(default)]
+    pub valid_for: Option<String>,
+}
+
+/// Parse `valid_for` into seconds. Zero, unknown units and overflow are errors.
+pub fn parse_duration_secs(raw: &str) -> Result<i64, String> {
+    let raw = raw.trim();
+    let split = raw.len().saturating_sub(1);
+    if !raw.is_char_boundary(split) || split == 0 {
+        return Err("expected a number followed by s, m, h or d".into());
+    }
+    let (num, unit) = raw.split_at(split);
+    let unit_secs: i64 = match unit {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3_600,
+        "d" => 86_400,
+        _ => return Err("unit must be s, m, h or d".into()),
+    };
+    if !num.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("expected a whole number".into());
+    }
+    let n: i64 = num.parse().map_err(|_| "number out of range".to_string())?;
+    let secs = n.checked_mul(unit_secs).ok_or("duration out of range")?;
+    if secs <= 0 {
+        return Err("duration must be positive".into());
+    }
+    Ok(secs)
+}
+
+impl IdentityGrant {
+    /// The end of the window: `expires_at`, or `not_before + valid_for`. `None` means no expiry.
+    /// Contradictory or malformed settings are an error, which callers treat as a denial.
+    pub fn effective_expiry(&self) -> Result<Option<i64>, GateError> {
+        let Some(raw) = self.valid_for.as_deref() else {
+            return Ok(self.expires_at);
+        };
+        if self.expires_at.is_some() {
+            return Err(GateError::GrantWindow(
+                "invalid window: set expires_at or valid_for, not both".into(),
+            ));
+        }
+        let from = self.not_before.ok_or_else(|| {
+            GateError::GrantWindow("invalid window: valid_for requires not_before".into())
+        })?;
+        let secs = parse_duration_secs(raw)
+            .map_err(|e| GateError::GrantWindow(format!("invalid valid_for: {e}")))?;
+        from.checked_add(secs)
+            .map(Some)
+            .ok_or_else(|| GateError::GrantWindow("invalid window: out of range".into()))
+    }
 }
 impl IdentityGrant {
     /// Fail-closed time box. Expired, not yet valid and contradictory windows all deny.
     pub fn check_window(&self, now: i64) -> Result<(), GateError> {
-        if let (Some(from), Some(until)) = (self.not_before, self.expires_at) {
+        let expiry = self.effective_expiry()?;
+        if let (Some(from), Some(until)) = (self.not_before, expiry) {
             if until <= from {
                 return Err(GateError::GrantWindow(
                     "invalid window: expires_at is not after not_before".into(),
@@ -39,7 +94,7 @@ impl IdentityGrant {
         if self.not_before.is_some_and(|from| now < from) {
             return Err(GateError::GrantWindow("grant not yet valid".into()));
         }
-        if self.expires_at.is_some_and(|until| now >= until) {
+        if expiry.is_some_and(|until| now >= until) {
             return Err(GateError::GrantWindow("grant expired".into()));
         }
         Ok(())
@@ -86,6 +141,28 @@ impl Gate {
         }
         replay.insert(key, proof.timestamp);
         Ok(identity)
+    }
+    /// Expiry times of grants that are not revoked and have a window, read the same way
+    /// authorization reads them. A grant with a malformed window is left out: it already
+    /// denies every request.
+    pub fn grant_expiries(&self) -> Result<Vec<(String, i64)>, GateError> {
+        let live;
+        let registry = if let Some(path) = &self.identity_registry_path {
+            live = ChannelRegistry::load(path)
+                .map_err(|e| GateError::IdentityGrant(format!("registry unavailable: {e}")))?;
+            &live
+        } else {
+            &self.registry
+        };
+        Ok(registry
+            .identities
+            .iter()
+            .filter(|(_, g)| !g.revoked)
+            .filter_map(|(id, g)| match g.effective_expiry() {
+                Ok(Some(until)) => Some((id.clone(), until)),
+                _ => None,
+            })
+            .collect())
     }
     pub fn authorize_identity(
         &self,
@@ -183,6 +260,7 @@ mod tests {
             github_repo_allowlist: vec!["a/b".into()],
             not_before: None,
             expires_at: None,
+            valid_for: None,
         };
         let registry = ChannelRegistry {
             identities: [(caller.public_key().to_hex(), grant)].into(),
@@ -415,5 +493,73 @@ mod tests {
         assert_eq!((ok.not_before, ok.expires_at), (Some(10), Some(20)));
         assert!(serde_yaml::from_str::<IdentityGrant>("expires: 20\n").is_err());
         assert!(serde_yaml::from_str::<IdentityGrant>("expires_at: soon\n").is_err());
+    }
+    fn grant_mut<'a>(g: &'a mut Gate, id: &str) -> &'a mut IdentityGrant {
+        g.registry.identities.get_mut(id).unwrap()
+    }
+    #[test]
+    fn duration_strings_parse_strictly() {
+        assert_eq!(parse_duration_secs("90s"), Ok(90));
+        assert_eq!(parse_duration_secs("90m"), Ok(5_400));
+        assert_eq!(parse_duration_secs(" 24h "), Ok(86_400));
+        assert_eq!(parse_duration_secs("7d"), Ok(604_800));
+        for bad in [
+            "",
+            "h",
+            "1",
+            "0h",
+            "-1h",
+            "1.5h",
+            "1w",
+            "1 h",
+            "h1",
+            "+1h",
+            "99999999999999999999d",
+            "9223372036854775807d",
+            "é",
+        ] {
+            assert!(parse_duration_secs(bad).is_err(), "{bad:?} should fail");
+        }
+    }
+    #[test]
+    fn relative_window_counts_from_not_before_and_fails_closed() {
+        let (mut g, c, i) = fixture();
+        let id = c.public_key().to_hex();
+        grant_mut(&mut g, &id).not_before = Some(1_000);
+        grant_mut(&mut g, &id).valid_for = Some("1h".into());
+        let ok = |g: &Gate, now| g.authorize_identity_at(&id, &i, "m", None, now);
+        assert!(matches!(ok(&g, 999), Err(GateError::GrantWindow(_))));
+        ok(&g, 1_000).unwrap();
+        ok(&g, 4_599).unwrap();
+        assert!(matches!(ok(&g, 4_600), Err(GateError::GrantWindow(_))));
+        // Both forms, a missing start, or a bad value deny at every time.
+        grant_mut(&mut g, &id).expires_at = Some(9_000);
+        assert!(matches!(ok(&g, 2_000), Err(GateError::GrantWindow(_))));
+        grant_mut(&mut g, &id).expires_at = None;
+        grant_mut(&mut g, &id).not_before = None;
+        assert!(matches!(ok(&g, 2_000), Err(GateError::GrantWindow(_))));
+        grant_mut(&mut g, &id).not_before = Some(1_000);
+        grant_mut(&mut g, &id).valid_for = Some("soon".into());
+        assert!(matches!(ok(&g, 2_000), Err(GateError::GrantWindow(_))));
+        grant_mut(&mut g, &id).valid_for = Some("1d".into());
+        grant_mut(&mut g, &id).not_before = Some(i64::MAX - 10);
+        assert!(matches!(ok(&g, i64::MAX), Err(GateError::GrantWindow(_))));
+    }
+    #[test]
+    fn grant_expiries_lists_windowed_unrevoked_grants_only() {
+        let (mut g, c, _) = fixture();
+        let id = c.public_key().to_hex();
+        assert!(g.grant_expiries().unwrap().is_empty());
+        g.registry.identities.get_mut(&id).unwrap().not_before = Some(100);
+        g.registry.identities.get_mut(&id).unwrap().valid_for = Some("1h".into());
+        assert_eq!(g.grant_expiries().unwrap(), vec![(id.clone(), 3_700)]);
+        g.registry.identities.get_mut(&id).unwrap().revoked = true;
+        assert!(g.grant_expiries().unwrap().is_empty());
+    }
+    #[test]
+    fn valid_for_parses_from_yaml() {
+        let g: IdentityGrant =
+            serde_yaml::from_str("scopes: [s]\nnot_before: 10\nvalid_for: 2h\n").unwrap();
+        assert_eq!(g.effective_expiry().unwrap(), Some(7_210));
     }
 }
