@@ -185,6 +185,9 @@ pub struct Snapshot {
     /// Clocked alarms raised by the gate, newest first, with delivery status.
     #[serde(default)]
     pub alarms: Vec<AlarmRecord>,
+    /// Summaries computed from the retained decisions.
+    #[serde(default)]
+    pub readings: Option<crate::readings::Readings>,
 }
 pub async fn snapshot(state: &GateServerState) -> Snapshot {
     let now = chrono::Utc::now().timestamp();
@@ -197,6 +200,7 @@ pub async fn snapshot(state: &GateServerState) -> Snapshot {
     let (total, decisions) = data.unwrap_or_default();
     let allowed = decisions.iter().filter(|d| d.outcome == "allow").count();
     let denied = decisions.iter().filter(|d| d.outcome == "deny").count();
+    let readings = available.then(|| crate::readings::compute(now, total, &decisions));
     Snapshot {
         schema_version: 1,
         observed_at: now,
@@ -228,6 +232,7 @@ pub async fn snapshot(state: &GateServerState) -> Snapshot {
         deny_rate: (allowed + denied > 0).then(|| denied as f64 / (allowed + denied) as f64),
         audit_available: available,
         alarms: state.audit.alarms(),
+        readings,
     }
 }
 pub fn loopback_address(value: &str) -> anyhow::Result<SocketAddr> {
