@@ -350,4 +350,4 @@ mod tests {
         assert!(!r.identities[0].identity.contains('\n'));
         assert!(r.actions[0].action.len() <= 64 && !r.actions[0].action.contains('\u{7}'));
     }
-          }
+}
