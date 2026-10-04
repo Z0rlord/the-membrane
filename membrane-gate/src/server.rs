@@ -50,7 +50,7 @@ pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Re
     spawn_delta_t_watchdog(state.gate.clone(), state.session_chain.clone());
     // Invalid alarm settings stop startup; they never silently disable alarms.
     let alarm_config = crate::alarm::AlarmConfig::from_env().map_err(anyhow::Error::msg)?;
-    crate::alarm::spawn_alarm_task(state.audit.clone(), alarm_config);
+    crate::alarm::spawn_alarm_task(state.audit.clone(), state.gate.clone(), alarm_config);
 
     let app = axum::Router::new()
         .route("/health", get(health))
@@ -662,6 +662,7 @@ mod tool_invoke_policy_tests {
                     github_repo_allowlist: repos.clone(),
                     not_before: None,
                     expires_at: None,
+                    valid_for: None,
                 },
             )]
             .into(),
