@@ -752,4 +752,4 @@ mod tests {
         assert!(e.evaluate_grants(1, &[]).is_empty());
         assert_eq!(e.expiring_raised.len(), 0);
     }
-            }
+}
