@@ -189,6 +189,145 @@ impl IntentAuthorizationCredential {
     }
 }
 
+/// Longest lifetime a re-issued IAC may be given.
+pub const MAX_REISSUE_TTL_SECS: i64 = 7 * 24 * 3600;
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ReissueError {
+    #[error("previous IAC is not signed by the operator key: {0}")]
+    PreviousNotOperatorSigned(String),
+    #[error("ttl must be between 1 and {MAX_REISSUE_TTL_SECS} seconds")]
+    BadTtl,
+    #[error(
+        "`{0}` is not a plain identifier; wildcards, spaces and control characters are refused"
+    )]
+    UnsafeIdentifier(String),
+    #[error("caller key mismatch: the previous IAC is bound to a different caller")]
+    CallerMismatch,
+    #[error("a caller public key is required; an unbound IAC cannot enter production")]
+    CallerRequired,
+}
+
+/// Explicit operator input for a re-issue. Anything not listed is copied
+/// unchanged from the previous IAC. Additions are narrow and named; there is no
+/// way to remove a forbidden export or to widen by pattern.
+#[derive(Debug, Clone, Default)]
+pub struct ReissueRequest {
+    pub now: i64,
+    pub ttl_secs: i64,
+    pub parent_cp_hash: String,
+    /// Required when the previous IAC has no caller binding; must match when it has one.
+    pub caller_pubkey: Option<String>,
+    pub add_models: Vec<String>,
+    pub add_tools: Vec<String>,
+    pub add_channels: Vec<String>,
+}
+
+/// One difference between the previous and the re-issued IAC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReissueChange {
+    pub field: &'static str,
+    pub from: String,
+    pub to: String,
+}
+
+fn plain_identifier(v: &str) -> bool {
+    !v.is_empty()
+        && v.len() <= 128
+        && v.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':' | '/'))
+        && !v.contains("..")
+}
+
+impl IntentAuthorizationCredential {
+    /// Build an unsigned successor of `self`. The previous IAC must verify against
+    /// `operator_pubkey_hex` (a foreign or tampered credential is never carried
+    /// forward), even if it has expired. Scope, models, tools, channels, export
+    /// restrictions and context bound are copied; only `valid_until`,
+    /// `parent_cp_hash` and explicitly named additions differ. The caller signs
+    /// the result: re-issue is always an operator act, never automatic.
+    pub fn reissue(
+        &self,
+        operator_pubkey_hex: &str,
+        req: &ReissueRequest,
+    ) -> Result<(Self, Vec<ReissueChange>), ReissueError> {
+        self.verify_signature(operator_pubkey_hex)
+            .map_err(|e| ReissueError::PreviousNotOperatorSigned(e.to_string()))?;
+        if req.ttl_secs < 1 || req.ttl_secs > MAX_REISSUE_TTL_SECS {
+            return Err(ReissueError::BadTtl);
+        }
+        for v in req
+            .add_models
+            .iter()
+            .chain(&req.add_tools)
+            .chain(&req.add_channels)
+        {
+            if !plain_identifier(v) {
+                return Err(ReissueError::UnsafeIdentifier(v.chars().take(40).collect()));
+            }
+        }
+        let caller = match (&self.caller_pubkey, &req.caller_pubkey) {
+            (Some(old), Some(new)) if !old.eq_ignore_ascii_case(new) => {
+                return Err(ReissueError::CallerMismatch)
+            }
+            (Some(old), _) => old.clone(),
+            (None, Some(new)) => new.to_ascii_lowercase(),
+            (None, None) => return Err(ReissueError::CallerRequired),
+        };
+
+        let mut next = self.clone();
+        next.signature = None;
+        next.caller_pubkey = Some(caller);
+        next.valid_until = req.now + req.ttl_secs;
+        next.parent_cp_hash = req.parent_cp_hash.clone();
+
+        let mut changes = Vec::new();
+        if self.caller_pubkey.is_none() {
+            changes.push(ReissueChange {
+                field: "caller_pubkey",
+                from: "(none)".into(),
+                to: next.caller_pubkey.clone().unwrap_or_default(),
+            });
+        }
+        changes.push(ReissueChange {
+            field: "valid_until",
+            from: self.valid_until.to_string(),
+            to: next.valid_until.to_string(),
+        });
+        if self.parent_cp_hash != next.parent_cp_hash {
+            changes.push(ReissueChange {
+                field: "parent_cp_hash",
+                from: self.parent_cp_hash.clone(),
+                to: next.parent_cp_hash.clone(),
+            });
+        }
+        let mut add = |field: &'static str, list: &mut Vec<String>, extra: &[String]| {
+            for v in extra {
+                if !list.contains(v) {
+                    list.push(v.clone());
+                    changes.push(ReissueChange {
+                        field,
+                        from: "(absent)".into(),
+                        to: v.clone(),
+                    });
+                }
+            }
+        };
+        add(
+            "model_allowlist",
+            &mut next.model_allowlist,
+            &req.add_models,
+        );
+        add("tool_allowlist", &mut next.tool_allowlist, &req.add_tools);
+        add(
+            "permitted_channels",
+            &mut next.permitted_channels,
+            &req.add_channels,
+        );
+        Ok((next, changes))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RollupBundle {
     pub version: String,
@@ -260,5 +399,123 @@ mod tests {
             iac.verify_signature(&Keys::generate().public_key().to_hex()),
             Err(IacVerifyError::MissingSignature)
         ));
+    }
+
+    fn signed_with_caller(keys: &Keys) -> IntentAuthorizationCredential {
+        let mut iac = sample_iac();
+        iac.caller_pubkey = Some("a".repeat(64));
+        iac.valid_until = 100;
+        iac.sign(keys).unwrap();
+        iac
+    }
+
+    fn req() -> ReissueRequest {
+        ReissueRequest {
+            now: 1_000,
+            ttl_secs: 3600,
+            parent_cp_hash: "1".repeat(64),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn reissue_changes_only_expiry_and_chain_head() {
+        let keys = Keys::generate();
+        let old = signed_with_caller(&keys);
+        let (mut next, changes) = old.reissue(&keys.public_key().to_hex(), &req()).unwrap();
+        assert!(next.signature.is_none());
+        assert_eq!(next.valid_until, 4_600);
+        assert_eq!(next.model_allowlist, old.model_allowlist);
+        assert_eq!(next.tool_allowlist, old.tool_allowlist);
+        assert_eq!(next.permitted_channels, old.permitted_channels);
+        assert_eq!(next.forbidden_exports, old.forbidden_exports);
+        assert_eq!(next.caller_pubkey, old.caller_pubkey);
+        let fields: Vec<_> = changes.iter().map(|c| c.field).collect();
+        assert_eq!(fields, vec!["valid_until", "parent_cp_hash"]);
+        next.sign(&keys).unwrap();
+        next.verify_signature(&keys.public_key().to_hex()).unwrap();
+    }
+
+    #[test]
+    fn reissue_refuses_foreign_or_unsigned_previous() {
+        let keys = Keys::generate();
+        let old = signed_with_caller(&keys);
+        let other = Keys::generate().public_key().to_hex();
+        assert!(matches!(
+            old.reissue(&other, &req()),
+            Err(ReissueError::PreviousNotOperatorSigned(_))
+        ));
+        let mut unsigned = old.clone();
+        unsigned.signature = None;
+        assert!(unsigned
+            .reissue(&keys.public_key().to_hex(), &req())
+            .is_err());
+        let mut tampered = old;
+        tampered.tool_allowlist.push("github.merge".into());
+        assert!(tampered
+            .reissue(&keys.public_key().to_hex(), &req())
+            .is_err());
+    }
+
+    #[test]
+    fn reissue_additions_are_explicit_and_recorded() {
+        let keys = Keys::generate();
+        let old = signed_with_caller(&keys);
+        let mut r = req();
+        r.add_tools = vec!["github.comment".into(), "jira.comment".into()];
+        let (next, changes) = old.reissue(&keys.public_key().to_hex(), &r).unwrap();
+        assert_eq!(next.tool_allowlist, vec!["jira.comment", "github.comment"]);
+        let added: Vec<_> = changes
+            .iter()
+            .filter(|c| c.field == "tool_allowlist")
+            .collect();
+        assert_eq!(added.len(), 1);
+        assert_eq!(added[0].to, "github.comment");
+    }
+
+    #[test]
+    fn reissue_refuses_wildcards_bad_ttl_and_caller_problems() {
+        let keys = Keys::generate();
+        let pk = keys.public_key().to_hex();
+        let old = signed_with_caller(&keys);
+        for bad in ["*", "github.*x y", "", "a/../b", "tool\nx"] {
+            let mut r = req();
+            r.add_tools = vec![bad.into()];
+            assert!(matches!(
+                old.reissue(&pk, &r),
+                Err(ReissueError::UnsafeIdentifier(_))
+            ));
+        }
+        for ttl in [0, -5, MAX_REISSUE_TTL_SECS + 1] {
+            let mut r = req();
+            r.ttl_secs = ttl;
+            assert_eq!(old.reissue(&pk, &r).unwrap_err(), ReissueError::BadTtl);
+        }
+        let mut r = req();
+        r.caller_pubkey = Some("b".repeat(64));
+        assert_eq!(
+            old.reissue(&pk, &r).unwrap_err(),
+            ReissueError::CallerMismatch
+        );
+
+        let mut unbound = sample_iac();
+        unbound.sign(&keys).unwrap();
+        assert_eq!(
+            unbound.reissue(&pk, &req()).unwrap_err(),
+            ReissueError::CallerRequired
+        );
+        let mut r = req();
+        r.caller_pubkey = Some("C".repeat(64));
+        let (next, _) = unbound.reissue(&pk, &r).unwrap();
+        assert_eq!(next.caller_pubkey, Some("c".repeat(64)));
+    }
+
+    #[test]
+    fn reissue_works_on_expired_previous() {
+        let keys = Keys::generate();
+        let old = signed_with_caller(&keys);
+        assert!(!old.is_valid_at(1_000));
+        let (next, _) = old.reissue(&keys.public_key().to_hex(), &req()).unwrap();
+        assert!(next.is_valid_at(1_000));
     }
 }
