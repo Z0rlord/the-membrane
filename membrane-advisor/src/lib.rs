@@ -283,6 +283,9 @@ pub fn analyze(
             ("identity_grant", _) => {
                 rec.summary = "Authenticated caller has no active matching identity grant. Inspect the exact scope and revoked flag. Do not automatically grant or un-revoke from a denial.".into();
             }
+            ("grant_window", _) => {
+                rec.summary = "Identity grant is expired, not yet valid or has a contradictory window. Renewing is an operator decision: edit not_before and expires_at in the registry if access should continue. Do not extend a grant automatically from a denial.".into();
+            }
             ("iac_signature", _) => {
                 rec.summary = "IAC signature failed. Do not change policy. This is a tampered or foreign credential until shown otherwise.".into();
             }

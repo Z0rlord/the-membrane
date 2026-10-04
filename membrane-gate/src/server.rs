@@ -601,6 +601,7 @@ fn gate_error_response(err: GateError) -> Response {
     let status = match &err {
         GateError::IdentityAuthentication(_)
         | GateError::IdentityGrant(_)
+        | GateError::GrantWindow(_)
         | GateError::NoValidIac(_)
         | GateError::InvalidIacSignature(_)
         | GateError::ChannelDenied(_)
@@ -659,6 +660,8 @@ mod tool_invoke_policy_tests {
                     model_allowlist: vec!["demo".into()],
                     tool_allowlist: tools.clone(),
                     github_repo_allowlist: repos.clone(),
+                    not_before: None,
+                    expires_at: None,
                 },
             )]
             .into(),

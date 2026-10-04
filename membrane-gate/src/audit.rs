@@ -134,6 +134,7 @@ pub fn rule(err: &GateError) -> &'static str {
     match err {
         GateError::IdentityAuthentication(_) => "identity_authentication",
         GateError::IdentityGrant(_) => "identity_grant",
+        GateError::GrantWindow(_) => "grant_window",
         GateError::NoValidIac(_) => "iac_validity",
         GateError::InvalidIacSignature(_) => "iac_signature",
         GateError::ChannelDenied(_) => "channel_allowlist",
