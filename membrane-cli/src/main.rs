@@ -315,6 +315,39 @@ enum IacCommands {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Re-issue an expired or mismatched IAC under the same operator key. Copies the
+    /// previous credential, changes only expiry and chain head, lists every difference.
+    Reissue {
+        #[arg(
+            long,
+            env = "MEMBRANE_RELAY_URL",
+            default_value = "ws://127.0.0.1:7777"
+        )]
+        relay: String,
+        #[arg(long, env = "NOSTR_NSEC")]
+        nsec: Option<String>,
+        /// Previous operator-signed IAC (may be expired)
+        #[arg(long)]
+        previous: PathBuf,
+        #[arg(long, default_value = "3600")]
+        ttl_secs: i64,
+        #[arg(long)]
+        parent_cp_hash: Option<String>,
+        /// Only needed when the previous IAC has no caller binding
+        #[arg(long)]
+        caller_pubkey: Option<String>,
+        /// Add one model id (repeatable). Nothing is added unless named here.
+        #[arg(long = "add-model")]
+        add_models: Vec<String>,
+        /// Add one tool id (repeatable)
+        #[arg(long = "add-tool")]
+        add_tools: Vec<String>,
+        /// Add one channel (repeatable)
+        #[arg(long = "add-channel")]
+        add_channels: Vec<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Sign an IAC JSON file with NOSTR_NSEC
     Sign {
         #[arg(long, env = "NOSTR_NSEC")]
@@ -444,6 +477,32 @@ async fn main() -> Result<()> {
                     &channel,
                     &tools,
                     &caller_pubkey,
+                    &out,
+                )
+                .await
+            }
+            IacCommands::Reissue {
+                relay,
+                nsec,
+                previous,
+                ttl_secs,
+                parent_cp_hash,
+                caller_pubkey,
+                add_models,
+                add_tools,
+                add_channels,
+                out,
+            } => {
+                iac_reissue(
+                    &relay,
+                    nsec,
+                    &previous,
+                    ttl_secs,
+                    parent_cp_hash.as_deref(),
+                    caller_pubkey,
+                    add_models,
+                    add_tools,
+                    add_channels,
                     &out,
                 )
                 .await
@@ -962,6 +1021,94 @@ async fn iac_issue(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+async fn iac_reissue(
+    relay: &str,
+    nsec: Option<String>,
+    previous: &PathBuf,
+    ttl_secs: i64,
+    parent_cp_hash: Option<&str>,
+    caller_pubkey: Option<String>,
+    add_models: Vec<String>,
+    add_tools: Vec<String>,
+    add_channels: Vec<String>,
+    out: &PathBuf,
+) -> Result<()> {
+    if previous == out {
+        bail!("--out must differ from --previous; the old credential is kept as evidence");
+    }
+    let keys = load_keys(nsec)?;
+    let now = now_secs();
+    let old: IntentAuthorizationCredential =
+        serde_json::from_str(&std::fs::read_to_string(previous).context("read previous IAC")?)
+            .context("parse previous IAC")?;
+    let old_hash = old.hash_hex()?;
+    if let Some(pk) = caller_pubkey.as_deref() {
+        nostr::PublicKey::from_hex(pk).context("caller public key")?;
+    }
+    let parent = match parent_cp_hash {
+        Some(hash) => hash.to_string(),
+        None => {
+            let (head, _, _) =
+                fetch_session_chain_bootstrap(relay, &keys.public_key().to_hex()).await?;
+            head
+        }
+    };
+    let (mut iac, changes) = old
+        .reissue(
+            &keys.public_key().to_hex(),
+            &membrane_core::iac::ReissueRequest {
+                now,
+                ttl_secs,
+                parent_cp_hash: parent.clone(),
+                caller_pubkey,
+                add_models,
+                add_tools,
+                add_channels,
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    iac.sign(&keys).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let iac_hash = iac.hash_hex()?;
+
+    let publisher = BusPublisher::new(BusPublisherConfig {
+        relay_url: relay.to_string(),
+        keys: keys.clone(),
+    });
+    let mut event = MembraneEvent::new(
+        EventType::Iac,
+        keys.public_key().to_hex(),
+        parent.clone(),
+        now,
+        MembranePayload::Generic(serde_json::json!({
+            "scope_id": iac.scope_id,
+            "model_allowlist": iac.model_allowlist,
+            "tool_allowlist": iac.tool_allowlist,
+            "iac_hash": iac_hash,
+            "supersedes_iac_hash": old_hash,
+            "parent_cp_hash": parent,
+            "valid_until": iac.valid_until,
+            "reissued": true,
+        })),
+    );
+    let event_id = publisher.publish(&mut event, None).await?;
+
+    std::fs::write(out, serde_json::to_string_pretty(&iac)?)?;
+    println!("re-issued IAC written to {}", out.display());
+    println!("  previous: {old_hash}");
+    println!("  new:      {iac_hash}");
+    println!("  changes:");
+    for c in &changes {
+        println!("    {}: {} -> {}", c.field, c.from, c.to);
+    }
+    println!("  authorization_event: {}", event_id.to_hex());
+    println!(
+        "  The gate loads the new file at start; restart it with --iac {}",
+        out.display()
+    );
+    Ok(())
+}
+
 async fn tools_invoke(
     gate_url: &str,
     iac_path: &PathBuf,
@@ -1328,4 +1475,4 @@ mod cli_tests {
         let help = Cli::command().render_long_help().to_string();
         assert!(!help.contains("landing-demo"));
     }
-        }
+}

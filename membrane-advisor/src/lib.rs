@@ -248,7 +248,7 @@ pub fn analyze(
                     rec.summary = "Denied model name is not a plain identifier, so no patch is generated. The name is caller-chosen text; treat it as hostile until reviewed.".into();
                 } else if registry.model_allowlist.iter().any(|x| x == m) {
                     rec.kind = Kind::IacReissue;
-                    rec.summary = format!("`{m}` is already in the registry, so the signed IAC is what denies it. Re-issue the IAC with this model only if the use is intended. No registry change.");
+                    rec.summary = format!("`{m}` is already in the registry, so the signed IAC is what denies it. Re-issue the IAC (`membrane iac reissue --add-model`) only if the use is intended. No registry change.");
                 } else {
                     rec.kind = Kind::RegistryPatch;
                     rec.summary = format!("Add `{m}` to model_allowlist only if this model is meant to run. The signed IAC must also list it, or the gate still denies. If the call was not intended, change nothing: the denial is correct.");
@@ -268,14 +268,14 @@ pub fn analyze(
             }
             ("tool_allowlist", s) => {
                 rec.kind = Kind::IacReissue;
-                rec.summary = format!("Tool `{shown}` is not in the signed IAC. Tool allowlists live in the IAC, not the registry, so there is no text patch. Re-issue the IAC with this one tool only if intended.{}", if s.is_none() { " The log did not record the tool name (gate predates subject logging)." } else { "" });
+                rec.summary = format!("Tool `{shown}` is not in the signed IAC. Tool allowlists live in the IAC, not the registry, so there is no text patch. Re-issue the IAC (`membrane iac reissue --add-tool`) with this one tool only if intended.{}", if s.is_none() { " The log did not record the tool name (gate predates subject logging)." } else { "" });
             }
             ("model_allowlist" | "repository_allowlist", None) => {
                 rec.summary = "Denied, but the log has no subject (gate predates subject logging). Upgrade the gate to get a specific recommendation.".into();
             }
             ("iac_validity", _) => {
                 rec.kind = Kind::IacReissue;
-                rec.summary = "IAC missing or expired. Re-issue a signed IAC with a new valid_until if the session should continue.".into();
+                rec.summary = "IAC missing or expired. Re-issue a signed IAC with a new valid_until (`membrane iac reissue`) if the session should continue.".into();
             }
             ("identity_authentication", _) => {
                 rec.summary = "Caller proof missing, forged, stale or replayed. Do not grant a claimed identity or loosen policy.".into();
