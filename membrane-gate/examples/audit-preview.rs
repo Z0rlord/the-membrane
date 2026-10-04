@@ -37,6 +37,47 @@ async fn main() -> anyhow::Result<()> {
     ] {
         audit.record(outcome, rule, gate.publisher_pubkey_hex(), scope, action);
     }
+    for (outcome, rule, action, id) in [
+        (
+            "allow",
+            "all_authorization_checks_passed",
+            "chat",
+            "a1b2c3d4e5f60718",
+        ),
+        (
+            "allow",
+            "all_authorization_checks_passed",
+            "chat",
+            "a1b2c3d4e5f60718",
+        ),
+        (
+            "allow",
+            "all_authorization_checks_passed",
+            "tool",
+            "a1b2c3d4e5f60718",
+        ),
+        ("deny", "tool_allowlist", "tool", "9f8e7d6c5b4a3921"),
+        ("deny", "repository_allowlist", "tool", "9f8e7d6c5b4a3921"),
+    ] {
+        audit.record_authenticated(
+            outcome,
+            rule,
+            gate.publisher_pubkey_hex(),
+            None,
+            action,
+            None,
+            Some(id.into()),
+        );
+    }
+    audit.record_alarm(
+        membrane_gate::alarm::Alarm {
+            kind: membrane_gate::alarm::AlarmKind::FirstSeenIdentity,
+            raised_at: chrono::Utc::now().timestamp(),
+            identity: Some("9f8e7d6c5b4a3921".into()),
+            summary: "Synthetic preview alarm: first request from a new identity.".into(),
+        },
+        membrane_gate::alarm::Delivery::NotConfigured,
+    );
     let state = GateServerState {
         gate,
         proxy: Arc::new(LlmProxy::new(None)),
