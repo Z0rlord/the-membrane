@@ -42,6 +42,7 @@ fn snap(decisions: Vec<Decision>) -> Snapshot {
         audit_available: true,
         alarms: vec![],
         readings: None,
+        liveness: None,
     }
 }
 
