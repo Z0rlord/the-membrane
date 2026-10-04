@@ -10,7 +10,11 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, net::SocketAddr, sync::Mutex};
+use std::{
+    collections::VecDeque,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 pub const CAPACITY: usize = 500;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,8 +44,12 @@ struct Buffer {
     alarms: VecDeque<AlarmRecord>,
 }
 #[derive(Debug, Default)]
-pub struct AuditLog(Mutex<Buffer>);
+pub struct AuditLog(Mutex<Buffer>, Arc<crate::liveness::Liveness>);
 impl AuditLog {
+    /// Gate process liveness (heartbeat stamped by a background task).
+    pub fn liveness(&self) -> Arc<crate::liveness::Liveness> {
+        self.1.clone()
+    }
     pub fn record(
         &self,
         outcome: &str,
@@ -189,6 +197,9 @@ pub struct Snapshot {
     /// Summaries computed from the retained decisions.
     #[serde(default)]
     pub readings: Option<crate::readings::Readings>,
+    /// Gate process uptime and heartbeat. Separate from the router checkpoint.
+    #[serde(default)]
+    pub liveness: Option<crate::liveness::LivenessReport>,
 }
 pub async fn snapshot(state: &GateServerState) -> Snapshot {
     let now = chrono::Utc::now().timestamp();
@@ -201,13 +212,14 @@ pub async fn snapshot(state: &GateServerState) -> Snapshot {
     let (total, decisions) = data.unwrap_or_default();
     let allowed = decisions.iter().filter(|d| d.outcome == "allow").count();
     let denied = decisions.iter().filter(|d| d.outcome == "deny").count();
+    let gate_live = state.audit.liveness().report(now);
     let readings = available.then(|| crate::readings::compute(now, total, &decisions));
     Snapshot {
         schema_version: 1,
         observed_at: now,
         status: if !available {
             "unknown"
-        } else if stale || degraded {
+        } else if stale || degraded || !gate_live.heartbeat_ok {
             "degraded"
         } else if chain.active_scope_id.is_none() {
             "idle"
@@ -234,6 +246,7 @@ pub async fn snapshot(state: &GateServerState) -> Snapshot {
         audit_available: available,
         alarms: state.audit.alarms(),
         readings,
+        liveness: Some(gate_live),
     }
 }
 pub fn loopback_address(value: &str) -> anyhow::Result<SocketAddr> {
@@ -294,6 +307,8 @@ pub async fn bind(
     listen: &str,
 ) -> anyhow::Result<tokio::task::JoinHandle<()>> {
     let listener = tokio::net::TcpListener::bind(loopback_address(listen)?).await?;
+    // Whoever serves the snapshot also stamps the heartbeat it reports.
+    crate::liveness::spawn_heartbeat(state.audit.liveness());
     Ok(tokio::spawn(async move {
         if let Err(err) = axum::serve(listener, router(state)).await {
             tracing::error!(%err, "audit listener stopped");
