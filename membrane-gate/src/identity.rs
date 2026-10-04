@@ -18,6 +18,32 @@ pub struct IdentityGrant {
     pub tool_allowlist: Vec<String>,
     #[serde(default)]
     pub github_repo_allowlist: Vec<String>,
+    /// Unix seconds. The grant is not usable before this time. Absent means no lower bound.
+    #[serde(default)]
+    pub not_before: Option<i64>,
+    /// Unix seconds. The grant stops working at this time (exclusive). Absent means a
+    /// standing grant with no expiry.
+    #[serde(default)]
+    pub expires_at: Option<i64>,
+}
+impl IdentityGrant {
+    /// Fail-closed time box. Expired, not yet valid and contradictory windows all deny.
+    pub fn check_window(&self, now: i64) -> Result<(), GateError> {
+        if let (Some(from), Some(until)) = (self.not_before, self.expires_at) {
+            if until <= from {
+                return Err(GateError::GrantWindow(
+                    "invalid window: expires_at is not after not_before".into(),
+                ));
+            }
+        }
+        if self.not_before.is_some_and(|from| now < from) {
+            return Err(GateError::GrantWindow("grant not yet valid".into()));
+        }
+        if self.expires_at.is_some_and(|until| now >= until) {
+            return Err(GateError::GrantWindow("grant expired".into()));
+        }
+        Ok(())
+    }
 }
 impl Gate {
     /// Public, per-process challenge binds a proof to this gate lifetime.
@@ -68,6 +94,21 @@ impl Gate {
         model: &str,
         tool_repo: Option<(&str, &str)>,
     ) -> Result<(), GateError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            // A clock before 1970 cannot prove a grant is inside its window.
+            .map_err(|_| GateError::GrantWindow("system clock unavailable".into()))?;
+        self.authorize_identity_at(identity, iac, model, tool_repo, now)
+    }
+    pub fn authorize_identity_at(
+        &self,
+        identity: &str,
+        iac: &IntentAuthorizationCredential,
+        model: &str,
+        tool_repo: Option<(&str, &str)>,
+        now: i64,
+    ) -> Result<(), GateError> {
         let live;
         let registry = if let Some(path) = &self.identity_registry_path {
             live = ChannelRegistry::load(path)
@@ -83,6 +124,7 @@ impl Gate {
         if grant.revoked {
             return Err(GateError::IdentityGrant("revoked identity".into()));
         }
+        grant.check_window(now)?;
         if !grant.scopes.contains(&iac.scope_id)
             || iac
                 .permitted_channels
@@ -139,6 +181,8 @@ mod tests {
             model_allowlist: vec!["m".into()],
             tool_allowlist: vec!["github.comment".into()],
             github_repo_allowlist: vec!["a/b".into()],
+            not_before: None,
+            expires_at: None,
         };
         let registry = ChannelRegistry {
             identities: [(caller.public_key().to_hex(), grant)].into(),
@@ -333,5 +377,43 @@ mod tests {
                 .sum::<usize>(),
             1
         );
+    }
+    #[test]
+    fn grant_window_is_enforced_and_fails_closed() {
+        let (mut g, c, i) = fixture();
+        let id = c.public_key().to_hex();
+        let ok = |g: &Gate, now| g.authorize_identity_at(&id, &i, "m", None, now);
+        // No window: a standing grant keeps working.
+        ok(&g, 1_000_000).unwrap();
+        g.registry.identities.get_mut(&id).unwrap().not_before = Some(1_000);
+        g.registry.identities.get_mut(&id).unwrap().expires_at = Some(2_000);
+        assert!(matches!(ok(&g, 999), Err(GateError::GrantWindow(_))));
+        ok(&g, 1_000).unwrap();
+        ok(&g, 1_999).unwrap();
+        assert!(matches!(ok(&g, 2_000), Err(GateError::GrantWindow(_))));
+        assert!(matches!(ok(&g, 9_999_999), Err(GateError::GrantWindow(_))));
+        // Contradictory windows deny at every time.
+        g.registry.identities.get_mut(&id).unwrap().not_before = Some(2_000);
+        assert!(matches!(ok(&g, 1_500), Err(GateError::GrantWindow(_))));
+        assert!(matches!(ok(&g, 2_500), Err(GateError::GrantWindow(_))));
+    }
+    #[test]
+    fn expiry_cannot_widen_what_the_grant_allows() {
+        let (mut g, c, i) = fixture();
+        let id = c.public_key().to_hex();
+        g.registry.identities.get_mut(&id).unwrap().expires_at = Some(2_000);
+        // Inside the window the usual intersection still applies.
+        assert!(matches!(
+            g.authorize_identity_at(&id, &i, "other-model", None, 1_000),
+            Err(GateError::ModelDenied(_))
+        ));
+    }
+    #[test]
+    fn registry_windows_parse_from_yaml_and_unknown_fields_still_fail() {
+        let ok: IdentityGrant =
+            serde_yaml::from_str("scopes: [s]\nnot_before: 10\nexpires_at: 20\n").unwrap();
+        assert_eq!((ok.not_before, ok.expires_at), (Some(10), Some(20)));
+        assert!(serde_yaml::from_str::<IdentityGrant>("expires: 20\n").is_err());
+        assert!(serde_yaml::from_str::<IdentityGrant>("expires_at: soon\n").is_err());
     }
 }
