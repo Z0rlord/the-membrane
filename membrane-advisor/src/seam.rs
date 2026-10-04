@@ -123,8 +123,24 @@ impl<T: Transport> Backend for HttpBackend<T> {
         if raw.len() > 1_000_000 {
             bail!("backend reply too large");
         }
-        Ok(serde_json::from_str(&raw)?)
+        unwrap_envelope(serde_json::from_str(&raw)?)
     }
+}
+
+/// Cloudflare's REST API wraps model output as `{"result": {...}, "success": true}`.
+/// Jev's direct API and a local server return the body unwrapped. Accept both; a wrapped
+/// reply with `success` not true is an error (fail closed).
+fn unwrap_envelope(v: serde_json::Value) -> Result<Response> {
+    let v = match v.get("result") {
+        Some(inner) if v.get("answers").is_none() => {
+            if v.get("success").and_then(|s| s.as_bool()) != Some(true) {
+                bail!("backend reported failure");
+            }
+            inner.clone()
+        }
+        _ => v,
+    };
+    Ok(serde_json::from_value(v)?)
 }
 
 /// Build an HTTP backend from config. Secrets come from the named env var, never the file.
@@ -278,6 +294,24 @@ mod tests {
         assert_eq!(n.backend_model.as_deref(), Some("jev-1.13.0"));
         let sent = b.transport.0.borrow()[0].clone();
         assert!(sent.contains("\"model\":\"jev-latest\"") && sent.contains("\"type\":\"noul\""));
+    }
+
+    #[test]
+    fn cloudflare_rest_envelope_is_unwrapped_and_failure_dropped() {
+        let ok = r#"{"result":{"model":"clef","answers":{"legit":{"type":"noul","noul":0.9}}},"success":true,"errors":[],"messages":[]}"#;
+        let bad = r#"{"result":{"answers":{"legit":{"type":"noul","noul":0.9}}},"success":false,"errors":[{"code":1}]}"#;
+        let mk = |body: &str| HttpBackend {
+            transport: Canned(RefCell::new(vec![]), body.into()),
+            url: "u".into(),
+            bearer: None,
+            model: "clef".into(),
+            name: "clef-workers-ai",
+        };
+        assert_eq!(
+            advise(&mk(ok), &view()).unwrap().triage,
+            Triage::LikelyMisconfiguration
+        );
+        assert!(advise(&mk(bad), &view()).is_none());
     }
 
     #[test]
