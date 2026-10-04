@@ -111,3 +111,28 @@ tampered caller binding, wrong body/route/audience, stale/future/unbound proof,
 replay, unknown/revoked identity, permission intersection, live registry edits and
 broken/missing registry, plus HTTP handler audit attribution and advisor grouping.
 The live GitHub connector test stays ignored unless explicitly enabled.
+
+## Re-issuing an IAC
+
+An IAC is operator-signed and short-lived, so it expires or stops matching the
+registry. Re-issue is an operator command, never an automatic one:
+
+```
+membrane iac reissue --previous old-iac.json --ttl-secs 3600 --out new-iac.json
+```
+
+- The previous IAC must verify against the operator key (`NOSTR_NSEC`). An unsigned,
+  tampered or foreign credential is refused, even if it has already expired.
+- Scope, caller binding, models, tools, channels, export restrictions and context
+  bound are copied unchanged. Only `valid_until` and `parent_cp_hash` (the current
+  chain head) change.
+- Widening is explicit and narrow: `--add-model`, `--add-tool`, `--add-channel`, one
+  exact identifier each. Wildcards, spaces and path tricks are refused. Forbidden
+  exports cannot be removed.
+- The lifetime is capped at 7 days. `--out` must differ from `--previous`.
+- The command prints every difference, publishes an authorization event that
+  records `supersedes_iac_hash`, and writes the new file. The gate reads its IAC at
+  start, so restart it with the new file.
+- Limit: the old credential is not revoked. It stays valid until its own
+  `valid_until`. To cut access off sooner, revoke the identity grant in the
+  registry.
