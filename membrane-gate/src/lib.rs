@@ -359,6 +359,7 @@ pub fn context_root_hex(chunks: &[Vec<u8>]) -> Result<String, GateError> {
         .ok_or_else(|| GateError::Registry("empty context".into()))
 }
 
+pub mod alarm;
 pub mod audit;
 pub mod demo;
 pub mod github;
