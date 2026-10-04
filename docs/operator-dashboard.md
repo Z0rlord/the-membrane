@@ -38,6 +38,12 @@ cargo run -p membrane-dashboard -- --listen 127.0.0.1:8791 --audit-url http://12
   or unknown when telemetry cannot be verified. It is not a claim that every scope
   is authorized. Polling every 10 seconds while visible; offline/stale responses clear
   cached status and metrics. Checkpoints can become stale between polls.
+  The card shows two separate things: the gate's own uptime and heartbeat, and the
+  router checkpoint age. The heartbeat is stamped every 5 seconds inside the gate
+  process; after three missed intervals (15 seconds) status turns degraded. It is
+  not published to the bus, because a liveness event on the checkpoint chain would
+  move the chain head that IACs anchor to, and it never masks a stale router. It
+  proves the gate runtime is scheduling work, not that any request would be allowed.
 - **Loaded policy**: the running registry's channels, model/repository allowlists,
   forbidden exports and checkpoint freshness threshold, without the model API URL.
   Per-request signed IAC constraints still apply and are not editable here.
