@@ -16,6 +16,8 @@
 //!   channels live in the signed IAC, which a text patch cannot change; those get
 //!   advice, not a diff.
 
+pub mod seam;
+
 use anyhow::{anyhow, bail, Result};
 use membrane_gate::audit::{Decision, Snapshot};
 use membrane_gate::ChannelRegistry;
@@ -62,6 +64,47 @@ pub struct Report {
     pub recommendations: Vec<Recommendation>,
     /// Unified diff against the registry file, empty when no registry change applies.
     pub patch: String,
+    /// Optional model triage notes (see [`seam`]). Advisory; empty unless a backend ran.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<seam::Note>,
+}
+
+/// Ask `backend` about each rule's denial group and attach validated notes. Notes never
+/// change `recommendations` or `patch`; a failed or invalid answer is simply absent.
+pub fn annotate<B: seam::Backend>(r: &mut Report, backend: &B) {
+    let mut by_rule: BTreeMap<
+        &str,
+        (
+            usize,
+            std::collections::BTreeSet<&str>,
+            std::collections::BTreeSet<&str>,
+        ),
+    > = BTreeMap::new();
+    for rec in &r.recommendations {
+        let e = by_rule.entry(rec.rule.as_str()).or_default();
+        e.0 += rec.denials;
+        if let Some(s) = rec.subject.as_deref() {
+            e.1.insert(s);
+        }
+        if let Some(i) = rec.authenticated_identity.as_deref() {
+            e.2.insert(i);
+        }
+    }
+    let notes: Vec<seam::Note> = by_rule
+        .into_iter()
+        .filter_map(|(rule, (n, subj, ids))| {
+            seam::advise(
+                backend,
+                &seam::GroupView {
+                    rule: rule.to_string(),
+                    denials: n,
+                    distinct_subjects: subj.len(),
+                    identified_callers: ids.len(),
+                },
+            )
+        })
+        .collect();
+    r.notes = notes;
 }
 
 /// A subject may enter a patch only if it is exactly one plain allowlist entry.
@@ -366,6 +409,7 @@ pub fn analyze(
         denied: snapshot.denied,
         recommendations: recs,
         patch,
+        notes: Vec::new(),
     })
 }
 
@@ -389,6 +433,22 @@ pub fn render_text(r: &Report) -> String {
             rec.last_sequence,
             rec.summary
         ));
+    }
+    if !r.notes.is_empty() {
+        s.push_str("\nModel triage (advisory; a suggestion to read, never a decision):\n");
+        for n in &r.notes {
+            s.push_str(&format!(
+                "  rule={} triage={:?} p_legitimate={:.2} via {}{}\n",
+                n.rule,
+                n.triage,
+                n.p_legitimate,
+                n.backend,
+                n.backend_model
+                    .as_deref()
+                    .map(|m| format!(" ({m})"))
+                    .unwrap_or_default()
+            ));
+        }
     }
     if !r.patch.is_empty() {
         s.push_str("\nProposed registry patch (review, then apply and merge through your normal code channel):\n\n");

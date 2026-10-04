@@ -244,3 +244,33 @@ fn authenticated_callers_group_separately_and_never_widen_global_policy() {
         .iter()
         .all(|x| x.summary.contains(".revoked to true") && x.authenticated_identity.is_some()));
 }
+
+#[test]
+fn notes_never_change_recommendations_or_patch() {
+    use crate::seam::*;
+    struct Fixed;
+    impl Backend for Fixed {
+        fn id(&self) -> String {
+            "fixed:m".into()
+        }
+        fn ask(&self, _: &Request) -> anyhow::Result<Response> {
+            Ok(serde_json::from_str(
+                r#"{"answers":{"legit":{"type":"noul","noul":0.95}}}"#,
+            )?)
+        }
+    }
+    let s = snap(vec![
+        deny(1, "model_not_allowed", Some("acme-model")),
+        deny(2, "model_not_allowed", Some("acme-model")),
+    ]);
+    let mut r = crate::analyze(&s, REGISTRY, "r.yaml", 1).unwrap();
+    let (recs, patch) = (
+        serde_json::to_string(&r.recommendations).unwrap(),
+        r.patch.clone(),
+    );
+    crate::annotate(&mut r, &Fixed);
+    assert!(!r.notes.is_empty());
+    assert_eq!(serde_json::to_string(&r.recommendations).unwrap(), recs);
+    assert_eq!(r.patch, patch);
+    assert!(crate::render_text(&r).contains("Model triage"));
+}
