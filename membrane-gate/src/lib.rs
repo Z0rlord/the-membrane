@@ -17,6 +17,8 @@ pub enum GateError {
     IdentityAuthentication(String),
     #[error("identity grant denied: {0}")]
     IdentityGrant(String),
+    #[error("identity grant outside its time window: {0}")]
+    GrantWindow(String),
     #[error("no valid IAC: {0}")]
     NoValidIac(String),
     #[error("invalid IAC signature: {0}")]
