@@ -365,6 +365,7 @@ pub mod demo;
 pub mod github;
 pub mod identity;
 pub mod proxy;
+pub mod readings;
 pub mod server;
 pub mod watchdog;
 
