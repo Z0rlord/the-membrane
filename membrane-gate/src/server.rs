@@ -794,6 +794,21 @@ mod tool_invoke_policy_tests {
     }
 
     #[tokio::test]
+    async fn stale_gate_heartbeat_shows_degraded_and_never_live() {
+        let (state, _) = test_state(vec![], vec![]);
+        let view = crate::audit::snapshot(&state).await;
+        let live = view.liveness.expect("liveness reported");
+        assert!(live.heartbeat_ok);
+        assert_ne!(view.status, "degraded");
+        state.audit.liveness().beat(now_secs() - 600);
+        let view = crate::audit::snapshot(&state).await;
+        assert_eq!(view.status, "degraded");
+        assert!(!view.liveness.unwrap().heartbeat_ok);
+        // Liveness is observational: authorization state is untouched.
+        assert!(!view.router_stale && !view.degraded);
+    }
+
+    #[tokio::test]
     async fn blocks_merge_before_github_http() {
         let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let headers = HeaderMap::new();

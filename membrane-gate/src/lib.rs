@@ -366,6 +366,7 @@ pub mod audit;
 pub mod demo;
 pub mod github;
 pub mod identity;
+pub mod liveness;
 pub mod proxy;
 pub mod readings;
 pub mod server;
