@@ -105,3 +105,22 @@ rejected or unreachable is recorded as `failed`, never `delivered`, and with no 
 status is `not_configured`. Alarms and their delivery status appear in the loopback `/audit`
 snapshot under `alarms`. The audit log holds the last 500 decisions, so a streak older than that is
 measured from its oldest retained decision.
+
+## Readings
+
+The `/audit` snapshot includes `readings`, computed by the gate from its retained decisions, and the
+dashboard shows them under the decision log. Readings are for spotting drift in the allow log, not
+only the denials:
+
+- Denials by rule clause.
+- Callers: allows and denials per key-verified identity, and each identity's allow volume in the
+  last hour compared with its hourly rate over the retained time before that (`volume_ratio`, shown
+  only once the retained baseline covers at least one hour).
+- Action types with allow and deny counts, and action types seen in the last hour that are absent
+  from the earlier retained decisions.
+- Decisions with no verified caller identity, counted separately.
+
+Readings describe the retained decisions only: the last 500 in this process. The snapshot reports
+how many older decisions are no longer retained (`coverage.dropped`) and the time span covered, and
+the dashboard shows both. They are observational and never feed an authorization decision. Grant
+and policy changes are not part of the decision log, so they are not in these readings.
