@@ -53,6 +53,27 @@ fallback, including when a default IAC is configured. Old unbound IACs remain
 parseable for historical/demo data but production requests deny until reissued.
 The demonstration remains simulation-only and does not exercise caller auth.
 
+### Time-boxed grants
+
+An identity grant can carry an optional window, in Unix seconds:
+
+```yaml
+identities:
+  <64-hex caller key>:
+    scopes: [pilot-scope]
+    not_before: 1791100000   # usable from this time
+    expires_at: 1791186400   # stops working at this time (exclusive)
+```
+
+Both fields are optional; a grant with neither is a standing grant, as before. Outside the window
+the request is denied with rule `grant_window`, which the audit log, readings and advisor report
+separately from `identity_grant`. A contradictory window (`expires_at` not after `not_before`)
+denies at every time, and so does an unreadable system clock. The window is read on every
+authorization, so it applies with registry hot reload and needs no restart. A window only narrows:
+it never adds a scope, channel, model, tool or repository, and the intersection with the signed IAC
+and global policy still applies. An expired grant is not renewed automatically; renewal is an
+operator edit of the registry.
+
 Set `identities.<key>.revoked: true` or remove the key. The next authorization sees
 that change without restarting. Revocation is not retroactive: an already-dispatched
 connector call cannot be recalled, and a file edit racing the final check can win
