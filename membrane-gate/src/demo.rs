@@ -1222,6 +1222,7 @@ fn demo_err(err: GateError) -> Response {
     let status = match &err {
         GateError::IdentityAuthentication(_)
         | GateError::IdentityGrant(_)
+        | GateError::GrantWindow(_)
         | GateError::NoValidIac(_)
         | GateError::InvalidIacSignature(_)
         | GateError::ChannelDenied(_)
