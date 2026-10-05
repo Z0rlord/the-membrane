@@ -203,6 +203,8 @@ mod tests {
                 session_nonce: nonce,
                 parent_cp_hash: GENESIS_CP_HASH.into(),
                 iac_hash: "dd".repeat(32),
+                scope_id: None,
+                tool_id: None,
             }),
         )
     }
