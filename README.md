@@ -4,7 +4,7 @@ The Membrane is a fail-closed authorization gateway for AI agents with productio
 
 The Membrane began with the concept of a firewall between human cognition and AI silicon, developed in the [cognitive boundary research](docs/whitepaper.md); the agent gate applies that boundary to model and tool calls.
 
-**Public landing:** [membrane.dojopop.live](https://membrane.dojopop.live) · source in [`site/`](site/)
+**Public landing:** [membrane.dojopop.live](https://membrane.dojopop.live) · source in [membrane-hq/membrane-site](https://github.com/membrane-hq/membrane-site)
 
 ## Run it under your own control
 
@@ -27,7 +27,7 @@ The repo also includes a demo that approximates the operator workflow, including
 | [docs/product.md](docs/product.md) | Product overview and deployment |
 | [docs/siem-export.md](docs/siem-export.md) | Vendor-neutral SIEM/SOC export (JSON Lines and OCSF-inspired JSON) |
 | [docs/github-connector.md](docs/github-connector.md) | GitHub connector configuration |
-| [site/](site/) | Public landing page ([membrane.dojopop.live](https://membrane.dojopop.live)) |
+| [membrane-hq/membrane-site](https://github.com/membrane-hq/membrane-site) | Public site repo ([membrane.dojopop.live](https://membrane.dojopop.live)) |
 | [docs/demo.md](docs/demo.md) | Local product dashboard - one-command demo |
 | [docs/whitepaper.md](docs/whitepaper.md) | Full specification (v0.9.14) - architecture & research |
 | [docs/appendix-open-research.md](docs/appendix-open-research.md) | Open-source BCI stacks, security research, Phase 0 path |
@@ -67,7 +67,7 @@ The asymmetry this buys: enforcement that only detects after publication is alwa
 
 **Primary path for anyone cloning the repo** - no secrets, no relay, no paid APIs.
 
-Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** - source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
+Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** - source in [membrane-hq/membrane-site](https://github.com/membrane-hq/membrane-site) (plain static files; preview with `python3 -m http.server 8080`).
 
 Open the isolated public sandbox at
 **[membrane-demo.dojopop.live](https://membrane-demo.dojopop.live)**, or run
