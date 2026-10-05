@@ -267,6 +267,8 @@ mod tests {
                 session_nonce: 7,
                 parent_cp_hash: "ab".repeat(32),
                 iac_hash: "ef".repeat(32),
+                scope_id: None,
+                tool_id: None,
             }),
         );
         let mapped = SiemEvent::from_membrane_event(&event, Some("bus-1"));
