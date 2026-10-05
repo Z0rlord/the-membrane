@@ -63,6 +63,12 @@ pub struct RouterSessionPayload {
     pub session_nonce: u64,
     pub parent_cp_hash: String,
     pub iac_hash: String,
+    /// Scope the call ran under. Covered by the event hash and signature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope_id: Option<String>,
+    /// Tool the call invoked, when the gate routed a tool call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,6 +152,8 @@ mod tests {
                 session_nonce: 1,
                 parent_cp_hash: "cafe".into(),
                 iac_hash: "babe".into(),
+                scope_id: None,
+                tool_id: None,
             }),
         );
         let json = serde_json::to_string(&event).unwrap();

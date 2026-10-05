@@ -103,8 +103,20 @@ pub struct TimelineEntry {
     pub detail: Value,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ReceiptOutcome {
+    #[default]
+    Allowed,
+    Blocked,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceReceipt {
+    #[serde(default)]
+    pub outcome: ReceiptOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     pub action_id: String,
     pub timestamp: i64,
     pub model: String,
@@ -628,10 +640,12 @@ async fn api_evidence_export(Extension(state): Extension<DemoServerState>) -> im
 }
 
 async fn api_evidence_verify(
-    Extension(_state): Extension<DemoServerState>,
+    Extension(state): Extension<DemoServerState>,
     Json(pack): Json<EvidencePack>,
 ) -> impl IntoResponse {
-    Json(verify_evidence_pack(&pack))
+    // Pin to this server's own key: a pack signed by anyone else fails.
+    let issuer = state.gate.publisher_pubkey_hex();
+    Json(verify_evidence_pack_pinned(&pack, Some(&issuer)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -772,47 +786,20 @@ async fn run_tool_action(
     };
 
     let Some(iac) = iac else {
-        let mut runtime = state.runtime.lock().await;
-        let id = runtime.alloc_id();
-        let agent_id = runtime.agent_id.clone();
-        let reason = "no live authorization; session idle or severed".to_string();
-        runtime.push(TimelineEntry {
-            id: id.clone(),
-            kind: TimelineKind::Blocked,
-            timestamp: now,
-            agent_id,
-            scope_id: None,
-            model: Some(model.clone()),
-            tool: Some(tool.clone()),
-            reason: Some(reason.clone()),
-            cp_hash: None,
-            parent_cp_hash: None,
-            iac_hash: None,
-            bus_event_id: None,
-            simulation: true,
-            detail: json!({
-                "blocked": true,
-                "reason": reason,
-                "note": "Fail-closed: no signed authorization is live."
-            }),
-        });
-        return Ok((
-            StatusCode::FORBIDDEN,
-            json!({
-                "ok": false,
-                "status": "blocked",
-                "action_id": id,
-                "model": model,
-                "tool": tool,
-                "reason": reason,
-                "simulation": true,
-            }),
-        ));
+        return Ok(record_blocked(
+            state,
+            None,
+            &model,
+            &tool,
+            now,
+            "no live authorization; session idle or severed".to_string(),
+        )
+        .await);
     };
 
-    // Record blocked outcomes on the timeline without extending the CP chain.
+    // Blocked outcomes get a signed receipt anchored to the chain head; the head itself does not advance.
     if let Err(err) = state.gate.validate_iac(Some(&iac), now) {
-        return Ok(record_blocked(state, &iac, &model, &tool, now, err.to_string()).await);
+        return Ok(record_blocked(state, Some(&iac), &model, &tool, now, err.to_string()).await);
     }
 
     {
@@ -821,17 +808,17 @@ async fn run_tool_action(
             .gate
             .check_session_liveness(&chain, &iac.scope_id, now)
         {
-            return Ok(record_blocked(state, &iac, &model, &tool, now, err.to_string()).await);
+            return Ok(record_blocked(state, Some(&iac), &model, &tool, now, err.to_string()).await);
         }
     }
 
     if !iac.model_allowed(&model) || !state.gate.registry().model_allowlist.contains(&model) {
         let err = GateError::ModelDenied(model.clone());
-        return Ok(record_blocked(state, &iac, &model, &tool, now, err.to_string()).await);
+        return Ok(record_blocked(state, Some(&iac), &model, &tool, now, err.to_string()).await);
     }
 
     if let Err(err) = state.gate.authorize_tool(&iac, &tool, now) {
-        return Ok(record_blocked(state, &iac, &model, &tool, now, err.to_string()).await);
+        return Ok(record_blocked(state, Some(&iac), &model, &tool, now, err.to_string()).await);
     }
 
     let sim_payload = simulate_tool(&tool, &req.ticket, &req.channel, &req.body);
@@ -866,6 +853,8 @@ async fn run_tool_action(
                 context_chunks,
                 session_nonce,
                 parent_cp_hash: parent_cp_hash.clone(),
+                scope_id: Some(iac.scope_id.clone()),
+                tool_id: Some(tool.clone()),
             },
             now,
             prev_event_id.as_deref(),
@@ -906,6 +895,8 @@ async fn run_tool_action(
         }),
     };
     runtime.receipts.push(EvidenceReceipt {
+        outcome: ReceiptOutcome::Allowed,
+        reason: None,
         action_id: id.clone(),
         timestamp: now,
         model: model.clone(),
@@ -943,35 +934,80 @@ async fn run_tool_action(
 
 async fn record_blocked(
     state: &DemoServerState,
-    iac: &IntentAuthorizationCredential,
+    iac: Option<&IntentAuthorizationCredential>,
     model: &str,
     tool: &str,
     now: i64,
     reason: String,
 ) -> (StatusCode, Value) {
-    let iac_hash = iac.hash_hex().ok();
+    let iac_hash = iac.and_then(|i| i.hash_hex().ok());
+    let scope_id = iac.map(|i| i.scope_id.clone());
+
+    // Signed membrane.action.blocked event. prev_cp_hash is the current chain
+    // head, so the denial is anchored in the chain without extending it.
+    let (head, prev_event_id) = {
+        let chain = state.session_chain.lock().await;
+        (chain.last_cp_hash.clone(), chain.last_event_id.clone())
+    };
+    let published = publish_blocked_event(
+        state,
+        scope_id.as_deref(),
+        model,
+        tool,
+        iac_hash.as_deref(),
+        &reason,
+        now,
+        &head,
+        prev_event_id.as_deref(),
+    )
+    .await;
+
     let mut runtime = state.runtime.lock().await;
     let id = runtime.alloc_id();
     let agent_id = runtime.agent_id.clone();
+    let (cp_hash, bus_event_id) = match &published {
+        Ok((event, bus_id)) => (cp_hash_hex(event).ok(), Some(bus_id.clone())),
+        Err(_) => (None, None),
+    };
+    if let (Ok((event, bus_id)), Some(cp)) = (&published, &cp_hash) {
+        runtime.receipts.push(EvidenceReceipt {
+            outcome: ReceiptOutcome::Blocked,
+            reason: Some(reason.clone()),
+            action_id: id.clone(),
+            timestamp: now,
+            model: model.to_string(),
+            tool: tool.to_string(),
+            scope_id: scope_id.clone().unwrap_or_default(),
+            iac_hash: iac_hash.clone().unwrap_or_default(),
+            cp_hash: cp.clone(),
+            parent_cp_hash: head.clone(),
+            bus_event_id: Some(bus_id.clone()),
+            event: event.clone(),
+        });
+        if runtime.receipts.len() > MAX_RECEIPTS {
+            let overflow = runtime.receipts.len() - MAX_RECEIPTS;
+            runtime.receipts.drain(0..overflow);
+        }
+    }
     runtime.push(TimelineEntry {
         id: id.clone(),
         kind: TimelineKind::Blocked,
         timestamp: now,
         agent_id,
-        scope_id: Some(iac.scope_id.clone()),
+        scope_id,
         model: Some(model.to_string()),
         tool: Some(tool.to_string()),
         reason: Some(reason.clone()),
-        cp_hash: None,
-        parent_cp_hash: None,
+        cp_hash,
+        parent_cp_hash: Some(head),
         iac_hash,
-        bus_event_id: None,
+        bus_event_id,
         simulation: true,
         detail: json!({
             "blocked": true,
             "reason": reason,
             "issuer_pubkey": state.gate.publisher_pubkey_hex(),
-            "note": "Action refused fail-closed; receipt chain not extended."
+            "note": "Action refused fail-closed; signed block receipt anchored to the chain head, head not advanced."
         }),
     });
     (
@@ -983,9 +1019,37 @@ async fn record_blocked(
             "model": model,
             "tool": tool,
             "reason": reason,
+            "receipt": published.is_ok(),
             "simulation": true,
         }),
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn publish_blocked_event(
+    state: &DemoServerState,
+    scope_id: Option<&str>,
+    model: &str,
+    tool: &str,
+    iac_hash: Option<&str>,
+    reason: &str,
+    now: i64,
+    head: &str,
+    prev_event_id: Option<&str>,
+) -> Result<(MembraneEvent, String), GateError> {
+    state
+        .gate
+        .publish_action_blocked_event(
+            scope_id,
+            model,
+            tool,
+            iac_hash,
+            reason,
+            now,
+            head,
+            prev_event_id,
+        )
+        .await
 }
 
 async fn sever_session(state: &DemoServerState) -> Result<Value, GateError> {
@@ -1111,53 +1175,176 @@ async fn build_evidence_pack(state: &DemoServerState) -> EvidencePack {
     }
 }
 
+/// Verify an evidence pack, trusting the issuer key stated inside it.
+/// Use `verify_evidence_pack_pinned` when you know the expected issuer: a pack
+/// that names its own key proves integrity, not origin.
 pub fn verify_evidence_pack(pack: &EvidencePack) -> ChainVerifyResult {
+    verify_evidence_pack_pinned(pack, None)
+}
+
+/// Verify hashes, signatures, wrapper-field consistency and chain linkage.
+/// With `expected_issuer`, receipts must be signed by exactly that key.
+pub fn verify_evidence_pack_pinned(
+    pack: &EvidencePack,
+    expected_issuer: Option<&str>,
+) -> ChainVerifyResult {
+    use membrane_core::event::{EventType, MembranePayload};
+    use membrane_core::nostr_bus::verify_membrane_event_signature;
+
     let mut errors = Vec::new();
-    let mut expected_parent: Option<String> = None;
+    let mut head: Option<String> = None;
     let mut checked = 0usize;
+
+    if let Some(expected) = expected_issuer {
+        if pack.issuer_pubkey != expected {
+            errors.push(format!(
+                "issuer_pubkey {} != expected issuer {}",
+                pack.issuer_pubkey, expected
+            ));
+        }
+    }
+    let signer = expected_issuer.unwrap_or(&pack.issuer_pubkey);
 
     for receipt in &pack.receipts {
         checked += 1;
-        match cp_hash_hex(&receipt.event) {
-            Ok(computed) => {
-                if computed != receipt.cp_hash {
-                    errors.push(format!(
-                        "{}: cp_hash mismatch (stored {} != recomputed {})",
-                        receipt.action_id, receipt.cp_hash, computed
-                    ));
-                }
-            }
-            Err(e) => errors.push(format!("{}: digest error: {e}", receipt.action_id)),
+        let id = &receipt.action_id;
+        let event = &receipt.event;
+
+        match cp_hash_hex(event) {
+            Ok(computed) if computed == receipt.cp_hash => {}
+            Ok(computed) => errors.push(format!(
+                "{id}: cp_hash mismatch (stored {} != recomputed {computed})",
+                receipt.cp_hash
+            )),
+            Err(e) => errors.push(format!("{id}: digest error: {e}")),
         }
 
-        if receipt.event.prev_cp_hash != receipt.parent_cp_hash {
+        if let Err(e) = verify_membrane_event_signature(event, signer) {
+            errors.push(format!("{id}: bad signature: {e}"));
+        }
+
+        if event.prev_cp_hash != receipt.parent_cp_hash {
             errors.push(format!(
-                "{}: event.prev_cp_hash does not match parent_cp_hash",
-                receipt.action_id
+                "{id}: event.prev_cp_hash does not match parent_cp_hash"
             ));
         }
-
-        if let Some(prev) = &expected_parent {
+        if event.timestamp != receipt.timestamp {
+            errors.push(format!("{id}: timestamp does not match signed event"));
+        }
+        if let Some(prev) = &head {
             if &receipt.parent_cp_hash != prev {
                 errors.push(format!(
-                    "{}: parent_cp_hash {} does not continue prior head {}",
-                    receipt.action_id, receipt.parent_cp_hash, prev
+                    "{id}: parent_cp_hash {} does not continue prior head {prev}",
+                    receipt.parent_cp_hash
                 ));
             }
         }
 
-        expected_parent = Some(receipt.cp_hash.clone());
+        match receipt.outcome {
+            ReceiptOutcome::Allowed => {
+                if event.event_type != EventType::CpRouter {
+                    errors.push(format!("{id}: allowed receipt is not a router event"));
+                }
+                match &event.payload {
+                    MembranePayload::Router(p) => {
+                        let checks = [
+                            ("model", p.model_id == receipt.model),
+                            ("iac_hash", p.iac_hash == receipt.iac_hash),
+                            ("parent_cp_hash", p.parent_cp_hash == receipt.parent_cp_hash),
+                            (
+                                "scope_id",
+                                p.scope_id.as_deref() == Some(receipt.scope_id.as_str()),
+                            ),
+                            (
+                                "tool",
+                                p.tool_id.as_deref() == Some(receipt.tool.as_str()),
+                            ),
+                        ];
+                        for (name, ok) in checks {
+                            if !ok {
+                                errors.push(format!(
+                                    "{id}: {name} does not match the signed event"
+                                ));
+                            }
+                        }
+                    }
+                    _ => errors.push(format!("{id}: allowed receipt has no router payload")),
+                }
+                head = Some(receipt.cp_hash.clone());
+            }
+            ReceiptOutcome::Blocked => {
+                if event.event_type != EventType::ActionBlocked {
+                    errors.push(format!("{id}: blocked receipt is not a block event"));
+                }
+                let field = |k: &str| match &event.payload {
+                    MembranePayload::Generic(v) => {
+                        v.get(k).and_then(|x| x.as_str()).map(str::to_string)
+                    }
+                    _ => None,
+                };
+                let checks = [
+                    ("model", field("model_id").as_deref() == Some(receipt.model.as_str())),
+                    ("tool", field("tool_id").as_deref() == Some(receipt.tool.as_str())),
+                    (
+                        "scope_id",
+                        field("scope_id").unwrap_or_default() == receipt.scope_id,
+                    ),
+                    (
+                        "iac_hash",
+                        field("iac_hash").unwrap_or_default() == receipt.iac_hash,
+                    ),
+                    (
+                        "reason",
+                        receipt.reason.is_some() && field("reason") == receipt.reason,
+                    ),
+                ];
+                for (name, ok) in checks {
+                    if !ok {
+                        errors.push(format!("{id}: {name} does not match the signed event"));
+                    }
+                }
+                // A block anchors to the head but never advances it.
+            }
+        }
     }
 
-    if let Some(last) = pack.receipts.last() {
-        let reset_after = pack
-            .timeline
-            .iter()
-            .any(|t| matches!(t.kind, TimelineKind::Reset) && t.timestamp >= last.timestamp);
-        if !reset_after && pack.chain_head != last.cp_hash {
+    // The timeline is unsigned; require it to agree with the signed receipts.
+    if pack.receipts.len() < MAX_RECEIPTS {
+        for t in &pack.timeline {
+            if matches!(t.kind, TimelineKind::Allowed | TimelineKind::Blocked) {
+                if let Some(cp) = &t.cp_hash {
+                    let matched = pack.receipts.iter().any(|r| {
+                        &r.cp_hash == cp
+                            && r.action_id == t.id
+                            && r.tool.as_str() == t.tool.as_deref().unwrap_or("")
+                    });
+                    if !matched {
+                        errors.push(format!(
+                            "timeline {} has no matching signed receipt",
+                            t.id
+                        ));
+                    }
+                } else if matches!(t.kind, TimelineKind::Allowed) {
+                    errors.push(format!("timeline {} allowed without receipt hash", t.id));
+                }
+            }
+        }
+    }
+
+    if let Some(last) = &head {
+        let reset_after = pack.timeline.iter().any(|t| {
+            matches!(t.kind, TimelineKind::Reset)
+                && pack
+                    .receipts
+                    .iter()
+                    .rev()
+                    .find(|r| &r.cp_hash == last)
+                    .is_some_and(|r| t.timestamp >= r.timestamp)
+        });
+        if !reset_after && &pack.chain_head != last {
             errors.push(format!(
-                "chain_head {} != last receipt {}",
-                pack.chain_head, last.cp_hash
+                "chain_head {} != last allowed receipt {last}",
+                pack.chain_head
             ));
         }
     }
@@ -1341,7 +1528,17 @@ mod tests {
         let pack = build_evidence_pack(&state).await;
         let verify = verify_evidence_pack(&pack);
         assert!(verify.ok, "errors: {:?}", verify.errors);
-        assert_eq!(verify.receipts_checked, 1);
+        // 1 allowed + 3 blocked (tool, model, severed) all carry signed receipts.
+        assert_eq!(verify.receipts_checked, 4);
+        assert_eq!(
+            pack.receipts
+                .iter()
+                .filter(|r| r.outcome == ReceiptOutcome::Blocked)
+                .count(),
+            3
+        );
+        let pinned = verify_evidence_pack_pinned(&pack, Some(&state.gate.publisher_pubkey_hex()));
+        assert!(pinned.ok, "errors: {:?}", pinned.errors);
 
         let runtime = state.runtime.lock().await;
         let siem_events: Vec<_> = runtime.timeline.iter().map(timeline_to_siem).collect();
@@ -1388,5 +1585,68 @@ mod tests {
         let verify = verify_evidence_pack(&pack);
         assert!(!verify.ok);
         assert!(!verify.errors.is_empty());
+    }
+
+    async fn pack_with_allow_and_block() -> (DemoServerState, EvidencePack) {
+        let state = test_state();
+        issue_authorization(&state, 900).await.unwrap();
+        for tool in ["jira.comment", DEMO_BLOCKED_TOOL] {
+            run_tool_action(
+                &state,
+                ActionRequest {
+                    tool: tool.into(),
+                    model: None,
+                    ticket: None,
+                    channel: None,
+                    body: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let pack = build_evidence_pack(&state).await;
+        assert!(verify_evidence_pack(&pack).ok);
+        (state, pack)
+    }
+
+    #[tokio::test]
+    async fn tampered_wrapper_fields_fail_verify() {
+        let (_s, base) = pack_with_allow_and_block().await;
+        type Mutate = fn(&mut EvidencePack);
+        let mutations: [(&str, Mutate); 6] = [
+            ("iac_hash", |p| p.receipts[0].iac_hash = "ab".repeat(32)),
+            ("tool", |p| p.receipts[0].tool = "slack.post".into()),
+            ("model", |p| p.receipts[0].model = "other".into()),
+            ("scope_id", |p| p.receipts[0].scope_id = "other".into()),
+            ("blocked reason", |p| {
+                p.receipts[1].reason = Some("fine actually".into())
+            }),
+            ("timeline", |p| p.timeline[1].cp_hash = Some("cd".repeat(32))),
+        ];
+        for (name, mutate) in mutations {
+            let mut pack = base.clone();
+            mutate(&mut pack);
+            assert!(!verify_evidence_pack(&pack).ok, "{name} tamper not detected");
+        }
+    }
+
+    #[tokio::test]
+    async fn forged_signature_and_foreign_issuer_fail_verify() {
+        let (state, base) = pack_with_allow_and_block().await;
+        // Strip the signature.
+        let mut pack = base.clone();
+        pack.receipts[0].event.signature = None;
+        assert!(!verify_evidence_pack(&pack).ok);
+        // Edit a signed field and fix up the hash: signature no longer verifies.
+        let mut pack = base.clone();
+        pack.receipts[1].event.timestamp += 1;
+        pack.receipts[1].timestamp += 1;
+        pack.receipts[1].cp_hash = cp_hash_hex(&pack.receipts[1].event).unwrap();
+        let v = verify_evidence_pack(&pack);
+        assert!(v.errors.iter().any(|e| e.contains("bad signature")), "{:?}", v.errors);
+        // A pack that names a different issuer fails when pinned.
+        let mut pack = base.clone();
+        pack.issuer_pubkey = "11".repeat(32);
+        assert!(!verify_evidence_pack_pinned(&pack, Some(&state.gate.publisher_pubkey_hex())).ok);
     }
 }

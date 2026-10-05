@@ -14,6 +14,28 @@ use tracing::{info, warn};
 pub const KIND_MEMBRANE: u16 = 31990;
 pub const KIND_ALERT: u16 = 31991;
 
+/// Verify the Schnorr signature on a MembraneEvent against `expected_pubkey_hex`.
+/// The event's own `subject_pubkey` must equal the expected key.
+pub fn verify_membrane_event_signature(
+    event: &MembraneEvent,
+    expected_pubkey_hex: &str,
+) -> Result<()> {
+    use nostr::secp256k1::{schnorr::Signature, XOnlyPublicKey};
+    if event.subject_pubkey != expected_pubkey_hex {
+        bail!("subject_pubkey does not match expected signer");
+    }
+    let sig_hex = event.signature.as_deref().context("event is unsigned")?;
+    let sig_bytes = hex::decode(sig_hex).context("signature is not hex")?;
+    let sig = Signature::from_slice(&sig_bytes).context("malformed signature")?;
+    let pk_bytes = hex::decode(expected_pubkey_hex).context("pubkey is not hex")?;
+    let pk = XOnlyPublicKey::from_slice(&pk_bytes).context("malformed pubkey")?;
+    let digest: [u8; 32] = Sha256::digest(&event.canonical_bytes()?).into();
+    let message = Message::from_digest(digest);
+    nostr::secp256k1::Secp256k1::verification_only()
+        .verify_schnorr(&sig, &message, &pk)
+        .map_err(|_| anyhow::anyhow!("signature does not verify"))
+}
+
 pub fn membrane_kind_for(event_type: EventType) -> u16 {
     match event_type {
         EventType::AlertDegraded | EventType::ActionBlocked => KIND_ALERT,
@@ -72,13 +94,14 @@ impl BusPublisher {
     }
 
     pub fn sign_membrane_event(&self, event: &mut MembraneEvent) -> Result<()> {
+        // Set the signer first so the signature covers subject_pubkey.
+        event.subject_pubkey = self.config.keys.public_key().to_hex();
         let signable = event.signable_view();
         let bytes = canonical_json_bytes(&signable).context("canonical event bytes")?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
         let message = Message::from_digest(digest);
         let sig = self.config.keys.sign_schnorr(&message);
         event.signature = Some(hex::encode(sig.serialize()));
-        event.subject_pubkey = self.config.keys.public_key().to_hex();
         Ok(())
     }
 
@@ -259,6 +282,8 @@ mod tests {
                 session_nonce: 1,
                 parent_cp_hash: "bb".repeat(32),
                 iac_hash: "cc".repeat(32),
+                scope_id: None,
+                tool_id: None,
             }),
         );
         publisher.sign_membrane_event(&mut event).unwrap();

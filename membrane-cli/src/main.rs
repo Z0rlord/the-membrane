@@ -1298,6 +1298,8 @@ async fn run_iac_smoke(relay: &str, nsec: Option<String>, registry_path: &PathBu
         context_chunks: vec![b"demo prompt chunk".to_vec()],
         session_nonce: 42,
         parent_cp_hash: "0".repeat(64),
+        scope_id: None,
+        tool_id: None,
     };
 
     println!("=== Step 1: open router without IAC (expect fail-closed) ===");
@@ -1324,6 +1326,8 @@ async fn run_iac_smoke(relay: &str, nsec: Option<String>, registry_path: &PathBu
         context_chunks: vec![b"second turn".to_vec()],
         session_nonce: 43,
         parent_cp_hash: outcome.cp_hash.clone(),
+        scope_id: None,
+        tool_id: None,
     };
     println!("\n=== Step 2b: chained router CP (parent = prior cp_hash) ===");
     let outcome2 = gate

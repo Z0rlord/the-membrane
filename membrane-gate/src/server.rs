@@ -298,6 +298,8 @@ async fn handle_chat(
             .collect::<Result<_, _>>()?,
         session_nonce,
         parent_cp_hash: parent_cp_hash.clone(),
+        scope_id: Some(iac.scope_id.clone()),
+        tool_id: None,
     };
 
     let outcome = state
@@ -407,6 +409,8 @@ async fn handle_tool_invoke(
                 context_chunks,
                 session_nonce,
                 parent_cp_hash: parent_cp_hash.clone(),
+                scope_id: Some(iac.scope_id.clone()),
+                tool_id: Some(req.tool.clone()),
             },
             now,
             prev_event_id.as_deref(),

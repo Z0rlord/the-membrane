@@ -63,6 +63,14 @@ Nothing new is built: provenance verification is operator policy evaluated when 
 
 The asymmetry this buys: enforcement that only detects after publication is always behind the leak. A fail-closed gate makes "unverified content never enters the pipeline" the default state rather than an audit finding.
 
+## Requirements
+
+- **Rust (stable) with Cargo.** Install with [rustup](https://rustup.rs): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`. Built and tested on stable Rust 1.99; older toolchains have not been verified.
+- A C toolchain and `git` for building dependencies (`build-essential` on Debian/Ubuntu).
+- Docker, only for the optional local Nostr relay in the operator full-stack path. The demo needs no Docker.
+
+First build takes about a minute. Check your setup with `cargo test --workspace`.
+
 ## Local demo dashboard
 
 **Primary path for anyone cloning the repo** - no secrets, no relay, no paid APIs.

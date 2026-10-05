@@ -181,6 +181,8 @@ mod tests {
                 session_nonce: nonce,
                 parent_cp_hash: "cc".repeat(32),
                 iac_hash: "dd".repeat(32),
+                scope_id: None,
+                tool_id: None,
             }),
         )
     }

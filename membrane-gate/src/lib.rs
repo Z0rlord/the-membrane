@@ -91,6 +91,9 @@ pub struct RouterSessionRequest {
     pub context_chunks: Vec<Vec<u8>>,
     pub session_nonce: u64,
     pub parent_cp_hash: String,
+    /// Recorded in the signed event so receipts bind scope and tool.
+    pub scope_id: Option<String>,
+    pub tool_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -267,6 +270,39 @@ impl Gate {
         Ok(id)
     }
 
+    /// Like `publish_action_blocked_detailed`, but returns the signed event so
+    /// callers can keep it as a receipt.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn publish_action_blocked_event(
+        &self,
+        scope_id: Option<&str>,
+        model_id: &str,
+        tool_id: &str,
+        iac_hash: Option<&str>,
+        reason: &str,
+        now: i64,
+        last_cp_hash: &str,
+        prev_event_id: Option<&str>,
+    ) -> Result<(MembraneEvent, String), GateError> {
+        let payload = MembranePayload::Generic(serde_json::json!({
+            "scope_id": scope_id,
+            "model_id": model_id,
+            "tool_id": tool_id,
+            "iac_hash": iac_hash,
+            "reason": reason,
+        }));
+        let mut event =
+            MembraneEvent::new(EventType::ActionBlocked, "", last_cp_hash, now, payload);
+        let id = self
+            .publisher
+            .publish(&mut event, prev_event_id)
+            .await
+            .map_err(GateError::Bus)?
+            .to_hex();
+        self.enqueue_siem(&event, Some(&id));
+        Ok((event, id))
+    }
+
     pub async fn open_router_session(
         &self,
         iac: Option<&IntentAuthorizationCredential>,
@@ -311,6 +347,8 @@ impl Gate {
                 session_nonce: req.session_nonce,
                 parent_cp_hash: req.parent_cp_hash,
                 iac_hash,
+                scope_id: req.scope_id,
+                tool_id: req.tool_id,
             }),
         );
 
@@ -373,7 +411,7 @@ pub mod server;
 pub mod watchdog;
 
 pub use demo::{
-    demo_registry, run_demo_dashboard, verify_evidence_pack, DemoRuntime, DemoServerState,
+    demo_registry, run_demo_dashboard, verify_evidence_pack, verify_evidence_pack_pinned, DemoRuntime, DemoServerState,
     EvidencePack, DEMO_ALLOWED_TOOLS, DEMO_BLOCKED_TOOL, DEMO_MODEL, DEMO_SWAP_MODEL,
     DEMO_TTL_SECS,
 };
