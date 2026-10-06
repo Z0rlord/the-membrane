@@ -864,7 +864,7 @@ async fn run_tool_action(
         )
         .await?;
 
-    let cp_hash = cp_hash_hex(&outcome.event).map_err(|e| GateError::Bus(e.into()))?;
+    let cp_hash = cp_hash_hex(&outcome.event).map_err(GateError::Bus)?;
     chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone(), now);
     drop(chain);
 
@@ -1065,7 +1065,6 @@ async fn sever_session(state: &DemoServerState) -> Result<Value, GateError> {
             .active_iac
             .as_ref()
             .map(|i| i.scope_id.clone())
-            .or_else(|| None)
             .unwrap_or_else(|| "demo".into())
     };
 
