@@ -254,17 +254,17 @@ async fn publish_blocked_receipt(
 
     if let Err(publish_err) = state
         .gate
-        .publish_action_blocked_detailed(
+        .publish_action_blocked(&crate::BlockedAction {
             scope_id,
             model_id,
             tool_id,
-            &tools,
-            iac_hash.as_deref(),
-            &err.to_string(),
-            now_secs(),
-            &last_cp_hash,
-            prev_event_id.as_deref(),
-        )
+            tool_allowlist: &tools,
+            iac_hash: iac_hash.as_deref(),
+            reason: &err.to_string(),
+            now: now_secs(),
+            last_cp_hash: &last_cp_hash,
+            prev_event_id: prev_event_id.as_deref(),
+        })
         .await
     {
         warn!(error = %publish_err, "failed to publish blocked-action receipt");
@@ -700,7 +700,7 @@ mod tool_invoke_policy_tests {
         });
         let state = GateServerState {
             gate: Arc::new(gate),
-            proxy: Arc::new(LlmProxy::new(None)),
+            proxy: Arc::new(LlmProxy::new(None).with_dev_mock(true)),
             default_iac: Some(iac.clone()),
             session_chain: Arc::new(Mutex::new(SessionChainState::genesis())),
             github: Arc::new(github),
