@@ -14,7 +14,7 @@ Self-host the gate and hold your own keys. The Membrane checks authorization bef
 
 The Rust workspace includes the authorization gate, CLI, receipt and attestation components, read-only operator dashboard, and deterministic recommendation advisor. The gate authenticates callers through caller-bound signed IACs and request proofs; operator-owned identity grants limit access and support revocation.
 
-The repo also includes a demo that approximates the operator workflow, including the gate's authorization checks and receipt chaining. The demo uses ephemeral keys, an in-memory bus, and simulated tool effects. It does not hold production credentials or make changes to external systems.
+The repo also includes a demo of the operator workflow: authorization checks and receipt chaining. It uses ephemeral keys and an in-memory bus, and tool effects are simulated.
 
 - **Run the software:** configure your operator registry, relay, signed IACs, caller keys and grants. Connect the gate to your model backend and supported tools. See [caller identity](docs/caller-identity.md) and the [GitHub connector](docs/github-connector.md).
 - **Try the demo:** open [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live) or run `membrane demo` locally.
@@ -59,9 +59,9 @@ The setup: an agent drafts or edits content built from third-party assets (foota
 - **Missing manifest, bad signature, revoked credential, untrusted signer.** No scope is issued. The call is blocked and the denial is written into the receipt chain. Missing provenance is a denial, not a warning.
 - **Allowed calls.** Each one writes a tamper-evident CP receipt chained to the prior receipt, so the audit record shows which signed scope authorized which operation on which asset.
 
-Nothing new is built: provenance verification is operator policy evaluated when the IAC is issued, not a separate product. The repo ships no C2PA verifier today; adding one is a connector-and-policy exercise using the same connector-and-policy pattern as external tool execution in [docs/github-connector.md](docs/github-connector.md).
+Provenance verification is operator policy evaluated when the IAC is issued. The repo ships no C2PA verifier today; adding one follows the connector-and-policy pattern in [docs/github-connector.md](docs/github-connector.md).
 
-The asymmetry this buys: enforcement that only detects after publication is always behind the leak. A fail-closed gate makes "unverified content never enters the pipeline" the default state rather than an audit finding.
+Detection after publication is always behind the leak. A fail-closed gate makes "unverified content never enters the pipeline" the default state.
 
 ## Requirements
 
@@ -73,14 +73,7 @@ First build takes about a minute. Check your setup with `cargo test --workspace`
 
 ## Local demo dashboard
 
-**Primary path for anyone cloning the repo** - no secrets, no relay, no paid APIs.
-
-Public marketing site (static): **[membrane.dojopop.live](https://membrane.dojopop.live)** - source in [`site/`](site/). Preview locally with `python3 -m http.server 8080 --directory site`.
-
-Open the isolated public sandbox at
-**[membrane-demo.dojopop.live](https://membrane-demo.dojopop.live)**, or run
-the same browser demo locally. Both paths use ephemeral keys and an in-memory
-bus; tool side effects are simulated. No production credentials.
+No secrets, relay, or paid APIs needed. Open the public sandbox at [membrane-demo.dojopop.live](https://membrane-demo.dojopop.live), or run the same demo locally. Preview the landing site with `python3 -m http.server 8080 --directory site`.
 
 ```bash
 cargo run -p membrane-cli -- demo
@@ -89,7 +82,7 @@ cargo run -p membrane-cli -- demo
 
 See [docs/demo.md](docs/demo.md) for the six-step flow. Demo HTTP routes live under `/demo/api/*` and are **not** enabled by `membrane gate start`.
 
-`membrane demo` is the single public demo command. The old `membrane landing-demo` spelling remains a hidden, deprecated alias. The relay-backed operator test moved to `membrane iac-smoke`.
+The relay-backed operator test is `membrane iac-smoke`.
 
 ## Full stack (operators)
 
