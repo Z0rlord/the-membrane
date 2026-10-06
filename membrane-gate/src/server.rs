@@ -19,7 +19,7 @@ use crate::proxy::{ChatRequest, ChatResponse, LlmProxy};
 use crate::watchdog::spawn_delta_t_watchdog;
 use crate::{Gate, GateError, RouterSessionRequest};
 
-/// Per-turn attestation receipt returned to sovereign clients (§4.2.2).
+/// Per-turn attestation receipt returned to chat clients.
 #[derive(Debug, Clone)]
 pub struct SessionReceipt {
     pub scope_id: String,
@@ -96,7 +96,7 @@ async fn chat_completions(
     headers: HeaderMap,
     request: Result<Json<ChatRequest>, axum::extract::rejection::JsonRejection>,
 ) -> Response {
-    let mut req = match request {
+    let req = match request {
         Ok(Json(req)) => req,
         Err(rejection) => {
             record_denied(
@@ -127,7 +127,7 @@ async fn chat_completions(
         return gate_error_response(err);
     }
     let mut authorized = false;
-    match handle_chat(&state, &headers, &mut req, &mut authorized).await {
+    match handle_chat(&state, &headers, &req, &mut authorized).await {
         Ok((resp, receipt)) => chat_success_response(resp, &receipt),
         Err(err) => {
             if !authorized {
@@ -307,7 +307,7 @@ async fn handle_chat(
         .open_router_session(Some(&iac), session_req, now, prev_event_id.as_deref())
         .await?;
 
-    let cp_hash = cp_hash_hex(&outcome.event).map_err(|e| GateError::Bus(e.into()))?;
+    let cp_hash = cp_hash_hex(&outcome.event).map_err(GateError::Bus)?;
     chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone(), now);
 
     let receipt = SessionReceipt {
@@ -338,7 +338,7 @@ async fn handle_chat(
     )?;
     *authorized = true;
     record_allowed(state, &iac, "chat");
-    let response = state.proxy.chat(req).await.map_err(|e| GateError::Bus(e))?;
+    let response = state.proxy.chat(req).await.map_err(GateError::Bus)?;
     Ok((response, receipt))
 }
 
@@ -417,7 +417,7 @@ async fn handle_tool_invoke(
         )
         .await?;
 
-    let cp_hash = cp_hash_hex(&outcome.event).map_err(|e| GateError::Bus(e.into()))?;
+    let cp_hash = cp_hash_hex(&outcome.event).map_err(GateError::Bus)?;
     chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone(), now);
 
     let receipt = SessionReceipt {

@@ -236,8 +236,7 @@ pub fn last_bus_event_id(bus_events: &[MembraneBusEvent], subject_pubkey: &str) 
     bus_events
         .iter()
         .filter(|e| e.event.subject_pubkey == subject_pubkey)
-        .filter(|e| is_cp_event(e.event.event_type))
-        .last()
+        .rfind(|e| is_cp_event(e.event.event_type))
         .map(|e| e.id.to_hex())
 }
 
