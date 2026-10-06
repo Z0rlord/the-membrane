@@ -75,6 +75,33 @@ impl ChannelRegistry {
     }
 }
 
+/// Inputs for a blocked-action event published without a receipt.
+#[derive(Debug, Clone, Copy)]
+pub struct BlockedAction<'a> {
+    pub scope_id: Option<&'a str>,
+    pub model_id: Option<&'a str>,
+    pub tool_id: Option<&'a str>,
+    pub tool_allowlist: &'a [String],
+    pub iac_hash: Option<&'a str>,
+    pub reason: &'a str,
+    pub now: i64,
+    pub last_cp_hash: &'a str,
+    pub prev_event_id: Option<&'a str>,
+}
+
+/// Inputs for a blocked-action event kept as a signed receipt.
+#[derive(Debug, Clone, Copy)]
+pub struct BlockedReceipt<'a> {
+    pub scope_id: Option<&'a str>,
+    pub model_id: &'a str,
+    pub tool_id: &'a str,
+    pub iac_hash: Option<&'a str>,
+    pub reason: &'a str,
+    pub now: i64,
+    pub last_cp_hash: &'a str,
+    pub prev_event_id: Option<&'a str>,
+}
+
 pub struct Gate {
     registry: ChannelRegistry,
     publisher: BusPublisher,
@@ -215,42 +242,22 @@ impl Gate {
         Ok(id)
     }
 
+    /// Publish a blocked-action event for a request that carried no usable scope.
     pub async fn publish_action_blocked(
         &self,
-        scope_id: Option<&str>,
-        model_id: Option<&str>,
-        iac_hash: Option<&str>,
-        reason: &str,
-        now: i64,
-        last_cp_hash: &str,
-        prev_event_id: Option<&str>,
+        blocked: &BlockedAction<'_>,
     ) -> Result<String, GateError> {
-        self.publish_action_blocked_detailed(
+        let BlockedAction {
             scope_id,
             model_id,
-            None,
-            &[],
+            tool_id,
+            tool_allowlist,
             iac_hash,
             reason,
             now,
             last_cp_hash,
             prev_event_id,
-        )
-        .await
-    }
-
-    pub async fn publish_action_blocked_detailed(
-        &self,
-        scope_id: Option<&str>,
-        model_id: Option<&str>,
-        tool_id: Option<&str>,
-        tool_allowlist: &[String],
-        iac_hash: Option<&str>,
-        reason: &str,
-        now: i64,
-        last_cp_hash: &str,
-        prev_event_id: Option<&str>,
-    ) -> Result<String, GateError> {
+        } = *blocked;
         let payload = MembranePayload::Generic(serde_json::json!({
             "scope_id": scope_id,
             "model_allowlist": model_id.into_iter().collect::<Vec<_>>(),
@@ -271,20 +278,22 @@ impl Gate {
         Ok(id)
     }
 
-    /// Like `publish_action_blocked_detailed`, but returns the signed event so
+    /// Like `publish_action_blocked`, but returns the signed event so
     /// callers can keep it as a receipt.
-    #[allow(clippy::too_many_arguments)]
     pub async fn publish_action_blocked_event(
         &self,
-        scope_id: Option<&str>,
-        model_id: &str,
-        tool_id: &str,
-        iac_hash: Option<&str>,
-        reason: &str,
-        now: i64,
-        last_cp_hash: &str,
-        prev_event_id: Option<&str>,
+        receipt: &BlockedReceipt<'_>,
     ) -> Result<(MembraneEvent, nostr::Event), GateError> {
+        let BlockedReceipt {
+            scope_id,
+            model_id,
+            tool_id,
+            iac_hash,
+            reason,
+            now,
+            last_cp_hash,
+            prev_event_id,
+        } = *receipt;
         let payload = MembranePayload::Generic(serde_json::json!({
             "scope_id": scope_id,
             "model_id": model_id,
