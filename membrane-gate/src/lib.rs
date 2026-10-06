@@ -361,7 +361,7 @@ impl Gate {
         let bus_event_id = bus_event.id.to_hex();
         self.enqueue_siem(&event, Some(&bus_event_id));
 
-        let cp_hash = cp_hash_hex(&event).map_err(|e| GateError::Bus(e.into()))?;
+        let cp_hash = cp_hash_hex(&event).map_err(GateError::Bus)?;
 
         Ok(RouterSessionOutcome {
             event,
@@ -413,9 +413,9 @@ pub mod server;
 pub mod watchdog;
 
 pub use demo::{
-    demo_registry, run_demo_dashboard, verify_evidence_pack, verify_evidence_pack_pinned, DemoRuntime, DemoServerState,
-    EvidencePack, DEMO_ALLOWED_TOOLS, DEMO_BLOCKED_TOOL, DEMO_MODEL, DEMO_SWAP_MODEL,
-    DEMO_TTL_SECS,
+    demo_registry, run_demo_dashboard, verify_evidence_pack, verify_evidence_pack_pinned,
+    DemoRuntime, DemoServerState, EvidencePack, DEMO_ALLOWED_TOOLS, DEMO_BLOCKED_TOOL, DEMO_MODEL,
+    DEMO_SWAP_MODEL, DEMO_TTL_SECS,
 };
 pub use github::{
     authorize_repo_and_args, body_sha256_hex, is_github_tool, GitHubConnector,
@@ -526,4 +526,4 @@ mod tests {
         assert!(matches!(err, GateError::ToolDenied(_)));
         gate.authorize_tool(&iac, "github.comment", 1_000).unwrap();
     }
-                                                                 }
+}
