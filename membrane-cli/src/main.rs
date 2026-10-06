@@ -115,12 +115,6 @@ enum Commands {
         #[arg(long, default_value = "tools/channel-registry.example.yaml")]
         registry: PathBuf,
     },
-    /// Deprecated alias for `membrane demo`
-    #[command(hide = true)]
-    LandingDemo {
-        #[arg(long, default_value = "127.0.0.1:8790")]
-        listen: String,
-    },
 }
 
 #[derive(Subcommand)]
@@ -467,18 +461,18 @@ async fn main() -> Result<()> {
                 caller_pubkey,
                 out,
             } => {
-                iac_issue(
-                    &relay,
+                iac_issue(IacIssueArgs {
+                    relay: &relay,
                     nsec,
-                    &model,
-                    scope_id.as_deref(),
+                    model: &model,
+                    scope_id: scope_id.as_deref(),
                     ttl_secs,
-                    parent_cp_hash.as_deref(),
-                    &channel,
-                    &tools,
-                    &caller_pubkey,
-                    &out,
-                )
+                    parent_cp_hash: parent_cp_hash.as_deref(),
+                    channels: &channel,
+                    tools: &tools,
+                    caller_pubkey: &caller_pubkey,
+                    out: &out,
+                })
                 .await
             }
             IacCommands::Reissue {
@@ -525,20 +519,20 @@ async fn main() -> Result<()> {
                 body,
                 commit_title,
             } => {
-                tools_invoke(
-                    &gate_url,
-                    &iac,
+                tools_invoke(ToolsInvokeArgs {
+                    gate_url: &gate_url,
+                    iac_path: &iac,
                     nsec,
-                    &gate_pubkey,
-                    &tool,
-                    &model,
-                    &owner,
-                    &repo,
+                    gate_pubkey: &gate_pubkey,
+                    tool: &tool,
+                    model: &model,
+                    owner: &owner,
+                    repo: &repo,
                     issue_number,
                     pull_number,
-                    body.as_deref(),
-                    commit_title.as_deref(),
-                )
+                    body: body.as_deref(),
+                    commit_title: commit_title.as_deref(),
+                })
                 .await
             }
         },
@@ -548,12 +542,6 @@ async fn main() -> Result<()> {
             nsec,
             registry,
         } => run_iac_smoke(&relay, nsec, &registry).await,
-        Commands::LandingDemo { listen } => {
-            eprintln!(
-                "warning: `membrane landing-demo` is deprecated; use `membrane demo` instead"
-            );
-            run_local_demo(&listen).await
-        }
         Commands::Chat {
             message,
             nsec,
@@ -782,7 +770,7 @@ async fn gate_start(
         );
     }
 
-    let proxy = Arc::new(LlmProxy::new(registry.model_api_url.clone()));
+    let proxy = Arc::new(LlmProxy::new(registry.model_api_url.clone()).with_dev_mock_from_env());
     let state = GateServerState {
         gate,
         proxy,
@@ -935,18 +923,32 @@ async fn rollup_stamp(
     Ok(())
 }
 
-async fn iac_issue(
-    relay: &str,
+struct IacIssueArgs<'a> {
+    relay: &'a str,
     nsec: Option<String>,
-    model: &str,
-    scope_id: Option<&str>,
+    model: &'a str,
+    scope_id: Option<&'a str>,
     ttl_secs: i64,
-    parent_cp_hash: Option<&str>,
-    channels: &[String],
-    tools: &[String],
-    caller_pubkey: &str,
-    out: &PathBuf,
-) -> Result<()> {
+    parent_cp_hash: Option<&'a str>,
+    channels: &'a [String],
+    tools: &'a [String],
+    caller_pubkey: &'a str,
+    out: &'a PathBuf,
+}
+
+async fn iac_issue(args: IacIssueArgs<'_>) -> Result<()> {
+    let IacIssueArgs {
+        relay,
+        nsec,
+        model,
+        scope_id,
+        ttl_secs,
+        parent_cp_hash,
+        channels,
+        tools,
+        caller_pubkey,
+        out,
+    } = args;
     let keys = load_keys(nsec)?;
     let now = now_secs();
     let scope_id = scope_id
@@ -1109,20 +1111,36 @@ async fn iac_reissue(
     Ok(())
 }
 
-async fn tools_invoke(
-    gate_url: &str,
-    iac_path: &PathBuf,
+struct ToolsInvokeArgs<'a> {
+    gate_url: &'a str,
+    iac_path: &'a PathBuf,
     nsec: Option<String>,
-    gate_pubkey: &str,
-    tool: &str,
-    model: &str,
-    owner: &str,
-    repo: &str,
+    gate_pubkey: &'a str,
+    tool: &'a str,
+    model: &'a str,
+    owner: &'a str,
+    repo: &'a str,
     issue_number: Option<u64>,
     pull_number: Option<u64>,
-    body: Option<&str>,
-    commit_title: Option<&str>,
-) -> Result<()> {
+    body: Option<&'a str>,
+    commit_title: Option<&'a str>,
+}
+
+async fn tools_invoke(args: ToolsInvokeArgs<'_>) -> Result<()> {
+    let ToolsInvokeArgs {
+        gate_url,
+        iac_path,
+        nsec,
+        gate_pubkey,
+        tool,
+        model,
+        owner,
+        repo,
+        issue_number,
+        pull_number,
+        body,
+        commit_title,
+    } = args;
     let iac_raw = std::fs::read_to_string(iac_path).context("read IAC")?;
     let url = format!("{}/v1/tools/invoke", gate_url.trim_end_matches('/'));
     let payload = serde_json::json!({
@@ -1344,10 +1362,14 @@ async fn run_iac_smoke(relay: &str, nsec: Option<String>, registry_path: &PathBu
     println!("  events fetched: {}", events.len());
     println!("  bus_root: {}", root.unwrap_or_else(|| "<empty>".into()));
 
-    let proxy = LlmProxy::new(registry.model_api_url.clone());
-    let llm = proxy.complete("sha256:demo-model", "membrane demo").await?;
-    println!("\n=== Step 4: model API proxy (configured backend or mock) ===");
-    println!("  {llm}");
+    println!("\n=== Step 4: model API proxy ===");
+    if registry.model_api_url.is_some() {
+        let proxy = LlmProxy::new(registry.model_api_url.clone());
+        let llm = proxy.complete("sha256:demo-model", "membrane demo").await?;
+        println!("  {llm}");
+    } else {
+        println!("  skipped: no model_api_url in the channel registry");
+    }
 
     Ok(())
 }
@@ -1472,11 +1494,7 @@ mod cli_tests {
     }
 
     #[test]
-    fn landing_demo_remains_a_hidden_alias() {
-        let cli = Cli::try_parse_from(["membrane", "landing-demo"]).unwrap();
-        assert!(matches!(cli.command, Commands::LandingDemo { .. }));
-
-        let help = Cli::command().render_long_help().to_string();
-        assert!(!help.contains("landing-demo"));
+    fn landing_demo_is_not_a_command() {
+        assert!(Cli::try_parse_from(["membrane", "landing-demo"]).is_err());
     }
 }
