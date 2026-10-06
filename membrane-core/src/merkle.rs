@@ -41,7 +41,7 @@ impl MerkleTree {
     }
 
     pub fn root_hex(&self) -> Option<String> {
-        self.root.map(|r| hex::encode(r))
+        self.root.map(hex::encode)
     }
 
     pub fn leaf_count(&self) -> usize {
