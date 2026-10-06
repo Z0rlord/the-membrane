@@ -136,7 +136,7 @@ cargo run -- rollup sign --input rollup.json --out rollup.signed.json
 cargo run -- rollup stamp --input rollup.signed.json --ots-out rollup.ots
 ```
 
-**Model API:** point `model_api_url` in your channel registry at any allowed backend that speaks the chat/completions wire format (default example: `http://127.0.0.1:8080/v1/chat/completions`). The gate falls back to mock responses if the backend is unreachable.
+**Model API:** point `model_api_url` in your channel registry at any allowed backend that speaks the chat/completions wire format (default example: `http://127.0.0.1:8080/v1/chat/completions`). If the backend is unreachable the request fails. For local development only, set `MEMBRANE_DEV_MOCK_MODEL=1` to get a canned reply instead.
 
 **Gate HTTP:** `POST /v1/chat/completions` with a standard chat/completions JSON body. Pass a **session-scoped** IAC via `X-Membrane-IAC` header (JSON or base64 JSON). Each turn publishes `membrane.cp.router` with a context Merkle root and chains `parent_cp_hash` to the prior CP. Issue session IACs with `membrane iac issue` (binds `parent_cp_hash` to the current chain head). A static `--iac` file is only valid when signed by the same key the gate is running as.
 
