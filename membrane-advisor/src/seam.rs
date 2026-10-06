@@ -254,6 +254,37 @@ pub fn advise<B: Backend>(b: &B, g: &GroupView) -> Option<Note> {
     validate(g, &b.ask(&req).ok()?, &b.id())
 }
 
+/// Blocking HTTP transport. Plain http is accepted only for loopback (a local model);
+/// anything else must be https. Short timeout, no redirects.
+pub struct ReqwestTransport;
+
+impl Transport for ReqwestTransport {
+    fn post_json(&self, url: &str, bearer: Option<&str>, body: &str) -> Result<String> {
+        let loopback = url.starts_with("http://127.0.0.1")
+            || url.starts_with("http://localhost")
+            || url.starts_with("http://[::1]");
+        if !(url.starts_with("https://") || loopback) {
+            bail!("advisor backend url must be https (or loopback http)");
+        }
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+        let mut rq = client
+            .post(url)
+            .header("content-type", "application/json")
+            .body(body.to_string());
+        if let Some(t) = bearer {
+            rq = rq.bearer_auth(t);
+        }
+        let resp = rq.send()?;
+        if !resp.status().is_success() {
+            bail!("backend returned {}", resp.status());
+        }
+        Ok(resp.text()?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,36 +390,5 @@ mod tests {
         ])
         .unwrap();
         assert!(!s.contains("allow") && !s.contains("apply"));
-    }
-}
-
-/// Blocking HTTP transport. Plain http is accepted only for loopback (a local model);
-/// anything else must be https. Short timeout, no redirects.
-pub struct ReqwestTransport;
-
-impl Transport for ReqwestTransport {
-    fn post_json(&self, url: &str, bearer: Option<&str>, body: &str) -> Result<String> {
-        let loopback = url.starts_with("http://127.0.0.1")
-            || url.starts_with("http://localhost")
-            || url.starts_with("http://[::1]");
-        if !(url.starts_with("https://") || loopback) {
-            bail!("advisor backend url must be https (or loopback http)");
-        }
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()?;
-        let mut rq = client
-            .post(url)
-            .header("content-type", "application/json")
-            .body(body.to_string());
-        if let Some(t) = bearer {
-            rq = rq.bearer_auth(t);
-        }
-        let resp = rq.send()?;
-        if !resp.status().is_success() {
-            bail!("backend returned {}", resp.status());
-        }
-        Ok(resp.text()?)
     }
 }
