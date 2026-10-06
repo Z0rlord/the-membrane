@@ -811,7 +811,9 @@ async fn run_tool_action(
             .gate
             .check_session_liveness(&chain, &iac.scope_id, now)
         {
-            return Ok(record_blocked(state, Some(&iac), &model, &tool, now, err.to_string()).await);
+            return Ok(
+                record_blocked(state, Some(&iac), &model, &tool, now, err.to_string()).await,
+            );
         }
     }
 
@@ -953,18 +955,19 @@ async fn record_blocked(
         let chain = state.session_chain.lock().await;
         (chain.last_cp_hash.clone(), chain.last_event_id.clone())
     };
-    let published = publish_blocked_event(
-        state,
-        scope_id.as_deref(),
-        model,
-        tool,
-        iac_hash.as_deref(),
-        &reason,
-        now,
-        &head,
-        prev_event_id.as_deref(),
-    )
-    .await;
+    let published = state
+        .gate
+        .publish_action_blocked_event(&crate::BlockedReceipt {
+            scope_id: scope_id.as_deref(),
+            model_id: model,
+            tool_id: tool,
+            iac_hash: iac_hash.as_deref(),
+            reason: &reason,
+            now,
+            last_cp_hash: &head,
+            prev_event_id: prev_event_id.as_deref(),
+        })
+        .await;
 
     let mut runtime = state.runtime.lock().await;
     let id = runtime.alloc_id();
@@ -1028,33 +1031,6 @@ async fn record_blocked(
             "simulation": true,
         }),
     )
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn publish_blocked_event(
-    state: &DemoServerState,
-    scope_id: Option<&str>,
-    model: &str,
-    tool: &str,
-    iac_hash: Option<&str>,
-    reason: &str,
-    now: i64,
-    head: &str,
-    prev_event_id: Option<&str>,
-) -> Result<(MembraneEvent, nostr::Event), GateError> {
-    state
-        .gate
-        .publish_action_blocked_event(
-            scope_id,
-            model,
-            tool,
-            iac_hash,
-            reason,
-            now,
-            head,
-            prev_event_id,
-        )
-        .await
 }
 
 async fn sever_session(state: &DemoServerState) -> Result<Value, GateError> {
@@ -1234,13 +1210,17 @@ pub fn verify_evidence_pack_pinned(
                     errors.push(format!("{id}: invalid bus event: {e}"));
                 }
                 if receipt.bus_event_id.as_deref() != Some(bus.id.to_hex().as_str()) {
-                    errors.push(format!("{id}: bus_event_id does not match signed bus event"));
+                    errors.push(format!(
+                        "{id}: bus_event_id does not match signed bus event"
+                    ));
                 }
                 if bus.pubkey.to_hex() != signer
                     || bus.kind.as_u16() != membrane_core::membrane_kind_for(event.event_type)
                     || bus.created_at.as_u64() as i64 != event.timestamp
                 {
-                    errors.push(format!("{id}: bus event signer, kind or timestamp mismatch"));
+                    errors.push(format!(
+                        "{id}: bus event signer, kind or timestamp mismatch"
+                    ));
                 }
                 match serde_json::to_string(event) {
                     Ok(content) if content == bus.content => {}
@@ -1282,16 +1262,12 @@ pub fn verify_evidence_pack_pinned(
                                 "scope_id",
                                 p.scope_id.as_deref() == Some(receipt.scope_id.as_str()),
                             ),
-                            (
-                                "tool",
-                                p.tool_id.as_deref() == Some(receipt.tool.as_str()),
-                            ),
+                            ("tool", p.tool_id.as_deref() == Some(receipt.tool.as_str())),
                         ];
                         for (name, ok) in checks {
                             if !ok {
-                                errors.push(format!(
-                                    "{id}: {name} does not match the signed event"
-                                ));
+                                errors
+                                    .push(format!("{id}: {name} does not match the signed event"));
                             }
                         }
                     }
@@ -1310,8 +1286,14 @@ pub fn verify_evidence_pack_pinned(
                     _ => None,
                 };
                 let checks = [
-                    ("model", field("model_id").as_deref() == Some(receipt.model.as_str())),
-                    ("tool", field("tool_id").as_deref() == Some(receipt.tool.as_str())),
+                    (
+                        "model",
+                        field("model_id").as_deref() == Some(receipt.model.as_str()),
+                    ),
+                    (
+                        "tool",
+                        field("tool_id").as_deref() == Some(receipt.tool.as_str()),
+                    ),
                     (
                         "scope_id",
                         field("scope_id").unwrap_or_default() == receipt.scope_id,
@@ -1347,10 +1329,7 @@ pub fn verify_evidence_pack_pinned(
                             && r.tool.as_str() == t.tool.as_deref().unwrap_or("")
                     });
                     if !matched {
-                        errors.push(format!(
-                            "timeline {} has no matching signed receipt",
-                            t.id
-                        ));
+                        errors.push(format!("timeline {} has no matching signed receipt", t.id));
                     }
                 } else if matches!(t.kind, TimelineKind::Allowed) {
                     errors.push(format!("timeline {} allowed without receipt hash", t.id));
@@ -1649,12 +1628,17 @@ mod tests {
             ("blocked reason", |p| {
                 p.receipts[1].reason = Some("fine actually".into())
             }),
-            ("timeline", |p| p.timeline[1].cp_hash = Some("cd".repeat(32))),
+            ("timeline", |p| {
+                p.timeline[1].cp_hash = Some("cd".repeat(32))
+            }),
         ];
         for (name, mutate) in mutations {
             let mut pack = base.clone();
             mutate(&mut pack);
-            assert!(!verify_evidence_pack(&pack).ok, "{name} tamper not detected");
+            assert!(
+                !verify_evidence_pack(&pack).ok,
+                "{name} tamper not detected"
+            );
         }
     }
 
@@ -1673,7 +1657,12 @@ mod tests {
             pack.receipts[index].bus_event = None;
             assert!(!verify_evidence_pack(&pack).ok);
             let mut pack = base.clone();
-            pack.receipts[index].bus_event.as_mut().unwrap().content.push(' ');
+            pack.receipts[index]
+                .bus_event
+                .as_mut()
+                .unwrap()
+                .content
+                .push(' ');
             assert!(!verify_evidence_pack(&pack).ok);
             let mut pack = base.clone();
             let bus = pack.receipts[index].bus_event.as_mut().unwrap();
@@ -1682,7 +1671,10 @@ mod tests {
             assert!(!verify_evidence_pack(&pack).ok);
             let mut pack = base.clone();
             pack.receipts[index].bus_event = base.receipts[1 - index].bus_event.clone();
-            pack.receipts[index].bus_event_id = pack.receipts[index].bus_event.as_ref().map(|e| e.id.to_hex());
+            pack.receipts[index].bus_event_id = pack.receipts[index]
+                .bus_event
+                .as_ref()
+                .map(|e| e.id.to_hex());
             assert!(!verify_evidence_pack(&pack).ok);
         }
         let mut pack = base.clone();
@@ -1703,10 +1695,14 @@ mod tests {
         pack.receipts[1].timestamp += 1;
         pack.receipts[1].cp_hash = cp_hash_hex(&pack.receipts[1].event).unwrap();
         let v = verify_evidence_pack(&pack);
-        assert!(v.errors.iter().any(|e| e.contains("bad signature")), "{:?}", v.errors);
+        assert!(
+            v.errors.iter().any(|e| e.contains("bad signature")),
+            "{:?}",
+            v.errors
+        );
         // A pack that names a different issuer fails when pinned.
         let mut pack = base.clone();
         pack.issuer_pubkey = "11".repeat(32);
         assert!(!verify_evidence_pack_pinned(&pack, Some(&state.gate.publisher_pubkey_hex())).ok);
     }
-               }
+}

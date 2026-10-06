@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let state = GateServerState {
         gate,
-        proxy: Arc::new(LlmProxy::new(None)),
+        proxy: Arc::new(LlmProxy::new(None).with_dev_mock(true)),
         default_iac: None,
         session_chain: Arc::new(tokio::sync::Mutex::new(SessionChainState::genesis())),
         github: Arc::new(GitHubConnector::new(GitHubConnectorConfig {
