@@ -21,7 +21,7 @@ credential: copying it is insufficient to act.
    --issue-number 1 --body <comment>`. Supply the caller secret through the existing
    `NOSTR_NSEC` environment or signing-key option, not a checked-in file.
 
-Existing sovereign chat is the self-caller case (operator and caller keys equal).
+The local chat command is the self-caller case (operator and caller keys equal).
 It binds new session IACs and sends proofs automatically. Its generated scope still
 needs an explicit registry grant. Distinct agents use operator-issued IACs, not
 self-issued authority; the tool CLI supports separate operator/caller keys.
