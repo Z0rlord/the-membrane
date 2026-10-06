@@ -244,6 +244,8 @@ This architecture is framed for conditions where:
 The architecture should therefore be read as:
 > a research architecture built from cryptographic and distributed-systems primitives.
 
+The software in this repository implements the agent authorization gate: signed scopes, chained receipts, severance, and operator-owned grants. The BCI, zk-STARK, and TEE components described in this document are research and are not implemented here.
+
 ---
 
 ## 0.6 Three Membranes (Terminological Lineage)
@@ -314,7 +316,7 @@ When extended to pure-silicon agents (§4.7), sovereignty means that an agent ca
 - Maintain an audit trail of delegations that is verifiable by any downstream party,
 - Sever its attestation chain and cease operation without operator permission (agent exit rights).
 
-This is particularly critical in multi-agent economies where agents delegate tasks, hold funds, and make commitments. Without these primitives, agents cannot independently prove runtime integrity or resist unauthorized modification.
+This matters most in multi-agent economies where agents delegate tasks, hold funds, and make commitments. Without these primitives, agents cannot independently prove runtime integrity or resist unauthorized modification.
 
 ---
 
@@ -629,7 +631,7 @@ A fully compromised node can forge its own attestation. RFA does not prevent thi
 
 ### 4.6 Cortical Implant Primitives Integration (Proposed Extension)
 
-The Membrane is substrate-agnostic and designed to leverage **high-bandwidth invasive BCIs** — cortical implants with kilohertz-scale neural recording. Implant-class signals provide richer, higher-entropy inputs than traditional IMU/video/audio canaries, strengthening both the **T₀ biological anchor** and the **Liveness Canary Circuit** — with significant caveats.
+The Membrane is substrate-agnostic and designed to use **high-bandwidth invasive BCIs** — cortical implants with kilohertz-scale neural recording. Implant-class signals provide richer, higher-entropy inputs than traditional IMU/video/audio canaries, strengthening both the **T₀ biological anchor** and the **Liveness Canary Circuit** — with significant caveats.
 
 **Benchtop and commercial closed-loop precedents:** DishBrain (in vitro cortical cultures on HD-MEAs playing a simulated game with read/write coupling) and code-deployable biological computers (e.g., Cortical Labs CL1, biological cloud APIs) demonstrate that **bidirectional electrophysiological closed loops** are no longer purely prospective for Membrane threat modeling.[^26] These systems are cited for **channel mechanics** (feedback-required plasticity, stimulation policy sensitivity, session-bound learning) — not as proof of consciousness, sentience adjudication, or in-vivo implant attestation APIs. They are **not** implementations of Păun's P-system formalism (§0.6).[^27]
 
@@ -711,7 +713,7 @@ When bidirectional stimulation is IAC-authorized:
 
 ### 4.7 Agent-to-Agent Attestation Mode (Proposed Extension)
 
-The Membrane's core primitives — recursive Chain Proofs, Recursive Attestation (RFA), process continuity, and substrate-agnostic design — are directly applicable to **AI agent-to-agent (A2A) relations**. In a future with thousands of autonomous, delegating, and long-lived AI agents, the ability to cryptographically attest that an agent is running the expected process without undetected forking, rollback, or migration becomes critical. This mode extends **sovereignty** to pure-silicon entities.
+The Membrane's core primitives — recursive Chain Proofs, Recursive Attestation (RFA), process continuity, and substrate-agnostic design — are directly applicable to **AI agent-to-agent (A2A) relations**. In a future with thousands of autonomous, delegating, and long-lived AI agents, the ability to cryptographically attest that an agent is running the expected process without undetected forking, rollback, or migration becomes necessary. This mode extends **sovereignty** to pure-silicon entities.
 
 For pure-silicon agents, the biological T₀ anchor and human liveness provider are replaced by TEE substrate canaries. Agents can prove process integrity, reject unattested peers, and maintain verifiable delegation chains.
 
