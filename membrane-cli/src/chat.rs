@@ -47,7 +47,7 @@ pub struct ChatClient {
 
 impl ChatClient {
     pub async fn new(config: MembraneConfig, keys: Keys) -> Result<Self> {
-        let scope_id = format!("sovereign-{}", now_secs());
+        let scope_id = format!("chat-{}", now_secs());
         let log_path = MembraneConfig::sessions_dir()?.join(format!("{scope_id}.json"));
         let session_log = SessionLog {
             scope_id: scope_id.clone(),
@@ -70,7 +70,7 @@ impl ChatClient {
     }
 
     pub async fn run_repl(&mut self) -> Result<()> {
-        println!("Membrane sovereign chat");
+        println!("Membrane chat");
         println!("  gate:  {}", self.config.gate_url);
         println!("  model: {}", self.config.model);
         println!("  scope: {}", self.session_log.scope_id);
