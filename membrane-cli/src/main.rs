@@ -68,7 +68,7 @@ enum Commands {
         #[command(subcommand)]
         command: ToolsCommands,
     },
-    /// Sovereign local LLM chat through the membrane gate (auto IAC + receipts)
+    /// Local LLM chat through the gate (auto IAC + receipts)
     Chat {
         #[arg(long)]
         message: Option<String>,
