@@ -47,7 +47,7 @@ If the `membrane` binary is installed, the equivalent command is `membrane demo`
 3. **Blocked tool** - attempt `github.merge`; hard block with reason
 4. **Blocked model swap** - same tool with `unrestricted-agent-v9`; hard block
 5. **Sever** - sever session, then retry `slack.post`; fails closed
-6. **Evidence** - export JSON evidence or SIEM-ready OCSF-inspired/JSON Lines records, then verify the receipt chain (pass/fail). Verification recomputes each receipt hash, checks the issuer signature on every signed event, confirms the receipt fields match the signed event, and checks chain linkage. Blocked calls get signed `membrane.action.blocked` receipts anchored to the current chain head; they do not advance it. The hosted verifier pins the signing key of the server that issued the pack
+6. **Evidence** - export JSON evidence or SIEM-ready OCSF-inspired/JSON Lines records, then verify the receipt chain (pass/fail). Verification recomputes each receipt hash, checks the issuer signature on every signed event, confirms the receipt fields match the signed event, and checks chain linkage. Each receipt also includes the exact signed Nostr bus envelope: verification checks its ID and signature, signer, kind, timestamp, and content against the signed Membrane event, and matches `bus_event_id` to its authenticated ID. Packs without a bus envelope fail verification; re-export evidence from an updated server. Blocked calls get signed `membrane.action.blocked` receipts anchored to the current chain head; they do not advance it. The hosted verifier pins the signing key of the server that issued the pack
 
 Demo SIEM API:
 

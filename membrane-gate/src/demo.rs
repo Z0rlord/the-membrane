@@ -127,6 +127,9 @@ pub struct EvidenceReceipt {
     pub parent_cp_hash: String,
     pub bus_event_id: Option<String>,
     pub event: MembraneEvent,
+    /// Exact signed bus envelope. Absent legacy envelopes fail verification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bus_event: Option<nostr::Event>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -907,6 +910,7 @@ async fn run_tool_action(
         parent_cp_hash: parent_cp_hash.clone(),
         bus_event_id: outcome.bus_event_id.clone(),
         event: outcome.event,
+        bus_event: Some(outcome.bus_event),
     });
     if runtime.receipts.len() > MAX_RECEIPTS {
         let overflow = runtime.receipts.len() - MAX_RECEIPTS;
@@ -966,10 +970,10 @@ async fn record_blocked(
     let id = runtime.alloc_id();
     let agent_id = runtime.agent_id.clone();
     let (cp_hash, bus_event_id) = match &published {
-        Ok((event, bus_id)) => (cp_hash_hex(event).ok(), Some(bus_id.clone())),
+        Ok((event, bus_event)) => (cp_hash_hex(event).ok(), Some(bus_event.id.to_hex())),
         Err(_) => (None, None),
     };
-    if let (Ok((event, bus_id)), Some(cp)) = (&published, &cp_hash) {
+    if let (Ok((event, bus_event)), Some(cp)) = (&published, &cp_hash) {
         runtime.receipts.push(EvidenceReceipt {
             outcome: ReceiptOutcome::Blocked,
             reason: Some(reason.clone()),
@@ -981,8 +985,9 @@ async fn record_blocked(
             iac_hash: iac_hash.clone().unwrap_or_default(),
             cp_hash: cp.clone(),
             parent_cp_hash: head.clone(),
-            bus_event_id: Some(bus_id.clone()),
+            bus_event_id: Some(bus_event.id.to_hex()),
             event: event.clone(),
+            bus_event: Some(bus_event.clone()),
         });
         if runtime.receipts.len() > MAX_RECEIPTS {
             let overflow = runtime.receipts.len() - MAX_RECEIPTS;
@@ -1036,7 +1041,7 @@ async fn publish_blocked_event(
     now: i64,
     head: &str,
     prev_event_id: Option<&str>,
-) -> Result<(MembraneEvent, String), GateError> {
+) -> Result<(MembraneEvent, nostr::Event), GateError> {
     state
         .gate
         .publish_action_blocked_event(
@@ -1223,6 +1228,29 @@ pub fn verify_evidence_pack_pinned(
             errors.push(format!("{id}: bad signature: {e}"));
         }
 
+        // Authenticate the outer bus ID without a circular inner-event hash.
+        match &receipt.bus_event {
+            Some(bus) => {
+                if let Err(e) = bus.verify() {
+                    errors.push(format!("{id}: invalid bus event: {e}"));
+                }
+                if receipt.bus_event_id.as_deref() != Some(bus.id.to_hex().as_str()) {
+                    errors.push(format!("{id}: bus_event_id does not match signed bus event"));
+                }
+                if bus.pubkey.to_hex() != signer
+                    || bus.kind.as_u16() != membrane_core::membrane_kind_for(event.event_type)
+                    || bus.created_at.as_u64() as i64 != event.timestamp
+                {
+                    errors.push(format!("{id}: bus event signer, kind or timestamp mismatch"));
+                }
+                match serde_json::to_string(event) {
+                    Ok(content) if content == bus.content => {}
+                    _ => errors.push(format!("{id}: bus content does not match signed event")),
+                }
+            }
+            None => errors.push(format!("{id}: missing signed bus event")),
+        }
+
         if event.prev_cp_hash != receipt.parent_cp_hash {
             errors.push(format!(
                 "{id}: event.prev_cp_hash does not match parent_cp_hash"
@@ -1315,6 +1343,7 @@ pub fn verify_evidence_pack_pinned(
                 if let Some(cp) = &t.cp_hash {
                     let matched = pack.receipts.iter().any(|r| {
                         &r.cp_hash == cp
+                            && r.bus_event_id == t.bus_event_id
                             && r.action_id == t.id
                             && r.tool.as_str() == t.tool.as_deref().unwrap_or("")
                     });
@@ -1631,6 +1660,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tampered_bus_event_id_fails_verify() {
+        let (_state, base) = pack_with_allow_and_block().await;
+        for index in 0..base.receipts.len() {
+            for replacement in [Some("ab".repeat(32)), None] {
+                let mut pack = base.clone();
+                pack.receipts[index].bus_event_id = replacement;
+                let result = verify_evidence_pack(&pack);
+                assert!(!result.ok);
+                assert!(result.errors.iter().any(|e| e.contains("bus_event_id")));
+            }
+            let mut pack = base.clone();
+            pack.receipts[index].bus_event = None;
+            assert!(!verify_evidence_pack(&pack).ok);
+            let mut pack = base.clone();
+            pack.receipts[index].bus_event.as_mut().unwrap().content.push(' ');
+            assert!(!verify_evidence_pack(&pack).ok);
+            let mut pack = base.clone();
+            let bus = pack.receipts[index].bus_event.as_mut().unwrap();
+            bus.id = nostr::EventId::from_hex(&"ab".repeat(32)).unwrap();
+            pack.receipts[index].bus_event_id = Some(bus.id.to_hex());
+            assert!(!verify_evidence_pack(&pack).ok);
+            let mut pack = base.clone();
+            pack.receipts[index].bus_event = base.receipts[1 - index].bus_event.clone();
+            pack.receipts[index].bus_event_id = pack.receipts[index].bus_event.as_ref().map(|e| e.id.to_hex());
+            assert!(!verify_evidence_pack(&pack).ok);
+        }
+        let mut pack = base.clone();
+        pack.timeline[1].bus_event_id = Some("ab".repeat(32));
+        assert!(!verify_evidence_pack(&pack).ok);
+    }
+
+    #[tokio::test]
     async fn forged_signature_and_foreign_issuer_fail_verify() {
         let (state, base) = pack_with_allow_and_block().await;
         // Strip the signature.
@@ -1649,4 +1710,4 @@ mod tests {
         pack.issuer_pubkey = "11".repeat(32);
         assert!(!verify_evidence_pack_pinned(&pack, Some(&state.gate.publisher_pubkey_hex())).ok);
     }
-}
+               }

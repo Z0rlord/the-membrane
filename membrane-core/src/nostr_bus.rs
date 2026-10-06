@@ -67,6 +67,17 @@ impl BusPublisher {
         event: &mut MembraneEvent,
         prev_event_id: Option<&str>,
     ) -> Result<EventId> {
+        Ok(self.publish_with_receipt(event, prev_event_id).await?.id)
+    }
+
+    /// Publish and retain the exact signed Nostr envelope for offline evidence.
+    /// Its ID hashes the envelope content, so it cannot be embedded in that
+    /// content without creating a circular hash.
+    pub async fn publish_with_receipt(
+        &self,
+        event: &mut MembraneEvent,
+        prev_event_id: Option<&str>,
+    ) -> Result<Event> {
         self.sign_membrane_event(event)?;
         let nostr_event = self.to_nostr_event(event, prev_event_id)?;
         let event_id = nostr_event.id;
@@ -80,17 +91,17 @@ impl BusPublisher {
                 kind = membrane_kind_for(event.event_type),
                 "signed MembraneEvent (in-memory bus)"
             );
-            return Ok(event_id);
+            return Ok(nostr_event);
         }
 
         let client = self.connect().await?;
-        client.send_event(nostr_event).await?;
+        client.send_event(nostr_event.clone()).await?;
         info!(
             event_id = %event_id.to_hex(),
             kind = membrane_kind_for(event.event_type),
             "published MembraneEvent to attestation bus"
         );
-        Ok(event_id)
+        Ok(nostr_event)
     }
 
     pub fn sign_membrane_event(&self, event: &mut MembraneEvent) -> Result<()> {

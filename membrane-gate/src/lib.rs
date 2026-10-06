@@ -99,6 +99,7 @@ pub struct RouterSessionRequest {
 #[derive(Debug, Clone)]
 pub struct RouterSessionOutcome {
     pub event: MembraneEvent,
+    pub bus_event: nostr::Event,
     pub context_merkle_root: String,
     pub cp_hash: String,
     pub bus_event_id: Option<String>,
@@ -283,7 +284,7 @@ impl Gate {
         now: i64,
         last_cp_hash: &str,
         prev_event_id: Option<&str>,
-    ) -> Result<(MembraneEvent, String), GateError> {
+    ) -> Result<(MembraneEvent, nostr::Event), GateError> {
         let payload = MembranePayload::Generic(serde_json::json!({
             "scope_id": scope_id,
             "model_id": model_id,
@@ -293,14 +294,14 @@ impl Gate {
         }));
         let mut event =
             MembraneEvent::new(EventType::ActionBlocked, "", last_cp_hash, now, payload);
-        let id = self
+        let bus_event = self
             .publisher
-            .publish(&mut event, prev_event_id)
+            .publish_with_receipt(&mut event, prev_event_id)
             .await
-            .map_err(GateError::Bus)?
-            .to_hex();
+            .map_err(GateError::Bus)?;
+        let id = bus_event.id.to_hex();
         self.enqueue_siem(&event, Some(&id));
-        Ok((event, id))
+        Ok((event, bus_event))
     }
 
     pub async fn open_router_session(
@@ -352,18 +353,19 @@ impl Gate {
             }),
         );
 
-        let bus_event_id = self
+        let bus_event = self
             .publisher
-            .publish(&mut event, prev_event_id)
+            .publish_with_receipt(&mut event, prev_event_id)
             .await
-            .map_err(GateError::Bus)?
-            .to_hex();
+            .map_err(GateError::Bus)?;
+        let bus_event_id = bus_event.id.to_hex();
         self.enqueue_siem(&event, Some(&bus_event_id));
 
         let cp_hash = cp_hash_hex(&event).map_err(|e| GateError::Bus(e.into()))?;
 
         Ok(RouterSessionOutcome {
             event,
+            bus_event,
             context_merkle_root,
             cp_hash,
             bus_event_id: Some(bus_event_id),
@@ -524,4 +526,4 @@ mod tests {
         assert!(matches!(err, GateError::ToolDenied(_)));
         gate.authorize_tool(&iac, "github.comment", 1_000).unwrap();
     }
-}
+                                                                 }
