@@ -188,6 +188,14 @@ async fn tools_invoke(
             if !authorized {
                 record_denied_identity(&state, &err, "tool", identity.clone());
             }
+            if authorized {
+                // Dispatch has begun. Do not describe an upstream or journal
+                // failure as a blocked action, or invite a blind write retry.
+                return (StatusCode::BAD_GATEWAY, Json(json!({
+                    "ok": false, "status": "uncertain", "operation_id": req.operation_id,
+                    "error": err.to_string(), "message": "Reconcile upstream before retrying this operation."
+                }))).into_response();
+            }
             publish_blocked_receipt(&state, &headers, Some(&req.model), Some(&req.tool), &err)
                 .await;
             gate_error_response(err)
@@ -421,8 +429,12 @@ async fn handle_tool_invoke(
         bus_event_id: outcome.bus_event_id.clone(),
     };
 
-    // Re-read identity policy immediately before dispatch. Publication failure or
-    // any enforcing check above must leave the upstream untouched.
+    // Publication may have taken time; recheck expiry and scope liveness as well
+    // as identity immediately before dispatch, still under the session lock.
+    state.gate.validate_iac(Some(&iac), now_secs())?;
+    state
+        .gate
+        .check_session_liveness(&chain, &iac.scope_id, now_secs())?;
     state.gate.authorize_identity(
         iac.caller_pubkey
             .as_deref()
@@ -762,6 +774,88 @@ mod tool_invoke_policy_tests {
         }
     }
 
+    #[tokio::test]
+    async fn repeated_write_id_executes_once_with_new_proof_nonce() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let (mut state, _) =
+            test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let hits = Arc::new(AtomicUsize::new(0));
+        let count = hits.clone();
+        let app = axum::Router::new().route(
+            "/repos/acme/pilot/issues/1/comments",
+            post(move || {
+                let count = count.clone();
+                async move {
+                    count.fetch_add(1, Ordering::SeqCst);
+                    Json(json!({"id":42,"html_url":"http://localhost/comment/42"}))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        state.github = Arc::new(GitHubConnector::new(GitHubConnectorConfig {
+            api_base: format!("http://{address}"),
+            repo_allowlist: vec!["acme/pilot".into()],
+            token: Some("fake".into()),
+        }));
+        let req = comment_request();
+        for attempt in 0..2 {
+            let mut headers = HeaderMap::new();
+            let proof = membrane_core::caller::CallerProof::sign(
+                state.gate.publisher().keys(),
+                &state.gate.caller_audience(),
+                "/v1/tools/invoke",
+                &req,
+                state.default_iac.as_ref().unwrap(),
+                now_secs(),
+                Keys::generate().public_key().to_hex(),
+            )
+            .unwrap();
+            headers.insert(
+                "x-membrane-caller-proof",
+                serde_json::to_string(&proof).unwrap().parse().unwrap(),
+            );
+            let response = tools_invoke(State(state.clone()), headers, Ok(Json(req.clone()))).await;
+            if attempt == 0 {
+                assert_eq!(response.status(), StatusCode::OK);
+            } else {
+                assert_ne!(response.status(), StatusCode::OK);
+            }
+        }
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn relay_failure_does_not_dispatch() {
+        let (mut state, _) =
+            test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let gate = Gate::new(
+            state.gate.registry().clone(),
+            BusPublisher::new(BusPublisherConfig {
+                relay_url: "invalid-relay-url".into(),
+                keys: state.gate.publisher().keys().clone(),
+            }),
+        );
+        state.gate = Arc::new(gate);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        state.github = Arc::new(GitHubConnector::new(GitHubConnectorConfig {
+            api_base: format!("http://{}", listener.local_addr().unwrap()),
+            repo_allowlist: vec!["acme/pilot".into()],
+            token: Some("fake".into()),
+        }));
+        let result =
+            handle_tool_invoke(&state, &HeaderMap::new(), &comment_request(), &mut false).await;
+        assert!(matches!(result, Err(GateError::Bus(_))));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), listener.accept())
+                .await
+                .is_err()
+        );
+    }
     #[tokio::test]
     async fn fresh_scope_recovers_without_reviving_stale_scope() {
         let (state, mut iac) = test_state(vec![], vec![]);
