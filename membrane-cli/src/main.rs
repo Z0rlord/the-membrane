@@ -731,7 +731,31 @@ async fn gate_start(
         .context("parse operator OIDC config")?;
         gate = gate.with_operator_oidc(config)?;
     }
-    if let Some(shipper) = SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))? {
+    let siem_export_config = std::env::var_os(membrane_gate::siem_export::ENV_EXPORT_CONFIG);
+    if let Some(path) = &siem_export_config {
+        if std::env::var_os(ENV_WEBHOOK_URL).is_some() {
+            bail!(
+                "{} and {ENV_WEBHOOK_URL} are both set; use only the hardened export",
+                membrane_gate::siem_export::ENV_EXPORT_CONFIG
+            );
+        }
+        let operation_dir = std::env::var_os("MEMBRANE_OPERATION_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(".membrane/tool-operations"));
+        let exporter = membrane_gate::siem_export::SiemExporter::start_from_file(
+            std::path::Path::new(path),
+            &operation_dir,
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let status = exporter.status();
+        println!(
+            "gate: SIEM export enabled (failure_mode={:?}, pending={})",
+            status.failure_mode, status.pending
+        );
+        gate = gate.with_siem_export(exporter);
+    } else if let Some(shipper) =
+        SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))?
+    {
         println!(
             "gate: SIEM webhook enabled (format={}, fail_open={}, urls={})",
             shipper.config().format.as_str(),
