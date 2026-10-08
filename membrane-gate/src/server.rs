@@ -48,7 +48,23 @@ pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Re
         std::env::var("MEMBRANE_AUDIT_LISTEN").unwrap_or_else(|_| "127.0.0.1:8788".into());
     let listener = tokio::net::TcpListener::bind(listen).await?;
     let audit_task = crate::audit::bind(state.clone(), &audit_listen).await?;
-    spawn_delta_t_watchdog(state.gate.clone(), state.session_chain.clone());
+    spawn_delta_t_watchdog(
+        state.gate.clone(),
+        state.session_chain.clone(),
+        state.operations.clone(),
+    );
+    let report = crate::reconciliation::reconcile(&state).await?;
+    warn!(
+        unresolved = report["operations"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0),
+        legacy = report["legacy_reservations"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0),
+        "startup operation reconciliation; inspect loopback /operations (no retries)"
+    );
     // Invalid alarm settings stop startup; they never silently disable alarms.
     let alarm_config = crate::alarm::AlarmConfig::from_env().map_err(anyhow::Error::msg)?;
     crate::alarm::spawn_alarm_task(state.audit.clone(), state.gate.clone(), alarm_config);
@@ -75,8 +91,17 @@ async fn health(State(state): State<GateServerState>) -> impl IntoResponse {
     let active_scope = chain.active_scope_id.clone();
     let degraded_scope = chain.degraded_scope_id.clone();
 
+    let journal = state.operations.unresolved();
+    let recovery = state.operations.recover(&state.gate.publisher_pubkey_hex());
+    let journal_blocked = recovery
+        .as_ref()
+        .map(|r| !r.pending.is_empty())
+        .unwrap_or(true);
     Json(json!({
-        "status": if router_stale || degraded_scope.is_some() { "degraded" } else { "ok" },
+        "journal_available": journal.is_ok() && recovery.is_ok(),
+        "journal_dispatch_blocked": journal_blocked,
+        "unresolved_operations": journal.as_ref().map(|v| v.len()).ok(),
+        "status": if router_stale || degraded_scope.is_some() || journal_blocked { "degraded" } else { "ok" },
         "gate": "membrane-phase-0",
         "caller_audience": state.gate.caller_audience(),
         "delta_t_secs": delta_t_secs,
@@ -295,7 +320,10 @@ async fn handle_chat(
     ensure_live_session(state, &iac, &mut chain, now).await?;
 
     let parent_cp_hash = chain.next_parent_cp_hash(&iac.parent_cp_hash);
-    let session_nonce = chain.next_session_nonce();
+    let session_nonce = chain
+        .session_nonce
+        .checked_add(1)
+        .ok_or_else(|| GateError::Connector("scope nonce exhausted".into()))?;
     let prev_event_id = chain.last_event_id.clone();
 
     let session_req = RouterSessionRequest {
@@ -311,12 +339,37 @@ async fn handle_chat(
         tool_id: None,
     };
 
+    let publication = state.operations.begin_publication()?;
     let outcome = state
         .gate
         .open_router_session(Some(&iac), session_req, now, prev_event_id.as_deref())
-        .await?;
+        .await;
+    let outcome = match outcome {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            if !matches!(err, GateError::Bus(_)) {
+                state
+                    .operations
+                    .append(crate::operations::Record::PublicationAborted { token: publication })?;
+                *chain = state
+                    .operations
+                    .recover(&state.gate.publisher_pubkey_hex())?
+                    .chain;
+            }
+            return Err(err);
+        }
+    };
 
     let cp_hash = cp_hash_hex(&outcome.event).map_err(GateError::Bus)?;
+    state
+        .operations
+        .append(crate::operations::Record::Checkpoint {
+            token: publication,
+            caller: iac.caller_pubkey.clone().unwrap_or_default(),
+            event: outcome.event.clone(),
+            bus_event_id: outcome.bus_event_id.clone(),
+        })?;
+    chain.session_nonce = session_nonce;
     chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone(), now);
 
     let receipt = SessionReceipt {
@@ -386,7 +439,10 @@ async fn handle_tool_invoke(
     let mut chain = state.session_chain.lock().await;
     ensure_live_session(state, &iac, &mut chain, now).await?;
     let parent_cp_hash = chain.next_parent_cp_hash(&iac.parent_cp_hash);
-    let session_nonce = chain.next_session_nonce();
+    let session_nonce = chain
+        .session_nonce
+        .checked_add(1)
+        .ok_or_else(|| GateError::Connector("scope nonce exhausted".into()))?;
     let prev_event_id = chain.last_event_id.clone();
     let context_chunks =
         vec![serde_json::to_vec(req).map_err(|e| GateError::Registry(e.to_string()))?];
@@ -394,12 +450,13 @@ async fn handle_tool_invoke(
     let reservation = if req.tool == crate::github::TOOL_GITHUB_ISSUE_READ {
         None
     } else {
-        Some(
-            state
-                .operations
-                .reserve(iac.caller_pubkey.as_deref().unwrap_or(""), req)?,
-        )
+        Some(state.operations.reserve_in_scope(
+            iac.caller_pubkey.as_deref().unwrap_or(""),
+            &iac.scope_id,
+            req,
+        )?)
     };
+    let publication = state.operations.begin_publication()?;
     let outcome = state
         .gate
         .open_router_session(
@@ -415,9 +472,33 @@ async fn handle_tool_invoke(
             now,
             prev_event_id.as_deref(),
         )
-        .await?;
+        .await;
+    let outcome = match outcome {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            if !matches!(err, GateError::Bus(_)) {
+                state
+                    .operations
+                    .append(crate::operations::Record::PublicationAborted { token: publication })?;
+                *chain = state
+                    .operations
+                    .recover(&state.gate.publisher_pubkey_hex())?
+                    .chain;
+            }
+            return Err(err);
+        }
+    };
 
     let cp_hash = cp_hash_hex(&outcome.event).map_err(GateError::Bus)?;
+    state
+        .operations
+        .append(crate::operations::Record::Checkpoint {
+            token: publication,
+            caller: iac.caller_pubkey.clone().unwrap_or_default(),
+            event: outcome.event.clone(),
+            bus_event_id: outcome.bus_event_id.clone(),
+        })?;
+    chain.session_nonce = session_nonce;
     chain.record_cp(cp_hash.clone(), outcome.bus_event_id.clone(), now);
 
     let receipt = SessionReceipt {
@@ -487,6 +568,11 @@ async fn ensure_live_session(
     chain: &mut SessionChainState,
     now: i64,
 ) -> Result<(), GateError> {
+    state.operations.assert_ready(
+        &state.gate.publisher_pubkey_hex(),
+        iac.caller_pubkey.as_deref().unwrap_or(""),
+        &iac.scope_id,
+    )?;
     // Authenticate severance from the operator bus on every dispatch, not just
     // startup. Relay failure fails closed; local test/demo buses have no relay.
     let relay = state.gate.publisher().relay_url();
@@ -495,6 +581,13 @@ async fn ensure_live_session(
             .await
             .map_err(GateError::Bus)?;
         apply_operator_severs(chain, &events, &state.gate.publisher_pubkey_hex());
+        for (scope, (reason, at)) in &chain.degraded_scopes {
+            state.operations.append(crate::operations::Record::Sever {
+                scope: scope.clone(),
+                reason: reason.clone(),
+                at: *at,
+            })?;
+        }
     }
     // Check degraded before begin_scope — switching onto a severed scope must not clear it.
     if let Err(err) = state.gate.check_session_liveness(chain, &iac.scope_id, now) {
@@ -517,6 +610,11 @@ async fn ensure_live_session(
                     prev.as_deref(),
                 )
                 .await?;
+            state.operations.append(crate::operations::Record::Sever {
+                scope: iac.scope_id.clone(),
+                reason: ALERT_REASON_DELTA_T_EXCEEDED.into(),
+                at: now,
+            })?;
             chain.mark_degraded(&iac.scope_id, ALERT_REASON_DELTA_T_EXCEEDED, now);
             return Err(err);
         }
@@ -1261,5 +1359,103 @@ mod tool_invoke_policy_tests {
             v.decisions[0].authenticated_identity.as_deref(),
             Some(id.as_str())
         );
+    }
+    #[tokio::test]
+    async fn reconciliation_reads_only_and_never_unblocks_same_id() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let (mut state, iac) =
+            test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let reads = Arc::new(AtomicUsize::new(0));
+        let writes = Arc::new(AtomicUsize::new(0));
+        let r = reads.clone();
+        let w = writes.clone();
+        let app = axum::Router::new().route(
+            "/repos/acme/pilot/issues/1/comments",
+            get(move || {
+                let r = r.clone();
+                async move {
+                    r.fetch_add(1, Ordering::SeqCst);
+                    Json(json!([{"id":42,"body":"local test"}]))
+                }
+            })
+            .post(move || {
+                let w = w.clone();
+                async move {
+                    w.fetch_add(1, Ordering::SeqCst);
+                    Json(json!({"id":42}))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        state.github = Arc::new(GitHubConnector::new(GitHubConnectorConfig {
+            repo_allowlist: vec!["acme/pilot".into()],
+            api_base: format!("http://{}", listener.local_addr().unwrap()),
+            token: Some("fake".into()),
+        }));
+        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let req = comment_request();
+        let path = state
+            .operations
+            .reserve_in_scope(iac.caller_pubkey.as_deref().unwrap(), &iac.scope_id, &req)
+            .unwrap();
+        state.operations.finish(&path, false).unwrap();
+        let report = crate::reconciliation::reconcile(&state).await.unwrap();
+        assert_eq!(report["operations"][0]["state"], "operator_review");
+        assert_eq!(report["operations"][0]["evidence"]["matching_ids"][0], 42);
+        assert_eq!(
+            report["operations"][0]["evidence"]["attribution_verified"],
+            false
+        );
+        assert!(
+            handle_tool_invoke(&state, &HeaderMap::new(), &req, &mut false)
+                .await
+                .is_err()
+        );
+        assert_eq!(reads.load(Ordering::SeqCst), 1);
+        assert_eq!(writes.load(Ordering::SeqCst), 0);
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn unavailable_reconciliation_is_operator_review_not_absence() {
+        let (state, iac) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let req = comment_request();
+        state
+            .operations
+            .reserve_in_scope(iac.caller_pubkey.as_deref().unwrap(), &iac.scope_id, &req)
+            .unwrap();
+        let report = crate::reconciliation::reconcile(&state).await.unwrap();
+        assert_eq!(report["operations"][0]["state"], "operator_review");
+        assert_eq!(
+            report["operations"][0]["evidence"]["observation"],
+            "unverifiable"
+        );
+    }
+    #[tokio::test]
+    async fn handler_restart_restores_receipt_and_preserves_deduplication() {
+        let (mut state, iac) =
+            test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let req = comment_request();
+        let mut authorized = false;
+        assert!(
+            handle_tool_invoke(&state, &HeaderMap::new(), &req, &mut authorized)
+                .await
+                .is_err()
+        );
+        assert!(authorized); // unreachable fake upstream, but durable intent and receipt
+        let recovered = state
+            .operations
+            .import_relay(&[], &state.gate.publisher_pubkey_hex())
+            .unwrap();
+        assert_eq!(recovered.scopes[&iac.scope_id].0, 1);
+        state.session_chain = Arc::new(Mutex::new(recovered));
+        let before = state.session_chain.lock().await.last_cp_hash.clone();
+        assert!(
+            handle_tool_invoke(&state, &HeaderMap::new(), &req, &mut false)
+                .await
+                .is_err()
+        );
+        assert_eq!(state.session_chain.lock().await.last_cp_hash, before);
+        assert_eq!(state.operations.unresolved().unwrap()[0].state, "uncertain");
     }
 }
