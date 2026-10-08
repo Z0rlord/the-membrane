@@ -31,6 +31,7 @@ services:
     depends_on:
       - llama
     environment:
+      MEMBRANE_OPERATION_DIR: /state/tool-operations
       MEMBRANE_RELAY_URL: ${MEMBRANE_RELAY_URL:-ws://host.docker.internal:7778}
       NOSTR_NSEC: ${NOSTR_NSEC:?NOSTR_NSEC required in .env}
     extra_hosts:
@@ -38,6 +39,7 @@ services:
     volumes:
       - ./channel-registry.prod.yaml:/config/registry.yaml:ro
       - ./iac.prod.json:/config/iac.json:ro
+      - gate-state:/state
     ports:
       - "127.0.0.1:8787:8787"
     command:
@@ -53,5 +55,6 @@ services:
       - ${MEMBRANE_RELAY_URL:-ws://host.docker.internal:7778}
 
 volumes:
+  gate-state:
   llama-models:
     name: membrane-llama-models
