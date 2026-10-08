@@ -130,7 +130,18 @@ pub fn authorize_repo_and_args(
     if !is_github_tool(&req.tool) {
         return Err(GitHubConnectorError::UnsupportedTool(req.tool.clone()));
     }
-    if req.owner.trim().is_empty() || req.repo.trim().is_empty() {
+    if req.owner.is_empty()
+        || req.repo.is_empty()
+        || !req
+            .owner
+            .bytes()
+            .chain(req.repo.bytes())
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        || req.owner == "."
+        || req.owner == ".."
+        || req.repo == "."
+        || req.repo == ".."
+    {
         return Err(GitHubConnectorError::InvalidArgs(
             "owner and repo are required".into(),
         ));
@@ -187,6 +198,8 @@ impl GitHubConnector {
     pub fn new(config: GitHubConnectorConfig) -> Self {
         let client = reqwest::Client::builder()
             .user_agent("membrane-gate-github-connector/0.1")
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(std::time::Duration::from_secs(15))
             .build()
             .expect("reqwest client");
         Self { config, client }
@@ -233,6 +246,76 @@ impl GitHubConnector {
             TOOL_GITHUB_MERGE => self.merge_pull(token, req).await,
             TOOL_GITHUB_ISSUE_READ => self.read_issue(token, req).await,
             other => Err(GitHubConnectorError::UnsupportedTool(other.into())),
+        }
+    }
+
+    /// GET-only observation. GitHub cannot prove operation attribution for these tools.
+    pub async fn observe(&self, req: &ToolInvokeRequest) -> Result<Value, GitHubConnectorError> {
+        self.preflight(req)?;
+        let suffix = match req.tool.as_str() {
+            TOOL_GITHUB_COMMENT => format!(
+                "issues/{}/comments?per_page=100",
+                req.issue_number.or(req.pull_number).unwrap()
+            ),
+            TOOL_GITHUB_MERGE => format!("pulls/{}", req.pull_number.unwrap()),
+            _ => return Err(GitHubConnectorError::UnsupportedTool(req.tool.clone())),
+        };
+        let url = format!(
+            "{}/repos/{}/{}/{}",
+            self.config.api_base.trim_end_matches('/'),
+            req.owner,
+            req.repo,
+            suffix
+        );
+        let response = self
+            .client
+            .get(url)
+            .bearer_auth(self.config.token.as_deref().unwrap())
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(|e| GitHubConnectorError::Http(e.to_string()))?;
+        if !response.status().is_success() {
+            return Ok(
+                json!({"observation":"unverifiable", "http_status":response.status().as_u16()}),
+            );
+        }
+        let paginated = response.headers().contains_key("link");
+        // Bound untrusted evidence before parsing; do not store bodies or tokens.
+        let mut response = response;
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| GitHubConnectorError::Http(e.to_string()))?
+        {
+            if bytes.len() + chunk.len() > 1024 * 1024 {
+                return Ok(json!({"observation":"unverifiable", "reason":"response_size_limit"}));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        let value: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| GitHubConnectorError::Http(e.to_string()))?;
+        if req.tool == TOOL_GITHUB_COMMENT {
+            let comments = value.as_array().ok_or_else(|| {
+                GitHubConnectorError::Http("comments response is not an array".into())
+            })?;
+            let ids: Vec<_> = comments
+                .iter()
+                .filter(|c| {
+                    c.get("body")
+                        .and_then(Value::as_str)
+                        .is_some_and(|b| Some(b) == req.body.as_deref())
+                })
+                .filter_map(|c| c.get("id").and_then(Value::as_u64))
+                .collect();
+            Ok(
+                json!({"observation":"comment_candidates", "matching_ids":ids, "history_complete":!paginated && comments.len() < 100, "attribution_verified":false}),
+            )
+        } else {
+            Ok(
+                json!({"observation":"pull_state", "merged":value.get("merged").and_then(Value::as_bool), "merge_commit_sha":value.get("merge_commit_sha").and_then(Value::as_str), "attribution_verified":false}),
+            )
         }
     }
 
@@ -587,5 +670,48 @@ mod tests {
         };
         let ctx = connector.execute(&req).await.unwrap();
         assert!(ctx.result.is_some());
+    }
+}
+
+#[cfg(test)]
+mod reconciliation_tests {
+    use super::*;
+    #[tokio::test]
+    async fn merge_and_paginated_comments_are_observations_not_proof() {
+        let app = axum::Router::new()
+            .route(
+                "/repos/acme/pilot/pulls/1",
+                axum::routing::get(|| async {
+                    axum::Json(json!({"merged":true,"merge_commit_sha":"abc"}))
+                }),
+            )
+            .route(
+                "/repos/acme/pilot/issues/1/comments",
+                axum::routing::get(|| async {
+                    (
+                        [("link", "<https://invalid.test/next>; rel=next")],
+                        axum::Json(json!([])),
+                    )
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let connector = GitHubConnector::new(GitHubConnectorConfig {
+            repo_allowlist: vec!["acme/pilot".into()],
+            api_base: format!("http://{}", listener.local_addr().unwrap()),
+            token: Some("test".into()),
+        });
+        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let mut req: ToolInvokeRequest = serde_json::from_value(json!({"tool":"github.merge","model":"demo","owner":"acme","repo":"pilot","pull_number":1})).unwrap();
+        let evidence = connector.observe(&req).await.unwrap();
+        assert_eq!(evidence["merged"], true);
+        assert_eq!(evidence["attribution_verified"], false);
+        req.tool = TOOL_GITHUB_COMMENT.into();
+        req.body = Some("hello".into());
+        let evidence = connector.observe(&req).await.unwrap();
+        assert_eq!(evidence["history_complete"], false);
+        assert_eq!(evidence["attribution_verified"], false);
+        req.owner = "acme/../evil".into();
+        assert!(connector.observe(&req).await.is_err());
+        task.abort();
     }
 }
