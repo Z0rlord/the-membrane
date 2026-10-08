@@ -10,19 +10,27 @@ use crate::{Gate, GateError};
 
 const WATCHDOG_INTERVAL_SECS: u64 = 30;
 
-pub fn spawn_delta_t_watchdog(gate: Arc<Gate>, session_chain: Arc<Mutex<SessionChainState>>) {
+pub fn spawn_delta_t_watchdog(
+    gate: Arc<Gate>,
+    session_chain: Arc<Mutex<SessionChainState>>,
+    operations: Arc<crate::operations::OperationJournal>,
+) {
     tokio::spawn(async move {
         let interval = std::time::Duration::from_secs(WATCHDOG_INTERVAL_SECS);
         loop {
             tokio::time::sleep(interval).await;
-            if let Err(err) = tick(&gate, &session_chain).await {
+            if let Err(err) = tick(&gate, &session_chain, &operations).await {
                 warn!(error = %err, "Δt watchdog tick failed");
             }
         }
     });
 }
 
-async fn tick(gate: &Gate, session_chain: &Arc<Mutex<SessionChainState>>) -> Result<(), GateError> {
+async fn tick(
+    gate: &Gate,
+    session_chain: &Arc<Mutex<SessionChainState>>,
+    operations: &crate::operations::OperationJournal,
+) -> Result<(), GateError> {
     let now = now_secs();
     let mut chain = session_chain.lock().await;
     let delta_t = gate.registry().delta_t_secs;
@@ -53,6 +61,11 @@ async fn tick(gate: &Gate, session_chain: &Arc<Mutex<SessionChainState>>) -> Res
     )
     .await?;
 
+    operations.append(crate::operations::Record::Sever {
+        scope: scope_id.clone(),
+        reason: ALERT_REASON_DELTA_T_EXCEEDED.into(),
+        at: now,
+    })?;
     chain.mark_degraded(&scope_id, ALERT_REASON_DELTA_T_EXCEEDED, now);
     info!(
         scope_id = %scope_id,
