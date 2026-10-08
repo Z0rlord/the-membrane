@@ -265,3 +265,5 @@ matched rules, liveness, loaded registry policy and deny rate. Loopback only, no
 editor or gate write path. See [local run instructions and limits](docs/operator-dashboard.md).
 
 Operator IdP integration: [OIDC configuration and token exchange](docs/operator-oidc.md).
+
+SIEM delivery: [hardened export to Splunk, Datadog or a webhook](docs/siem-export-hardened.md).
