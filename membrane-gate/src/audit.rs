@@ -71,6 +71,8 @@ impl AuditLog {
     ) {
         self.record_authenticated(outcome, rule, agent, scope, action, subject, None);
     }
+    // Existing telemetry API preserves all identity and decision fields.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_authenticated(
         &self,
         outcome: &str,
