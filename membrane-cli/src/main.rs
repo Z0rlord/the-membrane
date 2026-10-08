@@ -7,12 +7,11 @@ use chrono::Duration;
 use clap::{Parser, Subcommand, ValueEnum};
 use membrane_core::{
     build_ocsf_inspired_pack, build_rollup_bundle, day_bounds_utc, fetch_membrane_bus_events,
-    fetch_membrane_events, fetch_session_chain_bootstrap, keys_from_nsec, last_bus_event_id,
-    membrane_kind_for, npub_from_keys, render_jsonl, subscribe_and_compute_bus_root,
-    validate_rollup_bundle, BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper,
-    IntentAuthorizationCredential, MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper,
-    RollupBundle, SessionChainState, SiemEvent, SiemWebhookShipper, SignedRollupBundle,
-    ENV_WEBHOOK_URL,
+    fetch_membrane_events, fetch_session_chain_bootstrap, keys_from_nsec, membrane_kind_for,
+    npub_from_keys, render_jsonl, subscribe_and_compute_bus_root, validate_rollup_bundle,
+    BusPublisher, BusPublisherConfig, EventType, HttpOtsStamper, IntentAuthorizationCredential,
+    MembraneEvent, MembranePayload, MockOtsStamper, OtsStamper, RollupBundle, SessionChainState,
+    SiemEvent, SiemWebhookShipper, SignedRollupBundle, ENV_WEBHOOK_URL,
 };
 use membrane_gate::{
     demo_registry, run_demo_dashboard, run_gate_server, ChannelRegistry, DemoRuntime,
@@ -742,11 +741,9 @@ async fn gate_start(
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let pubkey = keys.public_key().to_hex();
-    let since = now_secs() - 86_400 * 7;
-    let bus_events = fetch_membrane_bus_events(relay, Some(since), 5_000).await?;
-    let membrane_events: Vec<_> = bus_events.iter().map(|e| e.event.clone()).collect();
-    let mut session_chain = SessionChainState::from_bus_events(&membrane_events, &pubkey);
-    session_chain.last_event_id = last_bus_event_id(&bus_events, &pubkey);
+    let operations = Arc::new(membrane_gate::operations::OperationJournal::from_env());
+    let bus_events = fetch_membrane_bus_events(relay, None, 5_000).await?;
+    let session_chain = operations.import_relay(&bus_events, &pubkey)?;
     println!(
         "gate: chain head cp_hash={} session_nonce={}",
         session_chain.last_cp_hash, session_chain.session_nonce
@@ -781,7 +778,7 @@ async fn gate_start(
         proxy,
         default_iac: Some(default_iac),
         session_chain: Arc::new(tokio::sync::Mutex::new(session_chain)),
-        operations: Arc::new(membrane_gate::operations::OperationJournal::from_env()),
+        operations,
         github: Arc::new(GitHubConnector::new(github_cfg)),
         audit: Arc::new(membrane_gate::audit::AuditLog::default()),
     };
