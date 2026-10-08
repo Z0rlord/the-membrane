@@ -30,6 +30,8 @@ pub enum OtsError {
     Http(String),
 }
 
+// async_trait adds a redundant must_use to its boxed Future on Rust 1.99.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait OtsStamper: Send + Sync {
     async fn stamp_digest(&self, digest: [u8; 32]) -> Result<OtsStampResult, OtsError>;
