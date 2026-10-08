@@ -42,6 +42,10 @@ traffic routed through the Membrane gate.
 
 ## Live webhook shipper
 
+> For production use the [hardened export](siem-export-hardened.md): bounded durable
+> spool, TLS pinning, retry with backoff and an explicit failure mode. The shipper
+> below is fail-open by default and is meant for local demos.
+
 When `MEMBRANE_SIEM_WEBHOOK_URL` is set, the gate (and `membrane iac issue`)
 POST mapped SIEM events as they are published:
 
