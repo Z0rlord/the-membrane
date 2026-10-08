@@ -38,6 +38,7 @@ pub struct GateServerState {
     pub session_chain: Arc<Mutex<SessionChainState>>,
     /// GitHub connector (operator installs). Demo dashboard does not use this.
     pub github: Arc<GitHubConnector>,
+    pub operations: Arc<crate::operations::OperationJournal>,
     pub audit: Arc<crate::audit::AuditLog>,
 }
 
@@ -372,34 +373,25 @@ async fn handle_tool_invoke(
     // Repo allowlist + token presence — still before GitHub HTTP.
     state.github.preflight(req).map_err(map_github_err)?;
 
-    // Fail closed if severed / stale before the mutating call.
-    {
-        let mut chain = state.session_chain.lock().await;
-        ensure_live_session(state, &iac, &mut chain, now).await?;
-    }
-
-    state.gate.authorize_identity(
-        iac.caller_pubkey
-            .as_deref()
-            .ok_or_else(|| GateError::IdentityAuthentication("missing caller binding".into()))?,
-        &iac,
-        &req.model,
-        Some((&req.tool, &format!("{}/{}", req.owner, req.repo))),
-    )?;
-    *authorized = true;
-    record_allowed(state, &iac, "tool");
-    let tool_ctx = state.github.execute(req).await.map_err(map_github_err)?;
-
+    // Serialize validation, intent publication and dispatch with sever/staleness changes.
+    // The receipt attests the request intent, not a completed upstream effect.
     let mut chain = state.session_chain.lock().await;
     ensure_live_session(state, &iac, &mut chain, now).await?;
-
     let parent_cp_hash = chain.next_parent_cp_hash(&iac.parent_cp_hash);
     let session_nonce = chain.next_session_nonce();
     let prev_event_id = chain.last_event_id.clone();
-
     let context_chunks =
-        vec![serde_json::to_vec(&tool_ctx).map_err(|e| GateError::Registry(e.to_string()))?];
+        vec![serde_json::to_vec(req).map_err(|e| GateError::Registry(e.to_string()))?];
 
+    let reservation = if req.tool == crate::github::TOOL_GITHUB_ISSUE_READ {
+        None
+    } else {
+        Some(
+            state
+                .operations
+                .reserve(iac.caller_pubkey.as_deref().unwrap_or(""), req)?,
+        )
+    };
     let outcome = state
         .gate
         .open_router_session(
@@ -428,6 +420,24 @@ async fn handle_tool_invoke(
         parent_cp_hash,
         bus_event_id: outcome.bus_event_id.clone(),
     };
+
+    // Re-read identity policy immediately before dispatch. Publication failure or
+    // any enforcing check above must leave the upstream untouched.
+    state.gate.authorize_identity(
+        iac.caller_pubkey
+            .as_deref()
+            .ok_or_else(|| GateError::IdentityAuthentication("missing caller binding".into()))?,
+        &iac,
+        &req.model,
+        Some((&req.tool, &format!("{}/{}", req.owner, req.repo))),
+    )?;
+    *authorized = true;
+    record_allowed(state, &iac, "tool");
+    let execution = state.github.execute(req).await;
+    if let Some(path) = reservation {
+        state.operations.finish(&path, execution.is_ok())?;
+    }
+    let tool_ctx = execution.map_err(map_github_err)?;
 
     info!(
         scope_id = %iac.scope_id,
@@ -465,13 +475,22 @@ async fn ensure_live_session(
     chain: &mut SessionChainState,
     now: i64,
 ) -> Result<(), GateError> {
+    // Authenticate severance from the operator bus on every dispatch, not just
+    // startup. Relay failure fails closed; local test/demo buses have no relay.
+    let relay = state.gate.publisher().relay_url();
+    if !relay.starts_with("memory://") && !relay.starts_with("local://") {
+        let events = membrane_core::nostr_bus::fetch_membrane_events(relay, None, 5_000)
+            .await
+            .map_err(GateError::Bus)?;
+        apply_operator_severs(chain, &events, &state.gate.publisher_pubkey_hex());
+    }
     // Check degraded before begin_scope — switching onto a severed scope must not clear it.
     if let Err(err) = state.gate.check_session_liveness(chain, &iac.scope_id, now) {
         if matches!(err, GateError::SessionDegraded(_, _)) {
             return Err(err);
         }
         if matches!(err, GateError::SessionStale(_, _)) {
-            let age = chain.last_router_cp_age_secs(now);
+            let age = chain.scope_router_cp_age_secs(&iac.scope_id, now);
             let prev = chain.last_event_id.clone();
             let cp_hash = chain.last_cp_hash.clone();
             let scope_id = iac.scope_id.clone();
@@ -492,16 +511,33 @@ async fn ensure_live_session(
         return Err(err);
     }
 
-    let new_scope = chain.begin_scope(&iac.scope_id);
-    if new_scope {
-        // Fresh scope id only — does not revive a still-degraded scope (checked above).
-        chain.clear_degraded_for_scope(&iac.scope_id);
-    }
-
+    let new_scope = chain.active_scope_id.as_deref() != Some(&iac.scope_id)
+        && !chain.scopes.contains_key(&iac.scope_id);
     chain
         .validate_iac_anchor(&iac.parent_cp_hash, new_scope)
         .map_err(GateError::NoValidIac)?;
+    // A rejected anchor must not make the next identical retry look established.
+    chain.begin_scope(&iac.scope_id);
     Ok(())
+}
+
+fn apply_operator_severs(
+    chain: &mut SessionChainState,
+    events: &[membrane_core::event::MembraneEvent],
+    operator: &str,
+) {
+    use membrane_core::event::EventType;
+    for event in events {
+        if event.event_type != EventType::AlertDegraded
+            || membrane_core::nostr_bus::verify_membrane_event_signature(event, operator).is_err()
+        {
+            continue;
+        }
+        let (reason, scope) = membrane_core::session::alert_degraded_fields(&event.payload);
+        if let (Some(reason), Some(scope)) = (reason, scope) {
+            chain.mark_degraded(&scope, &reason, event.timestamp);
+        }
+    }
 }
 
 fn map_github_err(err: crate::github::GitHubConnectorError) -> GateError {
@@ -704,15 +740,148 @@ mod tool_invoke_policy_tests {
             default_iac: Some(iac.clone()),
             session_chain: Arc::new(Mutex::new(SessionChainState::genesis())),
             github: Arc::new(github),
+            operations: Arc::new(crate::operations::OperationJournal::new(
+                std::env::temp_dir().join(Keys::generate().public_key().to_hex()),
+            )),
             audit: Arc::new(crate::audit::AuditLog::default()),
         };
         (state, iac)
+    }
+
+    fn comment_request() -> ToolInvokeRequest {
+        ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
+            tool: TOOL_GITHUB_COMMENT.into(),
+            model: "demo".into(),
+            owner: "acme".into(),
+            repo: "pilot".into(),
+            issue_number: Some(1),
+            pull_number: None,
+            body: Some("local test".into()),
+            commit_title: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn fresh_scope_recovers_without_reviving_stale_scope() {
+        let (state, mut iac) = test_state(vec![], vec![]);
+        let mut chain = state.session_chain.lock().await;
+        chain.begin_scope("old");
+        chain.next_session_nonce();
+        chain.record_cp("aa".repeat(32), None, 1);
+        iac.parent_cp_hash = chain.last_cp_hash.clone();
+        ensure_live_session(&state, &iac, &mut chain, now_secs())
+            .await
+            .unwrap();
+        assert_eq!(chain.last_router_cp_at, None);
+        assert!(state
+            .gate
+            .check_session_liveness(&chain, "old", now_secs())
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn signed_cli_sever_blocks_running_dispatch() {
+        let (state, iac) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let mut event = membrane_core::event::MembraneEvent::new(
+            membrane_core::event::EventType::AlertDegraded,
+            "",
+            "0".repeat(64),
+            now_secs(),
+            membrane_core::session::alert_degraded_payload(
+                "subject_sever",
+                &iac.scope_id,
+                None,
+                300,
+            ),
+        );
+        state
+            .gate
+            .publisher()
+            .sign_membrane_event(&mut event)
+            .unwrap();
+        let envelope = state.gate.publisher().to_nostr_event(&event, None).unwrap();
+        let parsed = membrane_core::nostr_bus::parse_membrane_event(&envelope).unwrap();
+        {
+            let mut chain = state.session_chain.lock().await;
+            apply_operator_severs(&mut chain, &[parsed], &state.gate.publisher_pubkey_hex());
+        }
+        let result =
+            handle_tool_invoke(&state, &HeaderMap::new(), &comment_request(), &mut false).await;
+        assert!(matches!(result, Err(GateError::SessionDegraded(_, _))));
+        assert_eq!(
+            state.session_chain.lock().await.last_cp_hash,
+            "0".repeat(64)
+        );
+    }
+    #[tokio::test]
+    async fn rejected_anchor_retry_never_changes_chain() {
+        let (state, iac) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let mut chain = state.session_chain.lock().await;
+        chain.last_cp_hash = "aa".repeat(32);
+        let before = chain.clone();
+        for _ in 0..2 {
+            assert!(matches!(
+                ensure_live_session(&state, &iac, &mut chain, now_secs()).await,
+                Err(GateError::NoValidIac(_))
+            ));
+            assert_eq!(*chain, before);
+        }
+    }
+
+    #[tokio::test]
+    async fn context_denial_never_reaches_upstream() {
+        let (mut state, mut iac) =
+            test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        state.github = Arc::new(GitHubConnector::new(GitHubConnectorConfig {
+            api_base: format!("http://{}", listener.local_addr().unwrap()),
+            repo_allowlist: vec!["acme/pilot".into()],
+            token: Some("fake".into()),
+        }));
+        iac.context_merkle_bound = "0".repeat(64);
+        iac.sign(state.gate.publisher().keys()).unwrap();
+        state.default_iac = Some(iac);
+        let result =
+            handle_tool_invoke(&state, &HeaderMap::new(), &comment_request(), &mut false).await;
+        assert!(matches!(result, Err(GateError::ContextBoundExceeded)));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), listener.accept())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            state.session_chain.lock().await.last_cp_hash,
+            "0".repeat(64)
+        );
+    }
+
+    #[tokio::test]
+    async fn authorization_receipt_precedes_upstream_failure() {
+        let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
+        let mut authorized = false;
+        assert!(matches!(
+            handle_tool_invoke(
+                &state,
+                &HeaderMap::new(),
+                &comment_request(),
+                &mut authorized
+            )
+            .await,
+            Err(GateError::Connector(_))
+        ));
+        assert!(authorized);
+        assert_ne!(
+            state.session_chain.lock().await.last_cp_hash,
+            "0".repeat(64)
+        );
     }
 
     #[tokio::test]
     async fn handler_records_denial_without_trusting_agent_headers() {
         let (state, _) = test_state(vec![], vec!["acme/pilot".into()]);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_MERGE.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -752,6 +921,7 @@ mod tool_invoke_policy_tests {
     async fn upstream_failure_does_not_rewrite_allow_as_deny() {
         let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -817,6 +987,7 @@ mod tool_invoke_policy_tests {
         let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let headers = HeaderMap::new();
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_MERGE.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -837,6 +1008,7 @@ mod tool_invoke_policy_tests {
         let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let headers = HeaderMap::new();
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -867,6 +1039,7 @@ mod tool_invoke_policy_tests {
         }
         let headers = HeaderMap::new();
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -885,6 +1058,7 @@ mod tool_invoke_policy_tests {
     async fn unauthenticated_handler_has_no_identity_and_never_allows() {
         let (state, _) = test_state(vec![TOOL_GITHUB_COMMENT.into()], vec!["acme/pilot".into()]);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
