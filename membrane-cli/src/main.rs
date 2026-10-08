@@ -776,6 +776,7 @@ async fn gate_start(
         proxy,
         default_iac: Some(default_iac),
         session_chain: Arc::new(tokio::sync::Mutex::new(session_chain)),
+        operations: Arc::new(membrane_gate::operations::OperationJournal::from_env()),
         github: Arc::new(GitHubConnector::new(github_cfg)),
         audit: Arc::new(membrane_gate::audit::AuditLog::default()),
     };
