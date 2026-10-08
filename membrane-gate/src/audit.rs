@@ -280,7 +280,11 @@ pub async fn local_only(req: Request, next: Next) -> Response {
             })
         })
         .unwrap_or(true);
-    if !valid_host || !valid_origin {
+    // Browser requests must not cause reconciliation, even same-origin.
+    let browser_write = req.method() != axum::http::Method::GET
+        && (req.headers().contains_key(header::ORIGIN)
+            || req.headers().contains_key("sec-fetch-site"));
+    if !valid_host || !valid_origin || browser_write {
         return StatusCode::FORBIDDEN.into_response();
     }
     let mut response = next.run(req).await;
@@ -299,6 +303,11 @@ async fn endpoint(State(state): State<GateServerState>) -> Json<Snapshot> {
 pub fn router(state: GateServerState) -> axum::Router {
     axum::Router::new()
         .route("/audit", get(endpoint))
+        .route("/operations", get(crate::reconciliation::list))
+        .route(
+            "/operations/reconcile",
+            axum::routing::post(crate::reconciliation::run),
+        )
         .with_state(state)
         .layer(middleware::from_fn(local_only))
 }
