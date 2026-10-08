@@ -177,13 +177,12 @@ pub fn authorize_repo_and_args(
                 ));
             }
         }
-        TOOL_GITHUB_ISSUE_READ => {
-            if req.issue_number.is_none() && req.pull_number.is_none() {
-                return Err(GitHubConnectorError::InvalidArgs(
-                    "issue_number or pull_number required for github.issue.read".into(),
-                ));
-            }
+        TOOL_GITHUB_ISSUE_READ if req.issue_number.is_none() && req.pull_number.is_none() => {
+            return Err(GitHubConnectorError::InvalidArgs(
+                "issue_number or pull_number required for github.issue.read".into(),
+            ));
         }
+        TOOL_GITHUB_ISSUE_READ => {}
         _ => {}
     }
     Ok(())
