@@ -1,3 +1,7 @@
+> Durable journal follow-up: [durable-journal.md](durable-journal.md) supersedes
+> the storage/recovery limits below where explicitly described. The following
+> notes document the enforcement-series baseline, not a production assurance claim.
+
 # October enforcement fixes and remaining limits
 
 Tool CP receipts now attest the **request intent before dispatch**, not successful
