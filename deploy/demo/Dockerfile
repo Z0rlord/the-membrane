@@ -4,6 +4,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY membrane-core membrane-core
 COPY membrane-gate membrane-gate
 COPY membrane-cli membrane-cli
+COPY membrane-dashboard membrane-dashboard
+COPY membrane-advisor membrane-advisor
 RUN cargo build --locked --release -p membrane-cli
 
 FROM debian:bookworm-slim
