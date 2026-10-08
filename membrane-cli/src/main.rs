@@ -1410,7 +1410,6 @@ fn now_secs() -> i64 {
 #[cfg(test)]
 mod cli_tests {
     use super::*;
-    use clap::CommandFactory;
 
     #[test]
     fn demo_is_the_local_dashboard() {

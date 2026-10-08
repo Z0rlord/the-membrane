@@ -4,7 +4,9 @@ COPY Cargo.toml Cargo.lock ./
 COPY membrane-core membrane-core
 COPY membrane-gate membrane-gate
 COPY membrane-cli membrane-cli
-RUN cargo build --release -p membrane-cli
+COPY membrane-dashboard membrane-dashboard
+COPY membrane-advisor membrane-advisor
+RUN cargo build --locked --release -p membrane-cli
 
 FROM debian:bookworm-slim
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates \
