@@ -375,6 +375,9 @@ enum ToolsCommands {
         gate_pubkey: String,
         #[arg(long)]
         tool: String,
+        /// Stable write ID. Reuse on retry; reconcile an uncertain result first.
+        #[arg(long)]
+        operation_id: Option<String>,
         #[arg(long)]
         model: String,
         #[arg(long)]
@@ -511,6 +514,7 @@ async fn main() -> Result<()> {
                 nsec,
                 gate_pubkey,
                 tool,
+                operation_id,
                 model,
                 owner,
                 repo,
@@ -525,6 +529,7 @@ async fn main() -> Result<()> {
                     nsec,
                     gate_pubkey: &gate_pubkey,
                     tool: &tool,
+                    operation_id: operation_id.as_deref(),
                     model: &model,
                     owner: &owner,
                     repo: &repo,
@@ -1118,6 +1123,7 @@ struct ToolsInvokeArgs<'a> {
     nsec: Option<String>,
     gate_pubkey: &'a str,
     tool: &'a str,
+    operation_id: Option<&'a str>,
     model: &'a str,
     owner: &'a str,
     repo: &'a str,
@@ -1134,6 +1140,7 @@ async fn tools_invoke(args: ToolsInvokeArgs<'_>) -> Result<()> {
         nsec,
         gate_pubkey,
         tool,
+        operation_id,
         model,
         owner,
         repo,
@@ -1146,6 +1153,7 @@ async fn tools_invoke(args: ToolsInvokeArgs<'_>) -> Result<()> {
     let url = format!("{}/v1/tools/invoke", gate_url.trim_end_matches('/'));
     let payload = serde_json::json!({
         "tool": tool,
+        "operation_id": operation_id,
         "model": model,
         "owner": owner,
         "repo": repo,
