@@ -163,6 +163,8 @@ pub enum SiemWebhookError {
     Http(String),
 }
 
+// async_trait adds a redundant must_use to its boxed Future on Rust 1.99.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait WebhookPoster: Send + Sync {
     async fn post(
@@ -244,7 +246,10 @@ impl<P: WebhookPoster> SiemWebhookShipper<P> {
         &self.config
     }
 
-    pub fn render_body(&self, event: &SiemEvent) -> Result<(String, &'static str), SiemWebhookError> {
+    pub fn render_body(
+        &self,
+        event: &SiemEvent,
+    ) -> Result<(String, &'static str), SiemWebhookError> {
         match self.config.format {
             SiemWebhookFormat::Jsonl => {
                 let body = render_jsonl(std::slice::from_ref(event))
@@ -329,10 +334,7 @@ impl<P: WebhookPoster> SiemWebhookShipper<P> {
 
             if attempt < self.config.max_attempts {
                 let shift = (attempt - 1).min(8);
-                let delay = self
-                    .config
-                    .initial_backoff
-                    .saturating_mul(1u32 << shift);
+                let delay = self.config.initial_backoff.saturating_mul(1u32 << shift);
                 if !delay.is_zero() {
                     tokio::time::sleep(delay).await;
                 }
@@ -431,8 +433,7 @@ fn write_dead_letter(
         .append(true)
         .open(path)
         .map_err(|io_err| SiemWebhookError::DeadLetter(io_err.to_string()))?;
-    writeln!(file, "{line}")
-        .map_err(|io_err| SiemWebhookError::DeadLetter(io_err.to_string()))?;
+    writeln!(file, "{line}").map_err(|io_err| SiemWebhookError::DeadLetter(io_err.to_string()))?;
     Ok(())
 }
 
@@ -564,18 +565,18 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let dlq = dir.join("dead.jsonl");
 
-        let poster = ScriptedPoster::with_statuses(vec![
-            Ok(500),
-            Err("connection reset".into()),
-            Ok(502),
-        ]);
+        let poster =
+            ScriptedPoster::with_statuses(vec![Ok(500), Err("connection reset".into()), Ok(502)]);
         let mut config = test_config(true);
         config.dead_letter_path = Some(dlq.clone());
         config.fail_open = false;
         let shipper = SiemWebhookShipper::new(config, poster);
 
         let err = shipper.deliver(&sample_event()).await.unwrap_err();
-        assert!(matches!(err, SiemWebhookError::Delivery { attempts: 3, .. }));
+        assert!(matches!(
+            err,
+            SiemWebhookError::Delivery { attempts: 3, .. }
+        ));
         assert_eq!(shipper.poster.calls.load(Ordering::SeqCst), 3);
 
         let dlq_body = std::fs::read_to_string(&dlq).unwrap();
@@ -605,7 +606,10 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(value["activity_name"], "Action Blocked");
         assert!(value.get("class_uid").is_none());
-        assert_eq!(value["unmapped"]["membrane"]["event_type"], "blocked_action");
+        assert_eq!(
+            value["unmapped"]["membrane"]["event_type"],
+            "blocked_action"
+        );
     }
 
     #[test]
