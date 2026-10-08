@@ -1,3 +1,4 @@
+pub mod oidc;
 pub mod operations;
 use membrane_core::event::{EventType, MembraneEvent, MembranePayload, RouterSessionPayload};
 use membrane_core::iac::IntentAuthorizationCredential;
@@ -107,6 +108,7 @@ pub struct Gate {
     registry: ChannelRegistry,
     publisher: BusPublisher,
     iac_signer_pubkey: String,
+    operator_oidc: Option<oidc::OperatorOidc>,
     siem_shipper: Option<Arc<SiemWebhookShipper>>,
     identity_registry_path: Option<std::path::PathBuf>,
     caller_challenge: String,
@@ -140,6 +142,7 @@ impl Gate {
             registry,
             publisher,
             iac_signer_pubkey,
+            operator_oidc: None,
             siem_shipper: None,
             identity_registry_path: None,
             caller_challenge: nostr::Keys::generate().public_key().to_hex(),
