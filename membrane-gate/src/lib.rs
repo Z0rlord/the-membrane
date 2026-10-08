@@ -1,3 +1,4 @@
+pub mod operations;
 use membrane_core::event::{EventType, MembraneEvent, MembranePayload, RouterSessionPayload};
 use membrane_core::iac::IntentAuthorizationCredential;
 use membrane_core::merkle::{Domain, MerkleTree};
@@ -201,14 +202,19 @@ impl Gate {
     ) -> Result<(), GateError> {
         if chain.is_scope_degraded(scope_id) {
             let reason = chain
-                .degraded_reason
-                .clone()
+                .degraded_scopes
+                .get(scope_id)
+                .map(|(reason, _)| reason.clone())
+                .or_else(|| chain.degraded_reason.clone())
                 .unwrap_or_else(|| "degraded".into());
             return Err(GateError::SessionDegraded(scope_id.to_string(), reason));
         }
-        if chain.is_router_stale(now, self.registry.delta_t_secs) {
+        if chain
+            .scope_router_cp_age_secs(scope_id, now)
+            .is_some_and(|age| age > self.registry.delta_t_secs as i64)
+        {
             let age = chain
-                .last_router_cp_age_secs(now)
+                .scope_router_cp_age_secs(scope_id, now)
                 .unwrap_or(self.registry.delta_t_secs as i64);
             return Err(GateError::SessionStale(age, self.registry.delta_t_secs));
         }
@@ -476,6 +482,7 @@ mod tests {
     fn rejects_stale_router_cp() {
         let gate = test_gate(300);
         let mut chain = SessionChainState::genesis();
+        chain.active_scope_id = Some("scope-a".into());
         chain.last_router_cp_at = Some(1_000);
         let err = gate
             .check_session_liveness(&chain, "scope-a", 1_400)
@@ -487,6 +494,7 @@ mod tests {
     fn fresh_router_cp_passes() {
         let gate = test_gate(300);
         let mut chain = SessionChainState::genesis();
+        chain.active_scope_id = Some("scope-a".into());
         chain.last_router_cp_at = Some(1_000);
         gate.check_session_liveness(&chain, "scope-a", 1_200)
             .unwrap();

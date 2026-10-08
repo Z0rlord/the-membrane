@@ -4,9 +4,9 @@
 //! Tokens come from env (`MEMBRANE_GITHUB_TOKEN` or `GITHUB_TOKEN`) — never logged.
 //! Public demo / `membrane demo` keeps simulated tools and does not mount this path.
 
-use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tracing::info;
 
@@ -53,7 +53,11 @@ impl GitHubConnectorConfig {
         let token = std::env::var(ENV_TOKEN_PRIMARY)
             .ok()
             .filter(|s| !s.is_empty())
-            .or_else(|| std::env::var(ENV_TOKEN_FALLBACK).ok().filter(|s| !s.is_empty()));
+            .or_else(|| {
+                std::env::var(ENV_TOKEN_FALLBACK)
+                    .ok()
+                    .filter(|s| !s.is_empty())
+            });
         Self {
             repo_allowlist,
             api_base: "https://api.github.com".into(),
@@ -74,6 +78,8 @@ impl GitHubConnectorConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolInvokeRequest {
     pub tool: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
     pub model: String,
     pub owner: String,
     pub repo: String,
@@ -142,7 +148,12 @@ pub fn authorize_repo_and_args(
                     "issue_number or pull_number required for github.comment".into(),
                 ));
             }
-            if req.body.as_ref().map(|b| b.trim().is_empty()).unwrap_or(true) {
+            if req
+                .body
+                .as_ref()
+                .map(|b| b.trim().is_empty())
+                .unwrap_or(true)
+            {
                 return Err(GitHubConnectorError::InvalidArgs(
                     "body required for github.comment".into(),
                 ));
@@ -366,10 +377,7 @@ impl GitHubConnector {
             });
         }
         let parsed: Value = serde_json::from_str(&text).unwrap_or(json!({}));
-        let title = parsed
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let title = parsed.get("title").and_then(|v| v.as_str()).unwrap_or("");
         Ok(ToolReceiptContext {
             tool: req.tool.clone(),
             model: req.model.clone(),
@@ -413,6 +421,7 @@ mod tests {
     fn deny_repo_not_on_allowlist_before_http() {
         let config = cfg(&["acme/allowed"]);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -430,6 +439,7 @@ mod tests {
     fn empty_allowlist_denies_all_repos() {
         let config = cfg(&[]);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -449,6 +459,7 @@ mod tests {
     fn allow_comment_args_on_listed_repo() {
         let config = cfg(&["acme/allowed"]);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -470,6 +481,7 @@ mod tests {
         };
         let connector = GitHubConnector::new(config);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -524,6 +536,7 @@ mod tests {
         };
         let connector = GitHubConnector::new(config);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "demo".into(),
             owner: "acme".into(),
@@ -562,6 +575,7 @@ mod tests {
         let config = GitHubConnectorConfig::from_env(vec![format!("{owner}/{repo}")]);
         let connector = GitHubConnector::new(config);
         let req = ToolInvokeRequest {
+            operation_id: Some("test-operation".into()),
             tool: TOOL_GITHUB_COMMENT.into(),
             model: "integration".into(),
             owner,

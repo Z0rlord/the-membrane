@@ -108,3 +108,16 @@ cargo test -p membrane-gate tool_invoke_policy
 # MEMBRANE_GITHUB_INTEGRATION=1 MEMBRANE_GITHUB_OWNER=… MEMBRANE_GITHUB_REPO=… \
 #   cargo test -p membrane-gate live_github_integration -- --ignored
 ```
+
+## Write retry safety
+
+`github.comment` and `github.merge` require `--operation-id` in the CLI (or
+`operation_id` in the signed JSON request). Keep the same ID when retrying the same
+operation. Reserved IDs fail closed, including after restart. Inspect GitHub before
+an operator clears any reservation. Store `MEMBRANE_OPERATION_DIR` on a persistent
+volume; the reference compose file mounts `/state` for that purpose.
+
+The router receipt covers the request intent and is published before GitHub is
+contacted. It does not prove the write completed. The local append-only journal
+records completion or uncertainty; it never automatically retries an uncertain
+write. See [remaining enforcement limits](audit-fixes.md).

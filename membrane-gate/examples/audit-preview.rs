@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
         proxy: Arc::new(LlmProxy::new(None).with_dev_mock(true)),
         default_iac: None,
         session_chain: Arc::new(tokio::sync::Mutex::new(SessionChainState::genesis())),
+        operations: Arc::new(membrane_gate::operations::OperationJournal::from_env()),
         github: Arc::new(GitHubConnector::new(GitHubConnectorConfig {
             repo_allowlist: vec![],
             api_base: "http://127.0.0.1:1".into(),

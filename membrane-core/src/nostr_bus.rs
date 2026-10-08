@@ -58,6 +58,10 @@ impl BusPublisher {
         Self { config }
     }
 
+    pub fn relay_url(&self) -> &str {
+        &self.config.relay_url
+    }
+
     pub fn keys(&self) -> &Keys {
         &self.config.keys
     }
@@ -171,6 +175,14 @@ pub fn parse_membrane_event(event: &Event) -> Result<MembraneEvent> {
     }
     let membrane: MembraneEvent =
         serde_json::from_str(&event.content).context("parse membrane event JSON")?;
+    event.verify().context("invalid Nostr envelope")?;
+    if kind != membrane_kind_for(membrane.event_type) {
+        bail!("event kind does not match inner type");
+    }
+    if event.created_at.as_u64() != membrane.timestamp as u64 || membrane.timestamp < 0 {
+        bail!("envelope timestamp does not match inner timestamp");
+    }
+    verify_membrane_event_signature(&membrane, &event.pubkey.to_hex())?;
     Ok(membrane)
 }
 
@@ -268,6 +280,56 @@ mod tests {
     use super::*;
     use crate::event::{MembranePayload, RouterSessionPayload};
 
+    #[test]
+    fn recovery_rejects_unsigned_spoofed_inner_events() {
+        let attacker = Keys::generate();
+        let operator = Keys::generate();
+        let publisher = BusPublisher::new(BusPublisherConfig {
+            relay_url: "memory://test".into(),
+            keys: attacker.clone(),
+        });
+        let event = MembraneEvent::new(
+            EventType::AlertDegraded,
+            operator.public_key().to_hex(),
+            "00".repeat(32),
+            100,
+            crate::session::alert_degraded_payload("subject_sever", "scope-a", None, 300),
+        );
+        let outer = publisher.to_nostr_event(&event, None).unwrap();
+        assert!(parse_membrane_event(&outer).is_err());
+    }
+
+    #[test]
+    fn recovery_verifies_both_signatures_and_kind() {
+        let keys = Keys::generate();
+        let publisher = BusPublisher::new(BusPublisherConfig {
+            relay_url: "memory://test".into(),
+            keys: keys.clone(),
+        });
+        let mut inner = MembraneEvent::new(
+            EventType::AlertDegraded,
+            "",
+            "00".repeat(32),
+            100,
+            crate::session::alert_degraded_payload("subject_sever", "scope-a", None, 300),
+        );
+        publisher.sign_membrane_event(&mut inner).unwrap();
+        let good = publisher.to_nostr_event(&inner, None).unwrap();
+        assert!(parse_membrane_event(&good).is_ok());
+        let wrong_kind = EventBuilder::new(
+            Kind::Custom(KIND_MEMBRANE),
+            serde_json::to_string(&inner).unwrap(),
+        )
+        .custom_created_at(Timestamp::from(100))
+        .sign_with_keys(&keys)
+        .unwrap();
+        assert!(parse_membrane_event(&wrong_kind).is_err());
+        inner.timestamp += 1;
+        assert!(parse_membrane_event(&publisher.to_nostr_event(&inner, None).unwrap()).is_err());
+        let mut bad_outer = good;
+        bad_outer.content.push(' ');
+        assert!(parse_membrane_event(&bad_outer).is_err());
+    }
     #[test]
     fn maps_router_kind() {
         assert_eq!(membrane_kind_for(EventType::CpRouter), KIND_MEMBRANE);

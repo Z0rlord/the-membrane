@@ -1,5 +1,7 @@
 //! Router session chain state (RFA-lite) for §4.2.2.
 
+use std::collections::BTreeMap;
+
 use crate::event::{EventType, MembraneEvent, MembranePayload};
 use crate::rollup::{cp_hash_hex, is_cp_event, GENESIS_CP_HASH};
 
@@ -19,6 +21,10 @@ pub struct SessionChainState {
     pub degraded_scope_id: Option<String>,
     pub degraded_at: Option<i64>,
     pub degraded_reason: Option<String>,
+    /// Scope-local counters and liveness; CP hashes remain one serialized operator chain.
+    pub scopes: BTreeMap<String, (u64, Option<i64>)>,
+    /// Never forget a severed scope when another scope is degraded.
+    pub degraded_scopes: BTreeMap<String, (String, i64)>,
 }
 
 impl SessionChainState {
@@ -32,6 +38,8 @@ impl SessionChainState {
             degraded_scope_id: None,
             degraded_at: None,
             degraded_reason: None,
+            scopes: BTreeMap::new(),
+            degraded_scopes: BTreeMap::new(),
         }
     }
 
@@ -52,10 +60,26 @@ impl SessionChainState {
                 state.last_router_cp_at = Some(event.timestamp);
                 if let MembranePayload::Router(payload) = &event.payload {
                     last_router_nonce = payload.session_nonce;
+                    if let Some(scope) = &payload.scope_id {
+                        state.scopes.insert(
+                            scope.clone(),
+                            (payload.session_nonce, Some(event.timestamp)),
+                        );
+                        state.active_scope_id = Some(scope.clone());
+                    }
                 }
             }
             if event.event_type == EventType::AlertDegraded {
                 let (reason, scope_id) = alert_degraded_fields(&event.payload);
+                if let Some(scope) = &scope_id {
+                    state.degraded_scopes.insert(
+                        scope.clone(),
+                        (
+                            reason.clone().unwrap_or_else(|| "degraded".into()),
+                            event.timestamp,
+                        ),
+                    );
+                }
                 state.degraded_scope_id = scope_id;
                 state.degraded_at = Some(event.timestamp);
                 state.degraded_reason = reason;
@@ -71,7 +95,9 @@ impl SessionChainState {
             return false;
         }
         self.active_scope_id = Some(scope_id.to_string());
-        self.session_nonce = 0;
+        let (nonce, at) = self.scopes.get(scope_id).copied().unwrap_or((0, None));
+        self.session_nonce = nonce;
+        self.last_router_cp_at = at;
         true
     }
 
@@ -92,15 +118,22 @@ impl SessionChainState {
         self.last_cp_hash = cp_hash;
         self.last_event_id = bus_event_id;
         self.last_router_cp_at = Some(at);
+        if let Some(scope) = &self.active_scope_id {
+            self.scopes
+                .insert(scope.clone(), (self.session_nonce, Some(at)));
+        }
     }
 
     pub fn mark_degraded(&mut self, scope_id: &str, reason: &str, at: i64) {
+        self.degraded_scopes
+            .insert(scope_id.to_string(), (reason.to_string(), at));
         self.degraded_scope_id = Some(scope_id.to_string());
         self.degraded_at = Some(at);
         self.degraded_reason = Some(reason.to_string());
     }
 
     pub fn clear_degraded_for_scope(&mut self, scope_id: &str) {
+        self.degraded_scopes.remove(scope_id);
         if self.degraded_scope_id.as_deref() == Some(scope_id) {
             self.degraded_scope_id = None;
             self.degraded_at = None;
@@ -113,7 +146,19 @@ impl SessionChainState {
     }
 
     pub fn is_scope_degraded(&self, scope_id: &str) -> bool {
-        self.degraded_scope_id.as_deref() == Some(scope_id)
+        self.degraded_scopes.contains_key(scope_id)
+            || self.degraded_scope_id.as_deref() == Some(scope_id)
+    }
+
+    pub fn scope_router_cp_age_secs(&self, scope_id: &str, now: i64) -> Option<i64> {
+        if self.active_scope_id.as_deref() == Some(scope_id) {
+            self.last_router_cp_age_secs(now)
+        } else {
+            self.scopes
+                .get(scope_id)
+                .and_then(|(_, at)| *at)
+                .map(|at| now.saturating_sub(at))
+        }
     }
 
     /// True when an active router CP chain exists and the last CP is older than Δt.
@@ -219,6 +264,44 @@ mod tests {
         )
     }
 
+    #[test]
+    fn interleaved_scopes_keep_nonce_age_and_all_severs() {
+        let mut state = SessionChainState::genesis();
+        state.begin_scope("a");
+        state.next_session_nonce();
+        state.record_cp("aa".repeat(32), None, 100);
+        state.begin_scope("b");
+        assert_eq!(state.last_router_cp_at, None);
+        state.next_session_nonce();
+        state.record_cp("bb".repeat(32), None, 500);
+        assert_eq!(state.scope_router_cp_age_secs("a", 600), Some(500));
+        state.begin_scope("a");
+        assert_eq!(state.next_session_nonce(), 2);
+        assert_eq!(state.last_router_cp_at, Some(100));
+        state.mark_degraded("a", ALERT_REASON_SUBJECT_SEVER, 601);
+        state.mark_degraded("b", ALERT_REASON_SUBJECT_SEVER, 602);
+        assert!(state.is_scope_degraded("a"));
+        assert!(state.is_scope_degraded("b"));
+    }
+
+    #[test]
+    fn restart_restores_active_scope_and_all_severs() {
+        let subject = "aa".repeat(32);
+        let mut cp = router_event(100, 5, &subject);
+        if let MembranePayload::Router(payload) = &mut cp.payload {
+            payload.scope_id = Some("a".into());
+        }
+        let events = vec![
+            cp,
+            degraded_event(110, &subject, "a", ALERT_REASON_SUBJECT_SEVER),
+            degraded_event(120, &subject, "b", ALERT_REASON_SUBJECT_SEVER),
+        ];
+        let state = SessionChainState::from_bus_events(&events, &subject);
+        assert_eq!(state.active_scope_id.as_deref(), Some("a"));
+        assert_eq!(state.scopes["a"].0, 5);
+        assert!(state.is_scope_degraded("a"));
+        assert!(state.is_scope_degraded("b"));
+    }
     #[test]
     fn chains_parent_cp_hash_after_first_turn() {
         let mut state = SessionChainState::genesis();
