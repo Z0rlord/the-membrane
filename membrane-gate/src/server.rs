@@ -71,6 +71,7 @@ pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Re
 
     let app = axum::Router::new()
         .route("/health", get(health))
+        .route("/v1/operator/iac", post(operator_iac))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/tools/invoke", post(tools_invoke))
         .with_state(state);
@@ -80,6 +81,45 @@ pub async fn run_gate_server(state: GateServerState, listen: &str) -> anyhow::Re
     audit_task.abort();
     result?;
     Ok(())
+}
+
+async fn operator_iac(
+    State(state): State<GateServerState>,
+    headers: HeaderMap,
+    Json(request): Json<crate::oidc::OperatorIacRequest>,
+) -> Response {
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "));
+    let Some(token) = token else {
+        let err = GateError::IdentityAuthentication("operator bearer token required".into());
+        record_denied(&state, &err, "operator.iac.issue");
+        return gate_error_response(err);
+    };
+    let parent = state.session_chain.lock().await.last_cp_hash.clone();
+    match state
+        .gate
+        .issue_operator_iac(token, &request, &parent)
+        .await
+    {
+        Ok((operator, iac)) => {
+            state.audit.record_authenticated(
+                "allow",
+                "operator_oidc",
+                state.gate.publisher_pubkey_hex(),
+                Some(iac.scope_id.clone()),
+                "operator.iac.issue",
+                None,
+                Some(operator),
+            );
+            Json(iac).into_response()
+        }
+        Err(err) => {
+            record_denied(&state, &err, "operator.iac.issue");
+            gate_error_response(err)
+        }
+    }
 }
 
 async fn health(State(state): State<GateServerState>) -> impl IntoResponse {
@@ -794,6 +834,37 @@ mod tool_invoke_policy_tests {
     use crate::ChannelRegistry;
     use membrane_core::{BusPublisher, BusPublisherConfig};
     use nostr::Keys;
+
+    #[tokio::test]
+    async fn operator_exchange_http_missing_invalid_and_unconfigured_denied() {
+        let (state, _) = test_state(vec![], vec![]);
+        let request = || crate::oidc::OperatorIacRequest {
+            caller_pubkey: "a".repeat(64),
+            scope_id: "s".into(),
+            model: "m".into(),
+            tools: vec![],
+            ttl_secs: 60,
+        };
+        let response = operator_iac(State(state.clone()), HeaderMap::new(), Json(request())).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            HeaderValue::from_static("Basic invalid"),
+        );
+        let response = operator_iac(State(state.clone()), headers.clone(), Json(request())).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer invalid"),
+        );
+        let response = operator_iac(State(state.clone()), headers, Json(request())).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let (_, decisions) = state.audit.snapshot().unwrap();
+        assert_eq!(decisions.len(), 3);
+        assert!(decisions.iter().all(|d| d.outcome == "deny"));
+        assert!(state.operations.unresolved().unwrap().is_empty());
+    }
 
     fn test_state(
         tools: Vec<String>,
