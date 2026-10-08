@@ -45,6 +45,8 @@ pub enum GateError {
     Connector(String),
     #[error("registry error: {0}")]
     Registry(String),
+    #[error("SIEM export: {0}")]
+    SiemExport(String),
     #[error("bus error: {0}")]
     Bus(#[from] anyhow::Error),
 }
@@ -110,6 +112,7 @@ pub struct Gate {
     iac_signer_pubkey: String,
     operator_oidc: Option<oidc::OperatorOidc>,
     siem_shipper: Option<Arc<SiemWebhookShipper>>,
+    siem_export: Option<Arc<siem_export::SiemExporter>>,
     identity_registry_path: Option<std::path::PathBuf>,
     caller_challenge: String,
     replay: std::sync::Mutex<std::collections::BTreeMap<String, i64>>,
@@ -144,6 +147,7 @@ impl Gate {
             iac_signer_pubkey,
             operator_oidc: None,
             siem_shipper: None,
+            siem_export: None,
             identity_registry_path: None,
             caller_challenge: nostr::Keys::generate().public_key().to_hex(),
             replay: Default::default(),
@@ -161,6 +165,23 @@ impl Gate {
         self
     }
 
+    pub fn with_siem_export(mut self, exporter: Arc<siem_export::SiemExporter>) -> Self {
+        self.siem_export = Some(exporter);
+        self
+    }
+
+    pub fn siem_export(&self) -> Option<&Arc<siem_export::SiemExporter>> {
+        self.siem_export.as_ref()
+    }
+
+    /// Refuses new authorizations when a `fail_closed` export cannot keep up.
+    pub fn siem_admission(&self) -> Result<(), GateError> {
+        match &self.siem_export {
+            Some(e) => e.admission(),
+            None => Ok(()),
+        }
+    }
+
     pub fn siem_shipper(&self) -> Option<&Arc<SiemWebhookShipper>> {
         self.siem_shipper.as_ref()
     }
@@ -171,6 +192,12 @@ impl Gate {
 
     fn enqueue_siem(&self, event: &MembraneEvent, bus_event_id: Option<&str>) {
         map_and_spawn_siem_ship(&self.siem_shipper, event, bus_event_id);
+        if let Some(exporter) = &self.siem_export {
+            exporter.enqueue(membrane_core::SiemEvent::from_membrane_event(
+                event,
+                bus_event_id,
+            ));
+        }
     }
 
     pub fn validate_iac(
@@ -428,6 +455,7 @@ pub mod liveness;
 pub mod proxy;
 pub mod readings;
 pub mod server;
+pub mod siem_export;
 pub mod watchdog;
 
 pub use demo::{

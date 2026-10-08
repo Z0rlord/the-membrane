@@ -150,6 +150,10 @@ async fn health(State(state): State<GateServerState>) -> impl IntoResponse {
         "active_scope_id": active_scope,
         "degraded_scope_id": degraded_scope,
         "degraded_reason": chain.degraded_reason,
+        "siem_export": match state.gate.siem_export() {
+            Some(e) => serde_json::to_value(e.status()).unwrap_or(json!({"enabled": true})),
+            None => json!({"enabled": false}),
+        },
         "github_connector": {
             "repo_allowlist": state.gate.registry().github_repo_allowlist,
             "token_configured": state.github.config().has_token(),
@@ -355,6 +359,7 @@ async fn handle_chat(
     let now = now_secs();
 
     state.gate.validate_iac(Some(&iac), now)?;
+    state.gate.siem_admission()?;
 
     let mut chain = state.session_chain.lock().await;
     ensure_live_session(state, &iac, &mut chain, now).await?;
@@ -455,6 +460,7 @@ async fn handle_tool_invoke(
     let now = now_secs();
 
     state.gate.validate_iac(Some(&iac), now)?;
+    state.gate.siem_admission()?;
 
     if !iac.model_allowed(&req.model) || !state.gate.registry().model_allowlist.contains(&req.model)
     {
@@ -803,6 +809,7 @@ fn gate_error_response(err: GateError) -> Response {
         | GateError::SessionDegraded(_, _)
         | GateError::SessionStale(_, _)
         | GateError::Connector(_) => StatusCode::FORBIDDEN,
+        GateError::SiemExport(_) => StatusCode::SERVICE_UNAVAILABLE,
         _ => StatusCode::BAD_REQUEST,
     };
     (
