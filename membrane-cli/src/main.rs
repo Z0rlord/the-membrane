@@ -724,6 +724,13 @@ async fn gate_start(
     });
     let mut gate =
         Gate::new(registry.clone(), publisher).with_identity_registry_path(registry_path.clone());
+    if let Some(path) = std::env::var_os("MEMBRANE_OPERATOR_OIDC_CONFIG") {
+        let config = serde_yaml::from_str::<membrane_gate::oidc::OidcConfig>(
+            &std::fs::read_to_string(path).context("read operator OIDC config")?,
+        )
+        .context("parse operator OIDC config")?;
+        gate = gate.with_operator_oidc(config)?;
+    }
     if let Some(shipper) = SiemWebhookShipper::from_env().map_err(|e| anyhow::anyhow!("{e}"))? {
         println!(
             "gate: SIEM webhook enabled (format={}, fail_open={}, urls={})",

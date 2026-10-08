@@ -263,3 +263,5 @@ Zorie R. Barber
 A separate read-only Rust dashboard observes the running gate: authorization decisions,
 matched rules, liveness, loaded registry policy and deny rate. Loopback only, no policy
 editor or gate write path. See [local run instructions and limits](docs/operator-dashboard.md).
+
+Operator IdP integration: [OIDC configuration and token exchange](docs/operator-oidc.md).
